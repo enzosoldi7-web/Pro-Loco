@@ -1,4 +1,4 @@
-import { Socio, ProLocoInfo, QuotaAssociativa, StatoQuota, ProLocoEvento, StandEvento, SitoWebConfig, GiornalinoConfig, ArticoloGiornalino, EdizioneGiornalino } from './types';
+import { Socio, ProLocoInfo, QuotaAssociativa, StatoQuota, ProLocoEvento, StandEvento, SitoWebConfig, GiornalinoConfig, ArticoloGiornalino, EdizioneGiornalino, DonazioneTerzi } from './types';
 
 const STORAGE_KEY_SOCI = 'proloco_gestione_soci_v1';
 const STORAGE_KEY_CONFIG = 'proloco_gestione_config_v1';
@@ -7,6 +7,7 @@ const STORAGE_KEY_SITO_WEB = 'proloco_gestione_sito_web_v1';
 const STORAGE_KEY_GIORNALINO = 'proloco_gestione_giornalino_v1';
 export const STORAGE_KEY_ARCHIVIO_GIORNALINI = 'proloco_archivio_giornalini_v1';
 export const STORAGE_KEY_GIORNALINO_ATTIVO_ID = 'proloco_giornalino_attivo_id_v1';
+export const STORAGE_KEY_DONAZIONI = 'proloco_gestione_donazioni_v1';
 
 export const DEFAULT_GIORNALINO_CONFIG: GiornalinoConfig = {
   testata: 'La Voce della Pro Loco',
@@ -562,6 +563,154 @@ export const INITIAL_SOCI: Socio[] = [
   }
 ];
 
+export const INITIAL_DONAZIONI: DonazioneTerzi[] = [
+  {
+    id: 'don-2026-001',
+    donatore: 'Fondazione Cassa di Risparmio Territoriale',
+    tipoDonatore: 'fondazione',
+    codiceFiscalePartitaIva: '01458920521',
+    importo: 3500,
+    data: '2026-02-12',
+    anno: 2026,
+    causale: 'Erogazione liberale per recupero sentieristica storico-ambientale e fontana monumentale del Trecento',
+    metodo: 'Bonifico Bancario',
+    ricevutaNumero: 'DON-2026/001',
+    destinazione: 'Cultura, Territorio & Ambiente',
+    detraibileFiscale: true,
+    note: 'Accreditato su c/c istituzionale Pro Loco. Emessa quietanza liberale deducibile Terzo Settore ex art. 83 CTS.'
+  },
+  {
+    id: 'don-2026-002',
+    donatore: 'BCC - Banca di Credito Cooperativo del Territorio',
+    tipoDonatore: 'azienda',
+    codiceFiscalePartitaIva: '00984710528',
+    importo: 2000,
+    data: '2026-03-05',
+    anno: 2026,
+    causale: 'Contributo liberale per acquisto postazione DAE (defibrillatore) e presidio sicurezza sagre paesane',
+    metodo: 'Bonifico Bancario',
+    ricevutaNumero: 'DON-2026/002',
+    destinazione: 'Sicurezza & Protezione Civile Pro Loco',
+    detraibileFiscale: true,
+    note: 'Dotazione salvavita ad uso pubblico per manifestazioni.'
+  },
+  {
+    id: 'don-2026-003',
+    donatore: 'Azienda Meccanica Valdelsa S.r.l.',
+    tipoDonatore: 'azienda',
+    codiceFiscalePartitaIva: '02341290526',
+    importo: 1200,
+    data: '2026-04-18',
+    anno: 2026,
+    causale: 'Erogazione liberale per allestimento stand gastronomici e impianto luci a basso consumo',
+    metodo: 'Bonifico Bancario',
+    ricevutaNumero: 'DON-2026/003',
+    destinazione: 'Feste & Sagre Popolari',
+    detraibileFiscale: true,
+    note: 'Sostegno logistico alle sagre tradizionali.'
+  },
+  {
+    id: 'don-2026-004',
+    donatore: 'Famiglia Rinaldi (in memoria del Cav. Aldo)',
+    tipoDonatore: 'privato',
+    codiceFiscalePartitaIva: 'RNLLDA42A15G752M',
+    importo: 800,
+    data: '2026-01-20',
+    anno: 2026,
+    causale: 'Donazione privata in memoria del socio fondatore per premio borse di studio giovani volontari',
+    metodo: 'Bonifico Bancario',
+    ricevutaNumero: 'DON-2026/004',
+    destinazione: 'Progetti Giovani & Borse di Studio',
+    detraibileFiscale: true,
+    note: 'Destinata a incentivare i giovani del borgo nelle attività culturali.'
+  },
+  {
+    id: 'don-2026-005',
+    donatore: 'Tenuta Vitivinicola Colle Antico',
+    tipoDonatore: 'azienda',
+    codiceFiscalePartitaIva: '01784920524',
+    importo: 1000,
+    data: '2026-05-15',
+    anno: 2026,
+    causale: 'Erogazione liberale a supporto della valorizzazione dei prodotti enogastronomici tipici locali',
+    metodo: 'Bonifico Bancario',
+    ricevutaNumero: 'DON-2026/005',
+    destinazione: 'Enogastronomia & Prodotti Tipici',
+    detraibileFiscale: true,
+    note: 'Collaborazione per calici e degustazioni guidate.'
+  },
+  {
+    id: 'don-2026-006',
+    donatore: 'Offerte Libere Spontanee della Cittadinanza',
+    tipoDonatore: 'anonimo',
+    importo: 450,
+    data: '2026-05-02',
+    anno: 2026,
+    causale: 'Raccolta offerte libere con cassetta sigillata durante la giornata ecologica e pulizia sentieri',
+    metodo: 'Contanti',
+    ricevutaNumero: 'DON-2026/006',
+    destinazione: 'Ambiente & Cura del Territorio',
+    detraibileFiscale: false,
+    note: 'Verbale di apertura cassetta controfirmato da Presidente e Tesoriere.'
+  },
+  {
+    id: 'don-2025-001',
+    donatore: 'Fondazione Cassa di Risparmio Territoriale',
+    tipoDonatore: 'fondazione',
+    codiceFiscalePartitaIva: '01458920521',
+    importo: 3000,
+    data: '2025-03-12',
+    anno: 2025,
+    causale: 'Contributo liberale per restauro antico tabernacolo ligneo e pubblicazione guida storico-artistica',
+    metodo: 'Bonifico Bancario',
+    ricevutaNumero: 'DON-2025/001',
+    destinazione: 'Cultura & Memoria Storica',
+    detraibileFiscale: true,
+    note: 'Progetto completato e rendicontato con successo.'
+  },
+  {
+    id: 'don-2025-002',
+    donatore: 'BCC - Banca di Credito Cooperativo del Territorio',
+    tipoDonatore: 'azienda',
+    codiceFiscalePartitaIva: '00984710528',
+    importo: 1800,
+    data: '2025-04-10',
+    anno: 2025,
+    causale: 'Donazione liberale per noleggio palco e impianto service musicale della Festa d\'Autunno',
+    metodo: 'Bonifico Bancario',
+    ricevutaNumero: 'DON-2025/002',
+    destinazione: 'Musica & Spettacoli',
+    detraibileFiscale: true
+  },
+  {
+    id: 'don-2025-003',
+    donatore: 'Studio Tecnico Arch. Rossi & Partners',
+    tipoDonatore: 'azienda',
+    codiceFiscalePartitaIva: '01998430522',
+    importo: 600,
+    data: '2025-09-08',
+    anno: 2025,
+    causale: 'Erogazione liberale per rilievo cartografico e tabellazione sentieri montani',
+    metodo: 'Bonifico Bancario',
+    ricevutaNumero: 'DON-2025/003',
+    destinazione: 'Sentieristica & Ambiente',
+    detraibileFiscale: true
+  },
+  {
+    id: 'don-2025-004',
+    donatore: 'Offerte Liberali Sagra Patronale',
+    tipoDonatore: 'anonimo',
+    importo: 520,
+    data: '2025-09-21',
+    anno: 2025,
+    causale: 'Offerte libere in piazza durante le celebrazioni patronali',
+    metodo: 'Contanti',
+    ricevutaNumero: 'DON-2025/004',
+    destinazione: 'Feste Tradizionali',
+    detraibileFiscale: false
+  }
+];
+
 export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
   {
     id: 'std-1',
@@ -571,6 +720,10 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     riferimentoFood: true,
     responsabile: 'Marco Valenti (Chef Volontario)',
     descrizione: 'Pasta fresca tirata a mano, sughi tipici della tradizione contadina e polenta rustica. Cucina coperta certificata HACCP.',
+    spesaPreventivo: 1400,
+    spesaConsuntivo: 1250,
+    incassoPrevisto: 3600,
+    incassoConsuntivo: 3800,
     incassoStimato: 3800
   },
   {
@@ -581,6 +734,10 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     riferimentoFood: true,
     responsabile: 'Roberto Ferri (Mastro Fuochista)',
     descrizione: 'Salsicce artigianali, tagliata, arrosticini e contorni cotti alla brace a vista. Impianto con cappa aspirante e braciere protetto.',
+    spesaPreventivo: 1200,
+    spesaConsuntivo: 1100,
+    incassoPrevisto: 3000,
+    incassoConsuntivo: 3200,
     incassoStimato: 3200
   },
   {
@@ -591,6 +748,10 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     riferimentoFood: true,
     responsabile: 'Lucia Bianchi',
     descrizione: 'Fritti dorati al cartoccio, frittelle di castagne, bomboloni caldi e ciambelle della festa preparate al momento.',
+    spesaPreventivo: 450,
+    spesaConsuntivo: 420,
+    incassoPrevisto: 1000,
+    incassoConsuntivo: 1100,
     incassoStimato: 1100
   },
   {
@@ -601,6 +762,10 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     riferimentoFood: true,
     responsabile: 'Simone Rossi',
     descrizione: 'Vini tipici delle colline, birre artigianali alla spina, acqua minerale e bibite fresche. Banco spillatura a flusso continuo.',
+    spesaPreventivo: 450,
+    spesaConsuntivo: 430,
+    incassoPrevisto: 1400,
+    incassoConsuntivo: 1400,
     incassoStimato: 1400
   },
   {
@@ -611,6 +776,10 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     riferimentoFood: false,
     responsabile: 'Elena Moretti (Tesoriere)',
     descrizione: 'Postazione scontrini e gettoni unificata per gli stand gastronomici con terminale POS contactless e contanti.',
+    spesaPreventivo: 200,
+    spesaConsuntivo: 180,
+    incassoPrevisto: 0,
+    incassoConsuntivo: 0,
     incassoStimato: 0
   },
   {
@@ -621,6 +790,10 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     riferimentoFood: false,
     responsabile: 'Alessandro Donati',
     descrizione: 'Bancarelle espositive di hobbisti locali, miele, olio extravergine d\'oliva e artigianato artistico del territorio.',
+    spesaPreventivo: 100,
+    spesaConsuntivo: 80,
+    incassoPrevisto: 0,
+    incassoConsuntivo: 0,
     incassoStimato: 0
   }
 ];
@@ -628,8 +801,8 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
 export const INITIAL_EVENTI: ProLocoEvento[] = [
   // 1. EVENTO NATIVO (100% Organizzazione & Rischio Pro Loco)
   {
-    id: 'evento-sim-1',
-    titolo: '1. Sagra del Borgo Antico (Evento Nativo)',
+    id: 'evento-eff-1',
+    titolo: '1. Sagra del Borgo Antico (Evento Nativo 100% Pro Loco)',
     categoria: 'Enogastronomia & Sagra',
     dataInizio: '2026-10-17',
     oraInizio: '12:00',
@@ -638,7 +811,7 @@ export const INITIAL_EVENTI: ProLocoEvento[] = [
     luogo: 'Piazza del Popolo e Borgo Antico',
     stato: 'in_programma',
     tipoEvento: 'nativo',
-    descrizione: 'Sagra autunnale con stand gastronomici numerati, specialità culinarie tipiche del borgo, caldarroste, vino DOC, mercatino artigianale e intrattenimento popolare. Organizzazione e gestione 100% Pro Loco.',
+    descrizione: 'Grande sagra enogastronomica autunnale ideata e gestita direttamente dalla Pro Loco con 6 stand operativi numerati, cucina tradizionale, griglia alla brace, friggitoria, punto beverage e mercatino.',
     locandina: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=700&auto=format&fit=crop&q=80',
     standNumerati: STAND_SIMULATI_DEFAULT,
     budgetPrevisto: 6500,
@@ -664,27 +837,27 @@ export const INITIAL_EVENTI: ProLocoEvento[] = [
     pianoSicurezzaSafety: true,
     aslHaccp: true,
     partecipantiStimati: 1800,
-    noteOrganizzative: 'Gestione Economica Nativa: 100% costi sostenuti (5.900 €) ed entrate lorde incassate (9.500 €) di competenza esclusiva della Pro Loco. Utile netto interamente a bilancio sociale (+3.600 €).'
+    noteOrganizzative: 'Gestione Economica Nativa Effettiva: 100% dei costi sostenuti (5.900 €) e degli incassi realizzati dagli stand (9.500 €) confluiscono nel bilancio sociale della Pro Loco con un utile netto di +3.600 €.'
   },
 
   // 2. EVENTO IBRIDO (Co-organizzazione con Partner / Ripartizione Quote)
   {
-    id: 'evento-sim-2',
-    titolo: '2. Sagra del Borgo Antico (Evento Ibrido)',
-    categoria: 'Enogastronomia & Sagra',
-    dataInizio: '2026-10-17',
-    oraInizio: '12:00',
-    dataFine: '2026-10-18',
-    oraFine: '23:30',
-    luogo: 'Piazza del Popolo e Borgo Antico',
+    id: 'evento-eff-2',
+    titolo: '2. Fiera d\'Autunno & Notte Bianca (Evento Ibrido con Partner)',
+    categoria: 'Festa Tradizionale & Patronale',
+    dataInizio: '2026-10-24',
+    oraInizio: '16:00',
+    dataFine: '2026-10-25',
+    oraFine: '01:00',
+    luogo: 'Vie del Centro Storico & Piazza Matteotti',
     stato: 'in_programma',
     tipoEvento: 'ibrido',
     partnerIbridoNome: 'Comune & Associazione Commercianti del Centro Storico',
     percentualeSpeseProLoco: 50,
     percentualeEntrateProLoco: 50,
     contributoPartner: 0,
-    descrizione: 'Sagra autunnale con le stesse identiche voci di costo, incassi e 6 stand numerati, co-organizzata in partnership con il Comune e i Commercianti. Ripartizione costi ed entrate al 50%.',
-    locandina: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=700&auto=format&fit=crop&q=80',
+    descrizione: 'Manifestazione autunnale co-organizzata in partnership con il Comune e i Commercianti. Stand gastronomici e operativi con ripartizione paritetica (50/50) di spese ed entrate.',
+    locandina: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=700&auto=format&fit=crop&q=80',
     standNumerati: STAND_SIMULATI_DEFAULT,
     budgetPrevisto: 6500,
     costiSostenuti: 5900,
@@ -709,27 +882,27 @@ export const INITIAL_EVENTI: ProLocoEvento[] = [
     pianoSicurezzaSafety: true,
     aslHaccp: true,
     partecipantiStimati: 1800,
-    noteOrganizzative: 'Gestione Economica Ibrida (50/50): Le stesse spese lorde (5.900 €) e gli stessi incassi (9.500 €) sono ripartiti pariteticamente col Partner. Quota costi Pro Loco: 2.950 € (50%), Quota incassi Pro Loco: 4.750 € (50%), Utile netto Pro Loco: +1.800 €.'
+    noteOrganizzative: 'Gestione Economica Ibrida Effettiva (50/50): Spese vive lorde (5.900 €) ed entrate lorde stand (9.500 €) divise al 50%. Quota costi Pro Loco: 2.950 €, Quota incassi Pro Loco: 4.750 €, Utile netto Pro Loco: +1.800 €.'
   },
 
   // 3. EVENTO GESTIONE (Conto Terzi per Committente / Rimborso Spese + Fee)
   {
-    id: 'evento-sim-3',
-    titolo: '3. Sagra del Borgo Antico (Evento Gestione)',
-    categoria: 'Enogastronomia & Sagra',
-    dataInizio: '2026-10-17',
-    oraInizio: '12:00',
-    dataFine: '2026-10-18',
+    id: 'evento-eff-3',
+    titolo: '3. Festival Patronale & Estate nel Borgo (Gestione Conto Terzi Comune)',
+    categoria: 'Musica, Spettacolo & Teatro',
+    dataInizio: '2026-11-07',
+    oraInizio: '10:00',
+    dataFine: '2026-11-08',
     oraFine: '23:30',
-    luogo: 'Piazza del Popolo e Borgo Antico',
+    luogo: 'Piazza della Libertà e Area Spettacoli',
     stato: 'in_programma',
     tipoEvento: 'gestione',
     committenteNome: 'Comune - Assessorato al Turismo & Grandi Eventi',
     tipoAccordoGestione: 'rimborso_piu_fee',
     compensoGestione: 2500,
     rimborsoSpeseCommittente: 5900,
-    descrizione: 'Sagra autunnale con le stesse identiche voci di costo e 6 stand numerati, svolta dalla Pro Loco per conto terzi del Comune committente. Spese vive anticipate rimborsate al 100% dal Comune + compenso/fee di gestione di 2.500 €.',
-    locandina: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=700&auto=format&fit=crop&q=80',
+    descrizione: 'Allestimento e gestione logistica ed enogastronomica per conto terzi del Comune. Le spese vive anticipate sono rimborsate al 100% dal Comune + compenso di gestione di 2.500 € a favore della Pro Loco.',
+    locandina: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=700&auto=format&fit=crop&q=80',
     standNumerati: STAND_SIMULATI_DEFAULT,
     budgetPrevisto: 6500,
     costiSostenuti: 5900,
@@ -754,7 +927,7 @@ export const INITIAL_EVENTI: ProLocoEvento[] = [
     pianoSicurezzaSafety: true,
     aslHaccp: true,
     partecipantiStimati: 1800,
-    noteOrganizzative: 'Gestione Economica Conto Terzi: Le spese sostenute (5.900 €) sono integralmente rimborsate a piè di lista dal Comune (+5.900 €). La Pro Loco incassa il compenso convenzionato di gestione (+2.500 €), che costituisce l\'utile netto per l\'associazione.'
+    noteOrganizzative: 'Gestione Economica Conto Terzi Effettiva: Spese anticipate (5.900 €) integralmente rimborsate dal Comune a piè di lista. Compenso di gestione Pro Loco: +2.500 € netti a rischio d\'impresa zero.'
   }
 ];
 
@@ -1342,23 +1515,41 @@ export function loadEventi(): ProLocoEvento[] {
       return [];
     }
 
-    // Mappa fallback per eventi demo
-    const demoMappa: Record<string, ProLocoEvento> = {};
-    INITIAL_EVENTI.forEach(e => {
-      demoMappa[e.id] = e;
-    });
-
-    // Assicuriamo che ogni evento abbia le voci di costo compilate
+    // Assicuriamo che ogni evento abbia le voci di costo e stand compilati
     const arricchiti = parsed.map(e => {
-      const demo = demoMappa[e.id];
-      const spesePrev = e.spesePreventivo || demo?.spesePreventivo || {
+      // Stand numerati dell'evento: garantiamo che ciascuno abbia i campi economici
+      let stands = e.standNumerati && e.standNumerati.length > 0 ? e.standNumerati : STAND_SIMULATI_DEFAULT;
+
+      // Se gli stand non hanno ancora spesaPreventivo / spesaConsuntivo, li arricchiamo con fallback
+      stands = stands.map((s, idx) => {
+        const defaultStand = STAND_SIMULATI_DEFAULT[idx] || STAND_SIMULATI_DEFAULT.find(d => d.numero === s.numero);
+        return {
+          ...s,
+          spesaPreventivo: s.spesaPreventivo ?? defaultStand?.spesaPreventivo ?? 0,
+          spesaConsuntivo: s.spesaConsuntivo ?? defaultStand?.spesaConsuntivo ?? 0,
+          incassoPrevisto: s.incassoPrevisto ?? defaultStand?.incassoPrevisto ?? (s.incassoStimato || 0),
+          incassoConsuntivo: s.incassoConsuntivo ?? defaultStand?.incassoConsuntivo ?? (s.incassoStimato || 0),
+        };
+      });
+
+      // Se il titolo conteneva vecchie denominazioni simulate, convertiamo in denominazioni effettive
+      let titolo = e.titolo;
+      if (titolo.includes('Simulazione: Modello 1') || titolo === '1. Sagra del Borgo Antico (Evento Nativo)') {
+        titolo = '1. Sagra del Borgo Antico (Evento Nativo 100% Pro Loco)';
+      } else if (titolo.includes('Simulazione: Modello 2') || titolo === '2. Sagra del Borgo Antico (Evento Ibrido)') {
+        titolo = '2. Fiera d\'Autunno & Notte Bianca (Evento Ibrido con Partner)';
+      } else if (titolo.includes('Simulazione: Modello 3') || titolo === '3. Sagra del Borgo Antico (Evento Gestione)') {
+        titolo = '3. Festival Patronale & Estate nel Borgo (Gestione Conto Terzi Comune)';
+      }
+
+      const spesePrev = e.spesePreventivo || {
         food: Math.round((e.budgetPrevisto || 0) * 0.45),
         intrattenimento: Math.round((e.budgetPrevisto || 0) * 0.25),
         altreSpese: Math.round((e.budgetPrevisto || 0) * 0.20),
         varie: Math.round((e.budgetPrevisto || 0) * 0.10)
       };
 
-      const speseCons = e.speseConsuntivo || demo?.speseConsuntivo || {
+      const speseCons = e.speseConsuntivo || {
         food: Math.round((e.costiSostenuti || 0) * 0.50),
         intrattenimento: Math.round((e.costiSostenuti || 0) * 0.25),
         altreSpese: Math.round((e.costiSostenuti || 0) * 0.15),
@@ -1370,21 +1561,22 @@ export function loadEventi(): ProLocoEvento[] {
 
       return {
         ...e,
-        standNumerati: e.standNumerati && e.standNumerati.length > 0 ? e.standNumerati : (demo?.standNumerati || STAND_SIMULATI_DEFAULT),
-        tipoEvento: e.tipoEvento || demo?.tipoEvento || 'nativo',
-        partnerIbridoNome: e.partnerIbridoNome ?? demo?.partnerIbridoNome,
-        percentualeSpeseProLoco: e.percentualeSpeseProLoco ?? demo?.percentualeSpeseProLoco ?? 50,
-        percentualeEntrateProLoco: e.percentualeEntrateProLoco ?? demo?.percentualeEntrateProLoco ?? 50,
-        contributoPartner: e.contributoPartner ?? demo?.contributoPartner ?? 0,
-        committenteNome: e.committenteNome ?? demo?.committenteNome,
-        tipoAccordoGestione: e.tipoAccordoGestione ?? demo?.tipoAccordoGestione ?? 'compenso_forfettario',
-        compensoGestione: e.compensoGestione ?? demo?.compensoGestione ?? 0,
-        rimborsoSpeseCommittente: e.rimborsoSpeseCommittente ?? demo?.rimborsoSpeseCommittente ?? 0,
+        titolo,
+        standNumerati: stands,
+        tipoEvento: e.tipoEvento || 'nativo',
+        partnerIbridoNome: e.partnerIbridoNome,
+        percentualeSpeseProLoco: e.percentualeSpeseProLoco ?? 50,
+        percentualeEntrateProLoco: e.percentualeEntrateProLoco ?? 50,
+        contributoPartner: e.contributoPartner ?? 0,
+        committenteNome: e.committenteNome,
+        tipoAccordoGestione: e.tipoAccordoGestione ?? 'compenso_forfettario',
+        compensoGestione: e.compensoGestione ?? 0,
+        rimborsoSpeseCommittente: e.rimborsoSpeseCommittente ?? 0,
         spesePreventivo: spesePrev,
         speseConsuntivo: speseCons,
         budgetPrevisto: totPrev > 0 ? totPrev : (e.budgetPrevisto || 0),
         costiSostenuti: totCons > 0 ? totCons : (e.costiSostenuti || 0),
-        entratePreviste: e.entratePreviste ?? demo?.entratePreviste ?? e.budgetPrevisto
+        entratePreviste: e.entratePreviste ?? e.budgetPrevisto
       };
     });
 
@@ -1536,11 +1728,145 @@ export function esportaEventiCSV(eventi: ProLocoEvento[], anno?: number): void {
   document.body.removeChild(link);
 }
 
+export function esportaStandEventoCSV(evento: ProLocoEvento, stands: StandEvento[]): void {
+  const intestazioni = [
+    'Numero Stand',
+    'Denominazione Stand',
+    'Tipologia Merceologica',
+    'Circuito Ristorazione (Food & Beverage)',
+    'Responsabile Stand',
+    'Spesa Preventivo (€)',
+    'Spesa Consuntivo (€)',
+    'Differenza Spesa (€)',
+    'Incasso Previsto (€)',
+    'Incasso Consuntivo (€)',
+    'Differenza Incasso (€)',
+    'Margine Netto Previsto (€)',
+    'Margine Netto Consuntivo (€)',
+    'Scostamento Margine Netto (€)',
+    'Manifestazione di Riferimento',
+    'Data Manifestazione'
+  ];
+
+  const righe = stands.map(s => {
+    const spP = Number(s.spesaPreventivo) || 0;
+    const spC = Number(s.spesaConsuntivo) || 0;
+    const diffS = spC - spP;
+    const inP = Number(s.incassoPrevisto) || Number(s.incassoStimato) || 0;
+    const inC = Number(s.incassoConsuntivo) || Number(s.incassoStimato) || 0;
+    const diffI = inC - inP;
+    const mP = inP - spP;
+    const mC = inC - spC;
+    const diffM = mC - mP;
+
+    return [
+      `"#${s.numero}"`,
+      `"${(s.nome || '').replace(/"/g, '""')}"`,
+      `"${(s.tipologia || '').replace(/"/g, '""')}"`,
+      `"${s.riferimentoFood ? 'SI (Food & Beverage)' : 'NO (Servizi / No-Food)'}"`,
+      `"${(s.responsabile || '').replace(/"/g, '""')}"`,
+      `"${spP}"`,
+      `"${spC}"`,
+      `"${diffS}"`,
+      `"${inP}"`,
+      `"${inC}"`,
+      `"${diffI}"`,
+      `"${mP}"`,
+      `"${mC}"`,
+      `"${diffM}"`,
+      `"${(evento.titolo || '').replace(/"/g, '""')}"`,
+      `"${evento.dataInizio || ''}"`
+    ].join(';');
+  });
+
+  const csvContent = '\uFEFF' + [intestazioni.join(';'), ...righe].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `Macro_Stand_${(evento.titolo || 'Evento').replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+export function loadDonazioni(): DonazioneTerzi[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DONAZIONI);
+    if (raw === null) {
+      saveDonazioni(INITIAL_DONAZIONI);
+      return INITIAL_DONAZIONI;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      saveDonazioni(INITIAL_DONAZIONI);
+      return INITIAL_DONAZIONI;
+    }
+    return parsed;
+  } catch (err) {
+    console.error('Errore nel caricamento delle donazioni:', err);
+    return INITIAL_DONAZIONI;
+  }
+}
+
+export function saveDonazioni(donazioni: DonazioneTerzi[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_DONAZIONI, JSON.stringify(donazioni));
+  } catch (err) {
+    console.error('Errore nel salvataggio delle donazioni:', err);
+  }
+}
+
+export function esportaDonazioniCSV(donazioni: DonazioneTerzi[], anno?: number): void {
+  const intestazioni = [
+    'ID Ricevuta',
+    'Data Donazione',
+    'Esercizio (Anno)',
+    'Donatore / Ente Erogante',
+    'Tipologia Donatore',
+    'C.F. / P.IVA',
+    'Importo Donazione (€)',
+    'Causale Erogazione',
+    'Destinazione / Progetto',
+    'Metodo Pagamento',
+    'Detraibile Terzo Settore (Art. 83 CTS)',
+    'Note'
+  ];
+
+  const filtrati = anno ? donazioni.filter(d => d.anno === anno) : donazioni;
+
+  const righe = filtrati.map(d => [
+    `"${d.ricevutaNumero}"`,
+    `"${d.data}"`,
+    `"${d.anno}"`,
+    `"${d.donatore.replace(/"/g, '""')}"`,
+    `"${d.tipoDonatore.toUpperCase()}"`,
+    `"${d.codiceFiscalePartitaIva || ''}"`,
+    `"${d.importo.toFixed(2)}"`,
+    `"${d.causale.replace(/"/g, '""')}"`,
+    `"${(d.destinazione || 'Attività Generali').replace(/"/g, '""')}"`,
+    `"${d.metodo}"`,
+    `"${d.detraibileFiscale ? 'SI (Detraibile/Deducibile)' : 'NO'}"`,
+    `"${(d.note || '').replace(/"/g, '""')}"`
+  ].join(';'));
+
+  const csvContent = '\uFEFF' + [intestazioni.join(';'), ...righe].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `Donazioni_Terzi_ProLoco_${anno || 'Globale'}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 export function esportaBilancioCompletoCSV(
   soci: Socio[], 
   eventi: ProLocoEvento[], 
   config: ProLocoInfo, 
-  anno?: number
+  anno?: number,
+  donazioni?: DonazioneTerzi[]
 ): void {
   const annoRif = anno || config.annoCorrente;
   const annoFiltro = anno && anno !== 0 ? anno : null;
@@ -1553,6 +1879,13 @@ export function esportaBilancioCompletoCSV(
   
   const totaleQuote = quoteAnno.reduce((sum, q) => sum + (q.importo || 0), 0);
 
+  // Donazioni da terzi
+  const donazioniTotali = donazioni || loadDonazioni();
+  const donazioniAnno = annoFiltro
+    ? donazioniTotali.filter(d => d.anno === annoFiltro)
+    : donazioniTotali;
+  const totaleDonazioni = donazioniAnno.reduce((sum, d) => sum + (d.importo || 0), 0);
+
   // Filtro eventi dell'anno
   const eventiAnno = annoFiltro
     ? eventi.filter(e => e.dataInizio.startsWith(annoFiltro.toString()))
@@ -1560,7 +1893,7 @@ export function esportaBilancioCompletoCSV(
 
   const totaleEntrateEventi = eventiAnno.reduce((sum, e) => sum + (e.entrateRealizzate || 0), 0);
   const totaleCostiEventi = eventiAnno.reduce((sum, e) => sum + (e.costiSostenuti || 0), 0);
-  const totaleEntrateGenerali = totaleQuote + totaleEntrateEventi;
+  const totaleEntrateGenerali = totaleQuote + totaleEntrateEventi + totaleDonazioni;
   const totaleUsciteGenerali = totaleCostiEventi;
   const avanzoGestione = totaleEntrateGenerali - totaleUsciteGenerali;
 
@@ -1574,6 +1907,7 @@ export function esportaBilancioCompletoCSV(
     `"Voce";"Importo (€)"`,
     `"Entrate Totali da Tesseramento (Quote Sociali)";"${totaleQuote.toFixed(2)}"`,
     `"Entrate Totali da Eventi & Manifestazioni";"${totaleEntrateEventi.toFixed(2)}"`,
+    `"Donazioni ed Erogazioni Liberali da Terzi";"${totaleDonazioni.toFixed(2)}"`,
     `"TOTALE GENERALE ENTRATE PRO LOCO";"${totaleEntrateGenerali.toFixed(2)}"`,
     `"TOTALE GENERALE USCITE & COSTI PRO LOCO";"${totaleUsciteGenerali.toFixed(2)}"`,
     `"RISULTATO ECONOMICO (AVANZO/DISAVANZO DI GESTIONE)";"${avanzoGestione.toFixed(2)}"`,
@@ -1628,6 +1962,86 @@ export function esportaBilancioCompletoCSV(
     ].join(';'));
   });
 
+  righeCsv.push('""');
+  righeCsv.push('"MACRO RIEPILOGO STAND NUMERATI & MODELLI DI GESTIONE ECONOMICA (NATIVO, IBRIDO, GESTIONE)"');
+  righeCsv.push(
+    `"Manifestazione";"Modello Economico";"N. Stand";"Stand Food";"Stand No-Food";"Prev. Spese Stand (€)";"Cons. Spese Stand (€)";"Diff. Spese (€)";"Prev. Incassi Stand (€)";"Cons. Incassi Stand (€)";"Diff. Incassi (€)";"Margine Netto Stand (€)";"Quota Spettante Pro Loco (€)"`
+  );
+
+  eventiAnno.forEach(e => {
+    const stands = (e.standNumerati && e.standNumerati.length > 0) ? e.standNumerati : STAND_SIMULATI_DEFAULT;
+    let spP = 0;
+    let spC = 0;
+    let inP = 0;
+    let inC = 0;
+    let fCount = 0;
+    let nfCount = 0;
+
+    stands.forEach(s => {
+      spP += Number(s.spesaPreventivo) || 0;
+      spC += Number(s.spesaConsuntivo) || 0;
+      inP += Number(s.incassoPrevisto) || Number(s.incassoStimato) || 0;
+      inC += Number(s.incassoConsuntivo) || Number(s.incassoStimato) || 0;
+      if (s.riferimentoFood) fCount++;
+      else nfCount++;
+    });
+
+    const diffS = spC - spP;
+    const diffI = inC - inP;
+    const margineStand = inC - spC;
+
+    let modelloLabel = 'Nativo (100% Pro Loco)';
+    let quotaProLoco = margineStand;
+    if (e.tipoEvento === 'ibrido') {
+      const perc = (e.percentualeEntrateProLoco !== undefined ? e.percentualeEntrateProLoco : 50) / 100;
+      modelloLabel = `Ibrido (${e.percentualeEntrateProLoco || 50}% Pro Loco)`;
+      quotaProLoco = Math.round(margineStand * perc);
+    } else if (e.tipoEvento === 'gestione') {
+      modelloLabel = `Gestione Conto Terzi (${e.committenteNome || 'Comune'})`;
+      quotaProLoco = Number(e.compensoGestione) || 2500;
+    }
+
+    righeCsv.push([
+      `"${e.titolo.replace(/"/g, '""')}"`,
+      `"${modelloLabel}"`,
+      `"${stands.length}"`,
+      `"${fCount}"`,
+      `"${nfCount}"`,
+      `"${spP}"`,
+      `"${spC}"`,
+      `"${diffS}"`,
+      `"${inP}"`,
+      `"${inC}"`,
+      `"${diffI}"`,
+      `"${margineStand}"`,
+      `"${quotaProLoco}"`
+    ].join(';'));
+  });
+
+  // Aggiungi sezione Donazioni ed Erogazioni Liberali da Terzi
+  righeCsv.push('""');
+  righeCsv.push('"DETTAGLIO DONAZIONI ED EROGAZIONI LIBERALI DA TERZI"');
+  righeCsv.push(
+    `"ID Ricevuta";"Data";"Anno";"Donatore / Ente";"Tipologia";"C.F. / P.IVA";"Importo (€)";"Causale Erogazione";"Destinazione / Progetto";"Metodo Pagamento";"Detraibile Terzo Settore (Art. 83 CTS)";"Note"`
+  );
+
+  donazioniAnno.forEach(d => {
+    righeCsv.push([
+      `"${d.ricevutaNumero}"`,
+      `"${d.data}"`,
+      `"${d.anno}"`,
+      `"${d.donatore.replace(/"/g, '""')}"`,
+      `"${d.tipoDonatore.toUpperCase()}"`,
+      `"${d.codiceFiscalePartitaIva || ''}"`,
+      `"${d.importo.toFixed(2)}"`,
+      `"${d.causale.replace(/"/g, '""')}"`,
+      `"${(d.destinazione || 'Attività Generali').replace(/"/g, '""')}"`,
+      `"${d.metodo}"`,
+      `"${d.detraibileFiscale ? 'SI' : 'NO'}"`,
+      `"${(d.note || '').replace(/"/g, '""')}"`
+    ].join(';'));
+  });
+
   const csvContent = '\uFEFF' + righeCsv.join('\r\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -1639,13 +2053,19 @@ export function esportaBilancioCompletoCSV(
   document.body.removeChild(link);
 }
 
-export function esportaBackupJSON(soci: Socio[], config: ProLocoInfo, eventi?: ProLocoEvento[]): void {
+export function esportaBackupJSON(
+  soci: Socio[], 
+  config: ProLocoInfo, 
+  eventi?: ProLocoEvento[],
+  donazioni?: DonazioneTerzi[]
+): void {
   const data = {
-    versione: '2.0',
+    versione: '2.1',
     dataEsportazione: new Date().toISOString(),
     configurazione: config,
     soci: soci,
-    eventi: eventi || loadEventi()
+    eventi: eventi || loadEventi(),
+    donazioni: donazioni || loadDonazioni()
   };
   const jsonString = JSON.stringify(data, null, 2);
   const blob = new Blob([jsonString], { type: 'application/json' });
@@ -1661,6 +2081,7 @@ export function esportaBackupJSON(soci: Socio[], config: ProLocoInfo, eventi?: P
 export function azzeraDatabase(): void {
   saveSoci([]);
   saveEventi([]);
+  saveDonazioni([]);
 }
 
 export function esportaCodiceSitoHTML(

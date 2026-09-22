@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Socio, ProLocoEvento, ProLocoInfo } from '../types';
+import { Socio, ProLocoEvento, ProLocoInfo, DonazioneTerzi } from '../types';
 import { 
   Printer, 
   X, 
@@ -13,16 +13,22 @@ import {
   PartyPopper,
   ShieldCheck,
   FileDown,
-  Loader2
+  Loader2,
+  Store,
+  Utensils,
+  Layers,
+  HeartHandshake
 } from 'lucide-react';
 import { esportaElementoInPDF } from '../utils/pdfExport';
 import { calcolaScadenzaQuota, getSociNonRinnovati } from '../utils/quoteHelpers';
+import { STAND_SIMULATI_DEFAULT, loadDonazioni } from '../storage';
 
 interface GlobalBudgetPrintModalProps {
   soci: Socio[];
   eventi: ProLocoEvento[];
   config: ProLocoInfo;
   annoSelezionato: number;
+  donazioni?: DonazioneTerzi[];
   onClose: () => void;
 }
 
@@ -31,6 +37,7 @@ export const GlobalBudgetPrintModal: React.FC<GlobalBudgetPrintModalProps> = ({
   eventi,
   config,
   annoSelezionato,
+  donazioni,
   onClose
 }) => {
   const printRef = useRef<HTMLDivElement>(null);
@@ -51,6 +58,12 @@ export const GlobalBudgetPrintModal: React.FC<GlobalBudgetPrintModalProps> = ({
   // Quote dell'anno
   const quoteAnno = soci.flatMap(s => (s.quote || []).filter(q => q.anno === annoSelezionato));
   const totaleQuote = quoteAnno.reduce((sum, q) => sum + (q.importo || 0), 0);
+
+  // Donazioni ed Erogazioni Liberali da Terzi dell'anno
+  const donazioniEffettive = donazioni && donazioni.length > 0 ? donazioni : loadDonazioni();
+  const donazioniAnno = donazioniEffettive.filter(d => d.anno === annoSelezionato);
+  const totaleDonazioni = donazioniAnno.reduce((sum, d) => sum + (d.importo || 0), 0);
+  const totaleDonazioniDetraibili = donazioniAnno.filter(d => d.detraibileFiscale).reduce((sum, d) => sum + (d.importo || 0), 0);
 
   // Soci in regola nell'anno
   const sociTesseratiAnno = soci.filter(s => (s.quote || []).some(q => q.anno === annoSelezionato));
@@ -74,8 +87,8 @@ export const GlobalBudgetPrintModal: React.FC<GlobalBudgetPrintModalProps> = ({
   const totaleEntrateEventi = eventiAnno.reduce((sum, e) => sum + (e.entrateRealizzate || 0), 0);
   const totaleBudgetPreventivato = eventiAnno.reduce((sum, e) => sum + (e.budgetPrevisto || 0), 0);
 
-  // Bilancio Globale
-  const totaleEntrateGenerali = totaleQuote + totaleEntrateEventi;
+  // Bilancio Globale (Quote + Eventi + Donazioni da terzi)
+  const totaleEntrateGenerali = totaleQuote + totaleEntrateEventi + totaleDonazioni;
   const totaleUsciteGenerali = totaleSpeseEventi;
   const avanzoGestione = totaleEntrateGenerali - totaleUsciteGenerali;
 
@@ -83,6 +96,76 @@ export const GlobalBudgetPrintModal: React.FC<GlobalBudgetPrintModalProps> = ({
   const sociNonRinnovati = getSociNonRinnovati(soci, annoSelezionato, config);
   const totaleQuoteDaIncassare = sociNonRinnovati.reduce((sum, s) => sum + s.importoDovuto, 0);
   const scadenzaQuota = calcolaScadenzaQuota(annoSelezionato);
+
+  // Stand Numerati & Modelli Economici dell'Anno (Nativo, Ibrido, Gestione)
+  let totStandsCountAnno = 0;
+  let totFoodCountAnno = 0;
+  let totNonFoodCountAnno = 0;
+  let totSpesaPrevStandsAnno = 0;
+  let totSpesaConsStandsAnno = 0;
+  let totIncassoPrevStandsAnno = 0;
+  let totIncassoConsStandsAnno = 0;
+
+  const eventiStandsDettaglio = eventiAnno.map(e => {
+    const stands = (e.standNumerati && e.standNumerati.length > 0) ? e.standNumerati : STAND_SIMULATI_DEFAULT;
+    let sPrev = 0;
+    let sCons = 0;
+    let iPrev = 0;
+    let iCons = 0;
+    let fCount = 0;
+    let nfCount = 0;
+
+    stands.forEach(s => {
+      sPrev += Number(s.spesaPreventivo) || 0;
+      sCons += Number(s.spesaConsuntivo) || 0;
+      iPrev += Number(s.incassoPrevisto) || Number(s.incassoStimato) || 0;
+      iCons += Number(s.incassoConsuntivo) || Number(s.incassoStimato) || 0;
+      if (s.riferimentoFood) fCount++;
+      else nfCount++;
+    });
+
+    totStandsCountAnno += stands.length;
+    totFoodCountAnno += fCount;
+    totNonFoodCountAnno += nfCount;
+    totSpesaPrevStandsAnno += sPrev;
+    totSpesaConsStandsAnno += sCons;
+    totIncassoPrevStandsAnno += iPrev;
+    totIncassoConsStandsAnno += iCons;
+
+    const diffS = sCons - sPrev;
+    const diffI = iCons - iPrev;
+    const margineStand = iCons - sCons;
+
+    let modelloLabel = 'Nativo (100%)';
+    let quotaProLoco = margineStand;
+    if (e.tipoEvento === 'ibrido') {
+      const perc = (e.percentualeEntrateProLoco !== undefined ? e.percentualeEntrateProLoco : 50) / 100;
+      modelloLabel = `Ibrido (${e.percentualeEntrateProLoco || 50}%)`;
+      quotaProLoco = Math.round(margineStand * perc);
+    } else if (e.tipoEvento === 'gestione') {
+      modelloLabel = `Gestione (${e.committenteNome || 'Comune'})`;
+      quotaProLoco = Number(e.compensoGestione) || 2500;
+    }
+
+    return {
+      evento: e,
+      standsCount: stands.length,
+      fCount,
+      nfCount,
+      sPrev,
+      sCons,
+      diffS,
+      iPrev,
+      iCons,
+      diffI,
+      margineStand,
+      modelloLabel,
+      quotaProLoco
+    };
+  });
+
+  const totMargineStandsAnno = totIncassoConsStandsAnno - totSpesaConsStandsAnno;
+  const totQuotaProLocoStands = eventiStandsDettaglio.reduce((sum, item) => sum + item.quotaProLoco, 0);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 print:p-0 print:bg-white">
@@ -200,13 +283,14 @@ export const GlobalBudgetPrintModal: React.FC<GlobalBudgetPrintModalProps> = ({
           {/* 1. QUADRO SINTETICO DI BILANCIO (STATO GENERALE) */}
           <div className="grid grid-cols-3 gap-3">
             <div className="border border-slate-300 rounded-lg p-3 bg-white">
-              <span className="text-[11px] font-bold text-slate-500 uppercase block">1. Entrate Totali Risc riscosse</span>
+              <span className="text-[11px] font-bold text-slate-500 uppercase block">1. Entrate Totali Riscosse</span>
               <span className="text-lg font-black text-slate-950 block mt-1">
                 {(totaleEntrateGenerali || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })} €
               </span>
               <div className="text-[10px] text-slate-500 mt-1 space-y-0.5">
                 <div>• Quote Tesseramento: {(totaleQuote || 0).toLocaleString('it-IT')} €</div>
-                <div>• Incassi Eventi: {(totaleEntrateEventi || 0).toLocaleString('it-IT')} €</div>
+                <div>• Incassi Eventi & Sagre: {(totaleEntrateEventi || 0).toLocaleString('it-IT')} €</div>
+                <div>• Donazioni da Terzi: {(totaleDonazioni || 0).toLocaleString('it-IT')} €</div>
               </div>
             </div>
 
@@ -430,7 +514,190 @@ export const GlobalBudgetPrintModal: React.FC<GlobalBudgetPrintModalProps> = ({
             </table>
           </div>
 
-          {/* 4. ATTESTAZIONE, VERBALE & FIRME COLLEGIALI */}
+          {/* 4. SEZIONE C: QUADRO MACRO ECONOMICO DEGLI STAND NUMERATI & MODELLI DI GESTIONE */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between border-b border-slate-300 pb-1">
+              <h3 className="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
+                <Store className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Sezione C • Quadro Riassuntivo Stand Numerati & Modelli di Gestione Economica</span>
+              </h3>
+              <span className="text-xs font-semibold text-slate-600">
+                Totale Stand Censiti: <strong>{totStandsCountAnno}</strong> ({totFoodCountAnno} Food & Beverage, {totNonFoodCountAnno} Servizi)
+              </span>
+            </div>
+
+            <table className="w-full border-collapse border border-slate-300 text-left text-[10px]">
+              <thead>
+                <tr className="bg-slate-100 text-slate-700 font-bold uppercase text-[9px]">
+                  <th className="p-1.5 border border-slate-300">Manifestazione</th>
+                  <th className="p-1.5 border border-slate-300 text-center">Modello Gestione</th>
+                  <th className="p-1.5 border border-slate-300 text-center">N° Stand (F / NF)</th>
+                  <th className="p-1.5 border border-slate-300 text-right">Prev. Spese</th>
+                  <th className="p-1.5 border border-slate-300 text-right">Cons. Spese</th>
+                  <th className="p-1.5 border border-slate-300 text-right">Diff. Spese</th>
+                  <th className="p-1.5 border border-slate-300 text-right">Prev. Incassi</th>
+                  <th className="p-1.5 border border-slate-300 text-right">Cons. Incassi</th>
+                  <th className="p-1.5 border border-slate-300 text-right">Diff. Incassi</th>
+                  <th className="p-1.5 border border-slate-300 text-right font-black">Margine Stand</th>
+                  <th className="p-1.5 border border-slate-300 text-right font-black">Quota Cassa Pro Loco</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {eventiStandsDettaglio.map(({ evento, standsCount, fCount, nfCount, sPrev, sCons, diffS, iPrev, iCons, diffI, margineStand, modelloLabel, quotaProLoco }) => (
+                  <tr key={evento.id} className="hover:bg-slate-50">
+                    <td className="p-1.5 border border-slate-300 font-medium">
+                      <span className="block text-slate-900 font-bold">{evento.titolo}</span>
+                      <span className="text-[8.5px] text-slate-500">{evento.dataInizio}</span>
+                    </td>
+                    <td className="p-1.5 border border-slate-300 text-center font-semibold text-slate-700 whitespace-nowrap">
+                      {modelloLabel}
+                    </td>
+                    <td className="p-1.5 border border-slate-300 text-center font-mono font-semibold">
+                      {standsCount} <span className="text-slate-500 text-[8.5px]">({fCount} F / {nfCount} NF)</span>
+                    </td>
+                    <td className="p-1.5 border border-slate-300 text-right font-mono">{(sPrev || 0).toLocaleString('it-IT')} €</td>
+                    <td className="p-1.5 border border-slate-300 text-right font-mono font-semibold">{(sCons || 0).toLocaleString('it-IT')} €</td>
+                    <td className={`p-1.5 border border-slate-300 text-right font-mono text-[9px] ${diffS <= 0 ? 'text-emerald-800' : 'text-rose-700'}`}>
+                      {diffS <= 0 ? `${diffS.toLocaleString('it-IT')} €` : `+${diffS.toLocaleString('it-IT')} €`}
+                    </td>
+                    <td className="p-1.5 border border-slate-300 text-right font-mono">{(iPrev || 0).toLocaleString('it-IT')} €</td>
+                    <td className="p-1.5 border border-slate-300 text-right font-mono font-semibold">{(iCons || 0).toLocaleString('it-IT')} €</td>
+                    <td className={`p-1.5 border border-slate-300 text-right font-mono text-[9px] ${diffI >= 0 ? 'text-emerald-800' : 'text-amber-800'}`}>
+                      {diffI >= 0 ? `+${diffI.toLocaleString('it-IT')} €` : `${diffI.toLocaleString('it-IT')} €`}
+                    </td>
+                    <td className={`p-1.5 border border-slate-300 text-right font-mono font-bold ${margineStand >= 0 ? 'text-emerald-800' : 'text-rose-700'}`}>
+                      {margineStand >= 0 ? '+' : ''}{margineStand.toLocaleString('it-IT')} €
+                    </td>
+                    <td className={`p-1.5 border border-slate-300 text-right font-mono font-black ${quotaProLoco >= 0 ? 'text-emerald-950' : 'text-rose-950'}`}>
+                      {quotaProLoco >= 0 ? '+' : ''}{quotaProLoco.toLocaleString('it-IT')} €
+                    </td>
+                  </tr>
+                ))}
+
+                {/* Totale Stand */}
+                <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                  <td colSpan={2} className="p-1.5 border border-slate-300 font-black text-slate-900">
+                    TOTALE CONSOLIDATO STAND NUMERATI
+                  </td>
+                  <td className="p-1.5 border border-slate-300 text-center font-mono">
+                    {totStandsCountAnno} ({totFoodCountAnno} F / {totNonFoodCountAnno} NF)
+                  </td>
+                  <td className="p-1.5 border border-slate-300 text-right font-mono font-bold">{(totSpesaPrevStandsAnno || 0).toLocaleString('it-IT')} €</td>
+                  <td className="p-1.5 border border-slate-300 text-right font-mono font-black text-slate-950">{(totSpesaConsStandsAnno || 0).toLocaleString('it-IT')} €</td>
+                  <td className={`p-1.5 border border-slate-300 text-right font-mono ${(totSpesaConsStandsAnno - totSpesaPrevStandsAnno) <= 0 ? 'text-emerald-800' : 'text-rose-700'}`}>
+                    {(totSpesaConsStandsAnno - totSpesaPrevStandsAnno) <= 0 
+                      ? `${(totSpesaConsStandsAnno - totSpesaPrevStandsAnno).toLocaleString('it-IT')} €` 
+                      : `+${(totSpesaConsStandsAnno - totSpesaPrevStandsAnno).toLocaleString('it-IT')} €`}
+                  </td>
+                  <td className="p-1.5 border border-slate-300 text-right font-mono font-bold">{(totIncassoPrevStandsAnno || 0).toLocaleString('it-IT')} €</td>
+                  <td className="p-1.5 border border-slate-300 text-right font-mono font-black text-emerald-950">{(totIncassoConsStandsAnno || 0).toLocaleString('it-IT')} €</td>
+                  <td className={`p-1.5 border border-slate-300 text-right font-mono ${(totIncassoConsStandsAnno - totIncassoPrevStandsAnno) >= 0 ? 'text-emerald-800' : 'text-amber-800'}`}>
+                    {(totIncassoConsStandsAnno - totIncassoPrevStandsAnno) >= 0 
+                      ? `+${(totIncassoConsStandsAnno - totIncassoPrevStandsAnno).toLocaleString('it-IT')} €` 
+                      : `${(totIncassoConsStandsAnno - totIncassoPrevStandsAnno).toLocaleString('it-IT')} €`}
+                  </td>
+                  <td className={`p-1.5 border border-slate-300 text-right font-mono font-black ${totMargineStandsAnno >= 0 ? 'text-emerald-900' : 'text-rose-800'}`}>
+                    {totMargineStandsAnno >= 0 ? '+' : ''}{totMargineStandsAnno.toLocaleString('it-IT')} €
+                  </td>
+                  <td className={`p-1.5 border border-slate-300 text-right font-mono font-black text-emerald-950`}>
+                    {totQuotaProLocoStands >= 0 ? '+' : ''}{totQuotaProLocoStands.toLocaleString('it-IT')} €
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* 5. SEZIONE D: DONAZIONI ED EROGAZIONI LIBERALI DA TERZI (ART. 83 CTS - RUNTS) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between border-b border-slate-300 pb-1">
+              <h3 className="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
+                <HeartHandshake className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Sezione D • Donazioni ed Erogazioni Liberali da Terzi (Art. 83 D.Lgs. 117/2017)</span>
+              </h3>
+              <span className="text-xs font-semibold text-slate-600">
+                Totale Registrate: <strong>{donazioniAnno.length}</strong> erogazioni (Detraibili: <strong>{(totaleDonazioniDetraibili || 0).toLocaleString('it-IT')} €</strong>)
+              </span>
+            </div>
+
+            {donazioniAnno.length === 0 ? (
+              <div className="p-3 text-center border border-slate-200 rounded-lg text-slate-500 italic text-[11px]">
+                Nessuna donazione registrata per l'esercizio {annoSelezionato}.
+              </div>
+            ) : (
+              <table className="w-full border-collapse border border-slate-300 text-left text-[10px]">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-bold uppercase text-[9px]">
+                    <th className="p-1.5 border border-slate-300">N° Ricevuta</th>
+                    <th className="p-1.5 border border-slate-300">Data</th>
+                    <th className="p-1.5 border border-slate-300">Donatore / Ente Erogatore</th>
+                    <th className="p-1.5 border border-slate-300 text-center">Tipologia</th>
+                    <th className="p-1.5 border border-slate-300">C.F. / P.IVA</th>
+                    <th className="p-1.5 border border-slate-300">Causale & Destinazione</th>
+                    <th className="p-1.5 border border-slate-300 text-center">Pagamento</th>
+                    <th className="p-1.5 border border-slate-300 text-center">Detraibile (Art. 83)</th>
+                    <th className="p-1.5 border border-slate-300 text-right font-black">Importo Erogato</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {donazioniAnno.map((d) => (
+                    <tr key={d.id} className="hover:bg-slate-50">
+                      <td className="p-1.5 border border-slate-300 font-mono font-bold text-slate-900">
+                        {d.ricevutaNumero}
+                      </td>
+                      <td className="p-1.5 border border-slate-300 font-mono whitespace-nowrap">
+                        {d.data}
+                      </td>
+                      <td className="p-1.5 border border-slate-300 font-semibold text-slate-900">
+                        {d.donatore}
+                      </td>
+                      <td className="p-1.5 border border-slate-300 text-center uppercase text-[8.5px] font-semibold text-slate-600">
+                        {d.tipoDonatore}
+                      </td>
+                      <td className="p-1.5 border border-slate-300 font-mono text-[9px] text-slate-600">
+                        {d.codiceFiscalePartitaIva || '—'}
+                      </td>
+                      <td className="p-1.5 border border-slate-300 text-slate-700">
+                        <span className="block font-medium">{d.causale}</span>
+                        {d.destinazione && (
+                          <span className="text-[8.5px] text-emerald-800 font-semibold block">
+                            Destinazione: {d.destinazione}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-1.5 border border-slate-300 text-center whitespace-nowrap text-slate-700 text-[9px]">
+                        {d.metodo}
+                      </td>
+                      <td className="p-1.5 border border-slate-300 text-center">
+                        <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold ${
+                          d.detraibileFiscale ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {d.detraibileFiscale ? 'SI (Art. 83 CTS)' : 'NO'}
+                        </span>
+                      </td>
+                      <td className="p-1.5 border border-slate-300 text-right font-mono font-black text-emerald-950">
+                        {(d.importo || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })} €
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Totale Donazioni */}
+                  <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                    <td colSpan={7} className="p-1.5 border border-slate-300 font-black text-slate-900">
+                      TOTALE EROGAZIONI LIBERALI & DONAZIONI DA TERZI
+                    </td>
+                    <td className="p-1.5 border border-slate-300 text-center font-mono text-[9px]">
+                      {donazioniAnno.filter(d => d.detraibileFiscale).length} su {donazioniAnno.length} detraibili
+                    </td>
+                    <td className="p-1.5 border border-slate-300 text-right font-mono font-black text-emerald-950">
+                      {(totaleDonazioni || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })} €
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* 6. ATTESTAZIONE, VERBALE & FIRME COLLEGIALI */}
           <div className="pt-4 border-t-2 border-slate-900 text-xs space-y-4">
             <p className="text-[11px] text-slate-600 leading-relaxed italic">
               Il presente Rendiconto Economico Finanziario dell'Esercizio {annoSelezionato} è stato redatto in conformità alle scritture del registro soci e alle registrazioni di cassa delle manifestazioni territoriali della Pro Loco {config.nome}. Viene depositato presso la sede sociale e sottoposto alla formale approvazione dell'Assemblea Ordinaria dei Soci.

@@ -20,6 +20,7 @@ import {
   loadEventi,
   saveEventi,
   INITIAL_EVENTI,
+  ripristinaEventiSimulati,
   loadSitoWebConfig,
   saveSitoWebConfig,
   loadGiornalinoConfig,
@@ -182,6 +183,12 @@ export default function App() {
     saveEventi(INITIAL_EVENTI);
     setConfig(DEFAULT_PRO_LOCO);
     saveProLocoConfig(DEFAULT_PRO_LOCO);
+  };
+
+  // Ripristino specifico dei 3 eventi simulati
+  const handleRipristinaEventiSimulati = () => {
+    const ripristinati = ripristinaEventiSimulati();
+    setEventi(ripristinati);
   };
 
   // Azzeramento completo dell'intero database (Soci, Eventi, Quote)
@@ -582,6 +589,7 @@ export default function App() {
               onEliminaEvento={handleEliminaEvento}
               onStampaEvento={(evento) => setEventoStampa(evento)}
               onStampaProgrammaEventi={() => setMostraStampaProgrammaEventi(true)}
+              onRipristinaSimulazione={handleRipristinaEventiSimulati}
             />
           </>
         ) : (

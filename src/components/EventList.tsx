@@ -38,11 +38,13 @@ import {
   Check,
   ArrowRight,
   Info,
-  X
+  X,
+  SlidersHorizontal
 } from 'lucide-react';
 import { esportaEventiCSV, STAND_SIMULATI_DEFAULT } from '../storage';
 import { EventBudgetChart } from './EventBudgetChart';
 import { calcolaEconomiaEvento, getInfoTipoEvento } from '../utils/eventoHelpers';
+import { EventStandsModal } from './EventStandsModal';
 
 interface EventListProps {
   eventi: ProLocoEvento[];
@@ -82,6 +84,7 @@ export const EventList: React.FC<EventListProps> = ({
   const [eventoEspansoId, setEventoEspansoId] = useState<string | null>(null);
   const [standEspansoId, setStandEspansoId] = useState<string | null>(null);
   const [mostraComparazioneModelli, setMostraComparazioneModelli] = useState<boolean>(false);
+  const [eventoPerModificaStand, setEventoPerModificaStand] = useState<ProLocoEvento | null>(null);
 
   // Soci mappa per reperire rapidamente i nominativi
   const sociMappa = useMemo(() => {
@@ -262,16 +265,16 @@ export const EventList: React.FC<EventListProps> = ({
   return (
     <div className="space-y-6">
 
-      {/* Banner Simulazione 3 Modelli Evento: Nativo, Ibrido, Gestione */}
+      {/* Banner Gestione Effettiva 3 Modelli Evento: Nativo, Ibrido, Gestione & Stand Numerati */}
       <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 rounded-2xl p-4 sm:p-5 text-white border border-teal-500/40 shadow-sm space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-black uppercase tracking-wider bg-teal-500 text-slate-950 shadow-2xs">
-                Simulazione 3 Modelli
+              <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-black uppercase tracking-wider bg-emerald-400 text-slate-950 shadow-2xs">
+                Dati Effettivi Operativi
               </span>
               <span className="text-xs text-teal-300 font-medium">
-                Confronto Architetture di Gestione Eventi Pro Loco
+                Gestione Eventi & Stand Numerati (Preventivo, Consuntivo e Differenza)
               </span>
             </div>
             <h3 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
@@ -282,7 +285,7 @@ export const EventList: React.FC<EventListProps> = ({
               <span>3. Evento Gestione</span>
             </h3>
             <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
-              Tutti e 3 gli eventi simulati presentano <strong>le stesse voci attuali</strong> (costi vivi 5.900 €, incassi lordi stand 9.500 €) e gli stessi <strong>stand numerati (#1-#6 con tipologia merceologica e riferimento Food & Beverage)</strong>. L'<strong>unica differenza è nella gestione economica</strong> e nella ripartizione a bilancio Pro Loco.
+              Tutti gli eventi sono ora <strong>effettivi ed operativi</strong>. Ciascun evento supporta l'<strong>inserimento e la numerazione libera degli stand</strong> in base all'esigenza organizzativa, con tipologia merceologica, riferimento <strong>Food & Beverage</strong>, tracciamento di <strong>Preventivo, Consuntivo e Differenza</strong> sia sulle spese che sugli incassi.
             </p>
           </div>
 
@@ -300,10 +303,10 @@ export const EventList: React.FC<EventListProps> = ({
                 type="button"
                 onClick={onRipristinaSimulazione}
                 className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
-                title="Ripristina i 3 eventi simulati con stand numerati e voci conformi"
+                title="Ripristina i 3 eventi con configurazione standard"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-teal-300" />
-                <span>Reimposta Simulazione</span>
+                <span>Reimposta Eventi Standard</span>
               </button>
             )}
           </div>
@@ -811,7 +814,7 @@ export const EventList: React.FC<EventListProps> = ({
                     ) : null}
                   </div>
 
-                  {/* Sezione Stand Numerati con Tipologia & Riferimento Food */}
+                  {/* Sezione Stand Numerati con Tipologia, Riferimento Food ed Economia Analitica */}
                   {(() => {
                     const stands: StandEvento[] = evento.standNumerati && evento.standNumerati.length > 0
                       ? evento.standNumerati
@@ -819,82 +822,214 @@ export const EventList: React.FC<EventListProps> = ({
                     const isStandEspanso = standEspansoId === evento.id;
                     const foodStandsCount = stands.filter(s => s.riferimentoFood).length;
 
+                    // Calcolo totali analitici degli stand
+                    let totSpPrev = 0;
+                    let totSpCons = 0;
+                    let totIncPrev = 0;
+                    let totIncCons = 0;
+                    stands.forEach(s => {
+                      totSpPrev += Number(s.spesaPreventivo) || 0;
+                      totSpCons += Number(s.spesaConsuntivo) || 0;
+                      totIncPrev += Number(s.incassoPrevisto) || 0;
+                      totIncCons += Number(s.incassoConsuntivo) || 0;
+                    });
+                    const diffSp = totSpCons - totSpPrev;
+                    const diffInc = totIncCons - totIncPrev;
+                    const margStand = totIncCons - totSpCons;
+
                     return (
-                      <div className="bg-slate-50/90 p-2.5 rounded-lg border border-slate-200 text-xs space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                            <Store className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Stand Numerati ({stands.length} Totali • {foodStandsCount} Food)</span>
+                      <div className="bg-slate-50/90 p-3 rounded-xl border border-slate-200 text-xs space-y-2.5">
+                        
+                        {/* Header Box Stand */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200/80">
+                          <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <Store className="w-4 h-4 text-amber-600" />
+                            <span>Stand Numerati ({stands.length} Totali • {foodStandsCount} Food & Beverage)</span>
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => setStandEspansoId(isStandEspanso ? null : evento.id)}
-                            className="text-[10px] font-semibold text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
-                          >
-                            {isStandEspanso ? 'Comprimi Stand' : 'Dettagli Stand'}
-                          </button>
-                        </div>
 
-                        {/* Griglia chip veloci dei 6 stand */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                          {stands.map(st => (
-                            <div
-                              key={st.id || st.numero}
-                              className={`p-1.5 rounded-md border flex items-center gap-1.5 ${
-                                st.riferimentoFood
-                                  ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
-                                  : 'bg-white border-slate-200 text-slate-800'
-                              }`}
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEventoPerModificaStand(evento)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px] transition-colors cursor-pointer border border-amber-300 shadow-2xs"
+                              title="Inserisci o modifica i dati degli stand (numerazione, preventivo, consuntivo e differenze)"
                             >
-                              <span className={`w-5 h-5 rounded text-[10px] font-bold font-mono flex items-center justify-center shrink-0 ${
-                                st.riferimentoFood ? 'bg-emerald-700 text-white' : 'bg-slate-700 text-white'
-                              }`}>
-                                #{st.numero}
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <span className="font-bold text-[10.5px] truncate block leading-tight">
-                                  {st.nome}
-                                </span>
-                                <span className="text-[9px] text-slate-500 block truncate">
-                                  {st.riferimentoFood ? 'Rif. Food' : 'No-Food / Servizi'}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
+                              <SlidersHorizontal className="w-3 h-3 text-amber-700" />
+                              <span>Gestisci Stand & Cifre</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setStandEspansoId(isStandEspanso ? null : evento.id)}
+                              className="text-[10.5px] font-semibold text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
+                            >
+                              {isStandEspanso ? 'Comprimi Tabella' : 'Tabella Analitica'}
+                            </button>
+                          </div>
                         </div>
 
-                        {/* Vista Espansa Stand con responsabili e stime */}
-                        {isStandEspanso && (
-                          <div className="pt-2 border-t border-slate-200 space-y-1.5 animate-in fade-in duration-150">
-                            <span className="text-[10px] font-semibold text-slate-500 block">
-                              Dettaglio Stand, Tipologie Merceologiche & Riferimento Food:
-                            </span>
-                            <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                              {stands.map(st => (
-                                <div key={st.numero} className="p-1.5 bg-white rounded border border-slate-200 text-[10.5px] flex items-center justify-between">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className={`w-5 h-5 rounded text-[10px] font-bold font-mono flex items-center justify-center text-white shrink-0 ${
-                                      st.riferimentoFood ? 'bg-emerald-700' : 'bg-slate-600'
-                                    }`}>
-                                      #{st.numero}
+                        {/* Riepilogo Rapido KPI Stand: Spese, Incassi e Margine */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 font-mono text-[11px] bg-white p-2 rounded-lg border border-slate-200">
+                          <div className="flex items-center justify-between px-1">
+                            <span className="text-slate-500 font-sans text-[10.5px]">Spese Stand:</span>
+                            <div className="text-right">
+                              <strong className="text-slate-900">{(totSpCons || 0).toLocaleString('it-IT')} €</strong>
+                              <span className="text-[9.5px] text-slate-400 ml-1">(prev. {(totSpPrev || 0).toLocaleString('it-IT')} €)</span>
+                              <span className={`text-[9.5px] font-bold block ${diffSp <= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {diffSp <= 0 ? `Diff: ${diffSp} € (Risparmio)` : `Diff: +${diffSp} € (Scost.)`}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between px-1 border-t sm:border-t-0 sm:border-l border-slate-100 pt-1 sm:pt-0">
+                            <span className="text-slate-500 font-sans text-[10.5px]">Incassi Stand:</span>
+                            <div className="text-right">
+                              <strong className="text-emerald-700">{(totIncCons || 0).toLocaleString('it-IT')} €</strong>
+                              <span className="text-[9.5px] text-slate-400 ml-1">(prev. {(totIncPrev || 0).toLocaleString('it-IT')} €)</span>
+                              <span className={`text-[9.5px] font-bold block ${diffInc >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                {diffInc >= 0 ? `Diff: +${diffInc} €` : `Diff: ${diffInc} €`}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between px-1 border-t sm:border-t-0 sm:border-l border-slate-100 pt-1 sm:pt-0">
+                            <span className="text-slate-500 font-sans text-[10.5px]">Margine Stand:</span>
+                            <div className="text-right">
+                              <strong className={margStand >= 0 ? 'text-emerald-700 font-black' : 'text-rose-600 font-black'}>
+                                {margStand >= 0 ? `+${margStand.toLocaleString('it-IT')}` : margStand.toLocaleString('it-IT')} €
+                              </strong>
+                              <span className="text-[9.5px] text-slate-400 block font-sans">
+                                Netto operativo
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Griglia chip veloci degli stand numerati */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          {stands.map(st => {
+                            const spP = Number(st.spesaPreventivo) || 0;
+                            const spC = Number(st.spesaConsuntivo) || 0;
+                            const inP = Number(st.incassoPrevisto) || 0;
+                            const inC = Number(st.incassoConsuntivo) || 0;
+                            const diffS = spC - spP;
+
+                            return (
+                              <div
+                                key={st.id || st.numero}
+                                className={`p-2 rounded-lg border flex items-start gap-2 ${
+                                  st.riferimentoFood
+                                    ? 'bg-emerald-50/70 border-emerald-200/90 text-emerald-950'
+                                    : 'bg-white border-slate-200 text-slate-800'
+                                }`}
+                              >
+                                <span className={`w-6 h-6 rounded-md text-[11px] font-bold font-mono flex items-center justify-center shrink-0 ${
+                                  st.riferimentoFood ? 'bg-emerald-700 text-white' : 'bg-slate-700 text-white'
+                                }`}>
+                                  #{st.numero}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="font-bold text-[11px] truncate block leading-tight">
+                                      {st.nome}
                                     </span>
-                                    <div className="min-w-0">
-                                      <span className="font-bold text-slate-900">{st.nome}</span>
-                                      <span className="text-slate-500 ml-1.5 truncate">({st.tipologia})</span>
-                                    </div>
                                   </div>
-                                  <div className="text-right shrink-0">
-                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                      st.riferimentoFood ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
-                                    }`}>
-                                      {st.riferimentoFood ? 'Food & Beverage' : 'Servizi'}
-                                    </span>
-                                    {st.responsabile && (
-                                      <span className="text-[9.5px] text-slate-400 block">Ref: {st.responsabile}</span>
-                                    )}
+                                  <span className="text-[9px] text-slate-500 block truncate">
+                                    {st.riferimentoFood ? 'Food & Beverage' : 'Servizi / No-Food'}
+                                  </span>
+                                  <div className="flex items-center justify-between text-[9.5px] font-mono text-slate-600 pt-1 mt-0.5 border-t border-slate-200/60">
+                                    <span>Sp: <strong>{spC}€</strong> <span className={diffS <= 0 ? 'text-emerald-700' : 'text-rose-600'}>({diffS <= 0 ? `${diffS}€` : `+${diffS}€`})</span></span>
+                                    <span className="text-emerald-800 font-bold">Inc: {inC}€</span>
                                   </div>
                                 </div>
-                              ))}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Vista Espansa: Tabella Analitica Completa degli Stand */}
+                        {isStandEspanso && (
+                          <div className="pt-2 border-t border-slate-200 space-y-2 animate-in fade-in duration-150">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10.5px] font-bold text-slate-700 block">
+                                Dettaglio Economico Stand: Preventivo, Consuntivo e Scostamento
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setEventoPerModificaStand(evento)}
+                                className="text-[10px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2 py-0.5 rounded cursor-pointer"
+                              >
+                                Modifica Dati Stand
+                              </button>
+                            </div>
+
+                            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                              <table className="w-full text-[10.5px] text-left border-collapse">
+                                <thead>
+                                  <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 text-[10px] uppercase font-bold tracking-wider">
+                                    <th className="py-1.5 px-2">N° & Stand</th>
+                                    <th className="py-1.5 px-2">Tipologia</th>
+                                    <th className="py-1.5 px-2">Circuito</th>
+                                    <th className="py-1.5 px-2">Referente</th>
+                                    <th className="py-1.5 px-2 text-right">Spesa (Prev / Cons / Diff)</th>
+                                    <th className="py-1.5 px-2 text-right">Incasso (Prev / Cons / Diff)</th>
+                                    <th className="py-1.5 px-2 text-right">Margine Netto</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 font-mono">
+                                  {stands.map(st => {
+                                    const spP = Number(st.spesaPreventivo) || 0;
+                                    const spC = Number(st.spesaConsuntivo) || 0;
+                                    const diffS = spC - spP;
+
+                                    const inP = Number(st.incassoPrevisto) || 0;
+                                    const inC = Number(st.incassoConsuntivo) || 0;
+                                    const diffI = inC - inP;
+
+                                    const marg = inC - spC;
+
+                                    return (
+                                      <tr key={st.id || st.numero} className="hover:bg-slate-50 transition-colors">
+                                        <td className="py-1.5 px-2 font-sans font-bold text-slate-900 whitespace-nowrap">
+                                          <span className="w-5 h-5 rounded bg-slate-800 text-white font-mono text-[10px] inline-flex items-center justify-center mr-1.5">
+                                            #{st.numero}
+                                          </span>
+                                          {st.nome}
+                                        </td>
+                                        <td className="py-1.5 px-2 font-sans text-slate-600 whitespace-nowrap">
+                                          {st.tipologia}
+                                        </td>
+                                        <td className="py-1.5 px-2 font-sans whitespace-nowrap">
+                                          <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                            st.riferimentoFood ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                                          }`}>
+                                            {st.riferimentoFood ? 'Food & Bev' : 'Servizi'}
+                                          </span>
+                                        </td>
+                                        <td className="py-1.5 px-2 font-sans text-slate-500 whitespace-nowrap">
+                                          {st.responsabile || '—'}
+                                        </td>
+                                        <td className="py-1.5 px-2 text-right whitespace-nowrap">
+                                          <span className="text-slate-500">{spP}€</span> / <strong className="text-slate-900">{spC}€</strong>
+                                          <span className={`ml-1 text-[9.5px] font-bold ${diffS <= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                                            ({diffS <= 0 ? `${diffS}€` : `+${diffS}€`})
+                                          </span>
+                                        </td>
+                                        <td className="py-1.5 px-2 text-right whitespace-nowrap">
+                                          <span className="text-slate-500">{inP}€</span> / <strong className="text-emerald-800">{inC}€</strong>
+                                          <span className={`ml-1 text-[9.5px] font-bold ${diffI >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                            ({diffI >= 0 ? `+${diffI}€` : `${diffI}€`})
+                                          </span>
+                                        </td>
+                                        <td className="py-1.5 px-2 text-right font-black whitespace-nowrap">
+                                          <span className={marg >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
+                                            {marg >= 0 ? `+${marg.toLocaleString('it-IT')}` : marg.toLocaleString('it-IT')} €
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
                             </div>
                           </div>
                         )}
@@ -956,7 +1091,7 @@ export const EventList: React.FC<EventListProps> = ({
                                 <strong>Modello 2 (Partner):</strong> {evento.partnerIbridoNome || 'Co-organizzatore'}
                               </span>
                               <span className="font-semibold text-violet-800 shrink-0 ml-1">
-                                Spese Pro Loco: {(econ.costiProLocoSostenuti || 0).toLocaleString('it-IT')} € (50%)
+                                Spese Pro Loco: {(econ.costiProLocoConsuntivo || 0).toLocaleString('it-IT')} € (50%)
                               </span>
                             </div>
                           )}
@@ -1477,7 +1612,7 @@ export const EventList: React.FC<EventListProps> = ({
             {/* Footer Modale */}
             <div className="px-5 py-3 border-t border-slate-200 bg-white flex items-center justify-between shrink-0">
               <span className="text-[11px] text-slate-500">
-                Simulazione conforme ai principi contabili e gestionali UNPLI per Pro Loco APS
+                Guida operativa conforme ai principi contabili e gestionali UNPLI per Pro Loco APS
               </span>
               <button
                 type="button"
@@ -1490,6 +1625,19 @@ export const EventList: React.FC<EventListProps> = ({
 
           </div>
         </div>
+      )}
+
+      {/* Modale Dedicata per Gestione & Inserimento Dati Stand Numerati */}
+      {eventoPerModificaStand && (
+        <EventStandsModal
+          evento={eventoPerModificaStand}
+          soci={soci}
+          onSalva={(eventoAggiornato) => {
+            onModificaEvento(eventoAggiornato);
+            setEventoPerModificaStand(null);
+          }}
+          onClose={() => setEventoPerModificaStand(null)}
+        />
       )}
 
     </div>

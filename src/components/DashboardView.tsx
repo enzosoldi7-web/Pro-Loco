@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProLocoInfo, Socio, ProLocoEvento, SitoWebConfig, GiornalinoConfig, PaginaPrincipale, SottoTabGestionale, EdizioneGiornalino } from '../types';
+import { ProLocoInfo, Socio, ProLocoEvento, SitoWebConfig, GiornalinoConfig, PaginaPrincipale, SottoTabGestionale, EdizioneGiornalino, DonazioneTerzi } from '../types';
 import { 
   Building2, 
   Calendar, 
@@ -37,9 +37,10 @@ import {
   Palette,
   Compass,
   Database,
-  Archive
+  Archive,
+  HeartHandshake
 } from 'lucide-react';
-import { esportaLibroSociCSV, esportaBackupJSON, esportaBilancioCompletoCSV, esportaCodiceSitoHTML } from '../storage';
+import { esportaLibroSociCSV, esportaBackupJSON, esportaBilancioCompletoCSV, esportaCodiceSitoHTML, loadDonazioni } from '../storage';
 
 interface DashboardViewProps {
   config: ProLocoInfo;
@@ -49,6 +50,7 @@ interface DashboardViewProps {
   giornalinoConfig: GiornalinoConfig;
   archivioGiornalini?: EdizioneGiornalino[];
   annoSelezionato: number;
+  donazioni?: DonazioneTerzi[];
   onNavigaPagina: (
     pagina: PaginaPrincipale, 
     sottoTab?: SottoTabGestionale, 
@@ -62,7 +64,7 @@ interface DashboardViewProps {
   onCambiaAnno: (anno: number) => void;
   onApriImpostazioni: () => void;
   onApriApkModal: () => void;
-  onImportaBackup: (dati: { soci: Socio[]; config: ProLocoInfo; eventi?: ProLocoEvento[] }) => void;
+  onImportaBackup: (dati: { soci: Socio[]; config: ProLocoInfo; eventi?: ProLocoEvento[]; donazioni?: DonazioneTerzi[] }) => void;
   onRipristinaDemo: () => void;
   onAzzeraDatabase?: () => void;
 }
@@ -75,6 +77,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   giornalinoConfig,
   archivioGiornalini = [],
   annoSelezionato,
+  donazioni,
   onNavigaPagina,
   onCambiaAnno,
   onApriImpostazioni,
@@ -101,9 +104,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return annoEv === annoSelezionato;
   });
 
+  const donazioniEffettive = donazioni && donazioni.length > 0 ? donazioni : loadDonazioni();
+  const donazioniAnno = donazioniEffettive.filter(d => d.anno === annoSelezionato);
+  const totaleDonazioniAnno = donazioniAnno.reduce((acc, d) => acc + (d.importo || 0), 0);
+
   const totaleSpeseEventi = eventiAnno.reduce((acc, e) => acc + (e.costiSostenuti || e.budgetPrevisto || 0), 0);
   const totaleEntrateEventi = eventiAnno.reduce((acc, e) => acc + (e.entrateRealizzate || e.entratePreviste || 0), 0);
-  const totaleEntrateComplessive = totaleIncassiQuote + totaleEntrateEventi;
+  const totaleEntrateComplessive = totaleIncassiQuote + totaleEntrateEventi + totaleDonazioniAnno;
   const avanzoEconomico = totaleEntrateComplessive - totaleSpeseEventi;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,7 +127,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onImportaBackup({
             soci: parsed.soci,
             config: parsed.configurazione,
-            eventi: parsed.eventi || []
+            eventi: parsed.eventi || [],
+            donazioni: parsed.donazioni || []
           });
           alert('Backup ripristinato con successo!');
           setMostraMenuBackup(false);
@@ -220,7 +228,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     
                     <button
                       onClick={() => {
-                        esportaBackupJSON(soci, config, eventi);
+                        esportaBackupJSON(soci, config, eventi, donazioniEffettive);
                         setMostraMenuBackup(false);
                       }}
                       className="w-full text-left px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer font-medium"
@@ -253,7 +261,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                     <button
                       onClick={() => {
-                        esportaBilancioCompletoCSV(soci, eventi, annoSelezionato);
+                        esportaBilancioCompletoCSV(soci, eventi, config, annoSelezionato, donazioniEffettive);
                         setMostraMenuBackup(false);
                       }}
                       className="w-full text-left px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer font-medium"

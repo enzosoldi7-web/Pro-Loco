@@ -23,6 +23,32 @@ export type MetodoPagamento =
 
 export type StatoQuota = 'in_regola' | 'da_rinnovare' | 'scaduta';
 
+export type TipoDonatore = 
+  | 'privato' 
+  | 'azienda' 
+  | 'fondazione' 
+  | 'ente_benefico' 
+  | 'associazione' 
+  | 'anonimo';
+
+export interface DonazioneTerzi {
+  id: string;
+  donatore: string; // Nome persona fisica, ditta, azienda, ente o fondazione
+  tipoDonatore: TipoDonatore;
+  codiceFiscalePartitaIva?: string;
+  importo: number; // Importo donazione in Euro (€)
+  data: string; // YYYY-MM-DD
+  anno: number; // Esercizio finanziario di competenza
+  causale: string; // Es. "Erogazione liberale a sostegno delle attività culturali e ambientali"
+  metodo: MetodoPagamento;
+  ricevutaNumero: string; // Es. "DON-2026/001"
+  destinazione?: string; // Es. "Cultura & Ambiente", "Feste & Sagre", "Solidarietà", "Generale"
+  eventoCollegatoId?: string;
+  eventoCollegatoTitolo?: string;
+  detraibileFiscale?: boolean; // Attestazione erogazione liberale Terzo Settore (Art. 83 D.Lgs. 117/2017)
+  note?: string;
+}
+
 export interface QuotaAssociativa {
   id: string;
   socioId: string;
@@ -161,13 +187,18 @@ export type TipologiaStand =
 
 export interface StandEvento {
   id: string;
-  numero: number; // Numero progressivo dello stand (1, 2, 3...)
+  numero: number; // Numero assegnato in base all'esigenza (es. 1, 2, 3...)
   nome: string; // Denominazione dello stand (es. "Cucina Tradizionale & Primi Piatti")
   tipologia: TipologiaStand | string;
-  riferimentoFood: boolean; // Riferimento Food (True = collegato all'area ristorazione / voce Food & Beverage)
+  riferimentoFood: boolean; // Riferimento Food (True = collegato all'area ristorazione / Food & Beverage)
   descrizione?: string;
   responsabile?: string;
-  incassoStimato?: number;
+  // Dati economici per singolo stand (Preventivo, Consuntivo e Differenza)
+  spesaPreventivo?: number; // Costi preventivati allestimento/merci (€)
+  spesaConsuntivo?: number; // Spese consuntive sostenute (€)
+  incassoPrevisto?: number; // Incasso / ricavi previsti (€)
+  incassoConsuntivo?: number; // Incasso consuntivo effettivo realizzato (€)
+  incassoStimato?: number; // Retrocompatibilità
 }
 
 export interface DettaglioSpeseEvento {

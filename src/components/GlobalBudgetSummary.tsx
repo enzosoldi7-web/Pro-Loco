@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Socio, ProLocoEvento, ProLocoInfo, QuotaAssociativa } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Socio, ProLocoEvento, ProLocoInfo, QuotaAssociativa, StandEvento, DonazioneTerzi, TipoDonatore } from '../types';
 import { 
   Building2,
   Euro,
@@ -38,7 +38,19 @@ import {
   ChevronUp,
   Sparkles,
   Handshake,
-  Briefcase
+  Briefcase,
+  Store,
+  Calculator,
+  ArrowRight,
+  Check,
+  SlidersHorizontal,
+  Info,
+  HeartHandshake,
+  BookOpen,
+  Plus,
+  Trash2,
+  Edit,
+  Eye
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -53,7 +65,15 @@ import {
   CartesianGrid,
   Legend
 } from 'recharts';
-import { esportaBilancioCompletoCSV, esportaBackupJSON } from '../storage';
+import { 
+  esportaBilancioCompletoCSV, 
+  esportaBackupJSON, 
+  STAND_SIMULATI_DEFAULT, 
+  esportaStandEventoCSV,
+  loadDonazioni,
+  saveDonazioni,
+  esportaDonazioniCSV
+} from '../storage';
 import { 
   calcolaScadenzaQuota, 
   getSociNonRinnovati,
@@ -66,12 +86,17 @@ import {
   getInfoTipoEvento 
 } from '../utils/eventoHelpers';
 import { PromemoriaRinnovoModal } from './PromemoriaRinnovoModal';
+import { DonazioneModal } from './DonazioneModal';
+import { DonazioneRicevutaModal } from './DonazioneRicevutaModal';
 
 interface GlobalBudgetSummaryProps {
   soci: Socio[];
   eventi: ProLocoEvento[];
   config: ProLocoInfo;
   annoSelezionato: number;
+  donazioni?: DonazioneTerzi[];
+  onSalvaDonazione?: (donazione: DonazioneTerzi) => void;
+  onEliminaDonazione?: (id: string) => void;
   onCambiaAnno: (anno: number) => void;
   onApriStampaBilancio: () => void;
   onVaiASocio?: (socioId: string) => void;
@@ -84,17 +109,40 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
   eventi,
   config,
   annoSelezionato,
+  donazioni,
+  onSalvaDonazione,
+  onEliminaDonazione,
   onCambiaAnno,
   onApriStampaBilancio,
   onVaiASocio,
   onVaiAEvento,
   onRegistraPagamento
 }) => {
-  const [sottoTab, setSottoTab] = useState<'quadro' | 'tesseramenti' | 'eventi' | 'runts' | 'database'>('quadro');
+  const [sottoTab, setSottoTab] = useState<'quadro' | 'tesseramenti' | 'eventi' | 'donazioni' | 'runts' | 'database'>('quadro');
   const [ricercaTesto, setRicercaTesto] = useState<string>('');
   const [filtroAnno, setFiltroAnno] = useState<number | 'tutti'>(annoSelezionato);
   const [mostraModalPromemoria, setMostraModalPromemoria] = useState<boolean>(false);
   const [mostraSociDaIncassare, setMostraSociDaIncassare] = useState<boolean>(true);
+  const [filtroCircuitoStandQuadro, setFiltroCircuitoStandQuadro] = useState<'tutti' | 'food' | 'non_food'>('tutti');
+
+  // Stati Gestione Donazioni da Terzi
+  const [listaDonazioni, setListaDonazioni] = useState<DonazioneTerzi[]>(() => {
+    if (donazioni && donazioni.length > 0) return donazioni;
+    return loadDonazioni();
+  });
+  const [modalDonazioneAperta, setModalDonazioneAperta] = useState<boolean>(false);
+  const [donazioneInModifica, setDonazioneInModifica] = useState<DonazioneTerzi | null>(null);
+  const [donazioneRicevutaStampa, setDonazioneRicevutaStampa] = useState<DonazioneTerzi | null>(null);
+  const [filtroTipoDonatore, setFiltroTipoDonatore] = useState<'tutti' | TipoDonatore>('tutti');
+  const [filtroRicercaDonatore, setFiltroRicercaDonatore] = useState<string>('');
+  const [confermaEliminaDonazioneId, setConfermaEliminaDonazioneId] = useState<string | null>(null);
+
+  // Sincronizzazione con donazioni esterne se fornite
+  useEffect(() => {
+    if (donazioni) {
+      setListaDonazioni(donazioni);
+    }
+  }, [donazioni]);
 
   // Lista anni disponibili
   const anniDisponibili = useMemo(() => {
@@ -214,24 +262,178 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
     };
   }, [aggregatoEventi]);
 
-  // 3. QUADRO GENERALE BILANCIO UNIFICATO (TESSERAMENTI + EVENTI)
+  // 2b. SELEZIONE EVENTO & AGGREGAZIONE MACRO ECONOMICA STAND NUMERATI
+  const [eventoSelezionatoPerStandId, setEventoSelezionatoPerStandId] = useState<string | null>(null);
+  const [filtroTipoStand, setFiltroTipoStand] = useState<'tutti' | 'food' | 'non_food'>('tutti');
+
+  const eventoPerMacroStand = useMemo(() => {
+    if (eventoSelezionatoPerStandId) {
+      const trovato = eventi.find(e => e.id === eventoSelezionatoPerStandId);
+      if (trovato) return trovato;
+    }
+    // Preferisci il primo evento con stand tra quelli filtrati per anno
+    const conStand = eventiFiltrati.find(e => e.standNumerati && e.standNumerati.length > 0);
+    if (conStand) return conStand;
+    if (eventiFiltrati.length > 0) return eventiFiltrati[0];
+    return eventi[0] || null;
+  }, [eventi, eventiFiltrati, eventoSelezionatoPerStandId]);
+
+  const standsEventoSelezionato: StandEvento[] = useMemo(() => {
+    if (!eventoPerMacroStand) return [];
+    if (eventoPerMacroStand.standNumerati && eventoPerMacroStand.standNumerati.length > 0) {
+      return eventoPerMacroStand.standNumerati;
+    }
+    return STAND_SIMULATI_DEFAULT;
+  }, [eventoPerMacroStand]);
+
+  const macroEconomiaStand = useMemo(() => {
+    let totSpesaPrev = 0;
+    let totSpesaCons = 0;
+    let totIncassoPrev = 0;
+    let totIncassoCons = 0;
+    let foodCount = 0;
+    let nonFoodCount = 0;
+
+    standsEventoSelezionato.forEach(s => {
+      const spP = Number(s.spesaPreventivo) || 0;
+      const spC = Number(s.spesaConsuntivo) || 0;
+      const inP = Number(s.incassoPrevisto) || Number(s.incassoStimato) || 0;
+      const inC = Number(s.incassoConsuntivo) || Number(s.incassoStimato) || 0;
+
+      totSpesaPrev += spP;
+      totSpesaCons += spC;
+      totIncassoPrev += inP;
+      totIncassoCons += inC;
+
+      if (s.riferimentoFood) {
+        foodCount++;
+      } else {
+        nonFoodCount++;
+      }
+    });
+
+    const diffSpesa = totSpesaCons - totSpesaPrev;
+    const diffIncasso = totIncassoCons - totIncassoPrev;
+    const marginePrev = totIncassoPrev - totSpesaPrev;
+    const margineCons = totIncassoCons - totSpesaCons;
+    const diffMargine = margineCons - marginePrev;
+
+    const costiManifestazione = eventoPerMacroStand?.costiSostenuti || 0;
+    const entrateManifestazione = eventoPerMacroStand?.entrateRealizzate || 0;
+    const incidenzaSpese = costiManifestazione > 0 ? ((totSpesaCons / costiManifestazione) * 100) : 0;
+    const incidenzaIncassi = entrateManifestazione > 0 ? ((totIncassoCons / entrateManifestazione) * 100) : 0;
+
+    return {
+      totSpesaPrev,
+      totSpesaCons,
+      diffSpesa,
+      totIncassoPrev,
+      totIncassoCons,
+      diffIncasso,
+      marginePrev,
+      margineCons,
+      diffMargine,
+      totaleStand: standsEventoSelezionato.length,
+      foodCount,
+      nonFoodCount,
+      incidenzaSpese,
+      incidenzaIncassi
+    };
+  }, [standsEventoSelezionato, eventoPerMacroStand]);
+
+  const standsVisualizzati = useMemo(() => {
+    if (filtroTipoStand === 'food') {
+      return standsEventoSelezionato.filter(s => s.riferimentoFood);
+    }
+    if (filtroTipoStand === 'non_food') {
+      return standsEventoSelezionato.filter(s => !s.riferimentoFood);
+    }
+    return standsEventoSelezionato;
+  }, [standsEventoSelezionato, filtroTipoStand]);
+
+  // Handlers CRUD Donazioni da Terzi
+  const handleSalvaDonazione = (nuovaDonazione: DonazioneTerzi) => {
+    let aggiornate: DonazioneTerzi[];
+    const esiste = listaDonazioni.some(d => d.id === nuovaDonazione.id);
+    if (esiste) {
+      aggiornate = listaDonazioni.map(d => d.id === nuovaDonazione.id ? nuovaDonazione : d);
+    } else {
+      aggiornate = [nuovaDonazione, ...listaDonazioni];
+    }
+    setListaDonazioni(aggiornate);
+    saveDonazioni(aggiornate);
+    if (onSalvaDonazione) onSalvaDonazione(nuovaDonazione);
+    setDonazioneInModifica(null);
+    setModalDonazioneAperta(false);
+  };
+
+  const handleEliminaDonazione = (id: string) => {
+    const aggiornate = listaDonazioni.filter(d => d.id !== id);
+    setListaDonazioni(aggiornate);
+    saveDonazioni(aggiornate);
+    if (onEliminaDonazione) onEliminaDonazione(id);
+    setConfermaEliminaDonazioneId(null);
+  };
+
+  // Donazioni filtrate per anno e criteri di ricerca
+  const donazioniFiltrate = useMemo(() => {
+    return listaDonazioni.filter(d => {
+      // Filtro anno sociale
+      if (annoAttivo && d.anno !== annoAttivo) return false;
+      // Filtro tipologia donatore
+      if (filtroTipoDonatore !== 'tutti' && d.tipoDonatore !== filtroTipoDonatore) return false;
+      // Filtro ricerca testo
+      if (filtroRicercaDonatore.trim()) {
+        const q = filtroRicercaDonatore.toLowerCase();
+        const matchDonatore = d.donatore.toLowerCase().includes(q);
+        const matchCausale = d.causale.toLowerCase().includes(q);
+        const matchCf = d.codiceFiscalePartitaIva?.toLowerCase().includes(q) || false;
+        const matchRicevuta = d.ricevutaNumero.toLowerCase().includes(q);
+        const matchDest = d.destinazione?.toLowerCase().includes(q) || false;
+        if (!matchDonatore && !matchCausale && !matchCf && !matchRicevuta && !matchDest) return false;
+      }
+      return true;
+    });
+  }, [listaDonazioni, annoAttivo, filtroTipoDonatore, filtroRicercaDonatore]);
+
+  const totaleDonazioni = useMemo(() => {
+    return donazioniFiltrate.reduce((acc, d) => acc + (d.importo || 0), 0);
+  }, [donazioniFiltrate]);
+
+  const totaleDonazioniDetraibili = useMemo(() => {
+    return donazioniFiltrate.filter(d => d.detraibileFiscale).reduce((acc, d) => acc + (d.importo || 0), 0);
+  }, [donazioniFiltrate]);
+
+  const donazioneMedia = useMemo(() => {
+    return donazioniFiltrate.length > 0 ? Math.round(totaleDonazioni / donazioniFiltrate.length) : 0;
+  }, [donazioniFiltrate, totaleDonazioni]);
+
+  const prossimoNumeroRicevuta = useMemo(() => {
+    const annoRif = annoAttivo || config.annoCorrente;
+    const conteggioAnno = listaDonazioni.filter(d => d.anno === annoRif).length + 1;
+    return `DON-${annoRif}-${String(conteggioAnno).padStart(3, '0')}`;
+  }, [listaDonazioni, annoAttivo, config.annoCorrente]);
+
+  // 3. QUADRO GENERALE BILANCIO UNIFICATO (TESSERAMENTI + EVENTI + DONAZIONI DA TERZI)
   const bilancioGlobale = useMemo(() => {
-    const totaleEntrateGenerali = totaleQuote + totaliEventi.entrateRealizzate;
+    const totaleEntrateGenerali = totaleQuote + totaliEventi.entrateRealizzate + totaleDonazioni;
     const totaleUsciteGenerali = totaliEventi.costiConsuntivo;
     const avanzoGestione = totaleEntrateGenerali - totaleUsciteGenerali;
 
     // Incidenza percentuale entrate
     const percQuote = totaleEntrateGenerali > 0 ? (totaleQuote / totaleEntrateGenerali) * 100 : 0;
     const percEventi = totaleEntrateGenerali > 0 ? (totaliEventi.entrateRealizzate / totaleEntrateGenerali) * 100 : 0;
+    const percDonazioni = totaleEntrateGenerali > 0 ? (totaleDonazioni / totaleEntrateGenerali) * 100 : 0;
 
     return {
       totaleEntrate: totaleEntrateGenerali,
       totaleUscite: totaleUsciteGenerali,
       avanzoGestione,
       percQuote,
-      percEventi
+      percEventi,
+      percDonazioni
     };
-  }, [totaleQuote, totaliEventi]);
+  }, [totaleQuote, totaliEventi, totaleDonazioni]);
 
   // 3b. CALCOLO QUOTE SOCIALI DA INCASSARE & SCADENZA STATUTARIA ESERCIZIO
   const annoRiferimentoQuote = annoAttivo || config.annoCorrente;
@@ -264,25 +466,258 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
   const potenzialeEntrateConQuote = bilancioGlobale.totaleEntrate + totaleQuoteDaIncassare;
   const potenzialeAvanzoConQuote = bilancioGlobale.avanzoGestione + totaleQuoteDaIncassare;
 
+  // 3c. CONSOLIDATO MACRO ECONOMICO STAND NUMERATI & MODELLI ECONOMICI (TUTTI GLI EVENTI DELL'ESERCIZIO)
+  const consolidatoGlobaleStand = useMemo(() => {
+    let totSpesaPrev = 0;
+    let totSpesaCons = 0;
+    let totIncassoPrev = 0;
+    let totIncassoCons = 0;
+    let totalStandCount = 0;
+    let foodCount = 0;
+    let nonFoodCount = 0;
+    let spesaFoodCons = 0;
+    let incassoFoodCons = 0;
+    let spesaNonFoodCons = 0;
+    let incassoNonFoodCons = 0;
+
+    // Ripartizione aggregata per i 3 modelli economici
+    const perModello = {
+      nativo: { eventi: 0, stand: 0, spesaPrev: 0, spesaCons: 0, incassoPrev: 0, incassoCons: 0, margineLordo: 0, quotaProLoco: 0 },
+      ibrido: { eventi: 0, stand: 0, spesaPrev: 0, spesaCons: 0, incassoPrev: 0, incassoCons: 0, margineLordo: 0, quotaProLoco: 0, quotaPartner: 0 },
+      gestione: { eventi: 0, stand: 0, spesaPrev: 0, spesaCons: 0, incassoPrev: 0, incassoCons: 0, margineLordo: 0, quotaProLoco: 0, compenso: 0, rimborsi: 0 }
+    };
+
+    const eventiStandList = eventiFiltrati.map(e => {
+      const econ = calcolaEconomiaEvento(e);
+      const stands: StandEvento[] = (e.standNumerati && e.standNumerati.length > 0)
+        ? e.standNumerati
+        : STAND_SIMULATI_DEFAULT;
+
+      let evSpesaPrev = 0;
+      let evSpesaCons = 0;
+      let evIncassoPrev = 0;
+      let evIncassoCons = 0;
+      let evFoodCount = 0;
+      let evNonFoodCount = 0;
+
+      stands.forEach(s => {
+        const spP = Number(s.spesaPreventivo) || 0;
+        const spC = Number(s.spesaConsuntivo) || 0;
+        const inP = Number(s.incassoPrevisto) || Number(s.incassoStimato) || 0;
+        const inC = Number(s.incassoConsuntivo) || Number(s.incassoStimato) || 0;
+
+        evSpesaPrev += spP;
+        evSpesaCons += spC;
+        evIncassoPrev += inP;
+        evIncassoCons += inC;
+
+        if (s.riferimentoFood) {
+          evFoodCount++;
+          spesaFoodCons += spC;
+          incassoFoodCons += inC;
+        } else {
+          evNonFoodCount++;
+          spesaNonFoodCons += spC;
+          incassoNonFoodCons += inC;
+        }
+      });
+
+      totSpesaPrev += evSpesaPrev;
+      totSpesaCons += evSpesaCons;
+      totIncassoPrev += evIncassoPrev;
+      totIncassoCons += evIncassoCons;
+      totalStandCount += stands.length;
+      foodCount += evFoodCount;
+      nonFoodCount += evNonFoodCount;
+
+      const tipo = e.tipoEvento || 'nativo';
+      const evMargineLordo = evIncassoCons - evSpesaCons;
+      let evQuotaProLoco = evMargineLordo;
+
+      if (tipo === 'nativo') {
+        perModello.nativo.eventi++;
+        perModello.nativo.stand += stands.length;
+        perModello.nativo.spesaPrev += evSpesaPrev;
+        perModello.nativo.spesaCons += evSpesaCons;
+        perModello.nativo.incassoPrev += evIncassoPrev;
+        perModello.nativo.incassoCons += evIncassoCons;
+        perModello.nativo.margineLordo += evMargineLordo;
+        perModello.nativo.quotaProLoco += evMargineLordo;
+      } else if (tipo === 'ibrido') {
+        const percProLoco = (e.percentualeEntrateProLoco !== undefined ? e.percentualeEntrateProLoco : 50) / 100;
+        evQuotaProLoco = Math.round(evMargineLordo * percProLoco);
+        const evQuotaPartner = evMargineLordo - evQuotaProLoco;
+
+        perModello.ibrido.eventi++;
+        perModello.ibrido.stand += stands.length;
+        perModello.ibrido.spesaPrev += evSpesaPrev;
+        perModello.ibrido.spesaCons += evSpesaCons;
+        perModello.ibrido.incassoPrev += evIncassoPrev;
+        perModello.ibrido.incassoCons += evIncassoCons;
+        perModello.ibrido.margineLordo += evMargineLordo;
+        perModello.ibrido.quotaProLoco += evQuotaProLoco;
+        perModello.ibrido.quotaPartner += evQuotaPartner;
+      } else if (tipo === 'gestione') {
+        evQuotaProLoco = Number(e.compensoGestione) || 2500;
+        const evRimborsi = Number(e.rimborsoSpeseCommittente) || evSpesaCons;
+
+        perModello.gestione.eventi++;
+        perModello.gestione.stand += stands.length;
+        perModello.gestione.spesaPrev += evSpesaPrev;
+        perModello.gestione.spesaCons += evSpesaCons;
+        perModello.gestione.incassoPrev += evIncassoPrev;
+        perModello.gestione.incassoCons += evIncassoCons;
+        perModello.gestione.margineLordo += evMargineLordo;
+        perModello.gestione.quotaProLoco += evQuotaProLoco;
+        perModello.gestione.compenso += evQuotaProLoco;
+        perModello.gestione.rimborsi += evRimborsi;
+      }
+
+      return {
+        evento: e,
+        economia: econ,
+        stands,
+        standsCount: stands.length,
+        foodCount: evFoodCount,
+        nonFoodCount: evNonFoodCount,
+        spesaPrev: evSpesaPrev,
+        spesaCons: evSpesaCons,
+        diffSpesa: evSpesaCons - evSpesaPrev,
+        incassoPrev: evIncassoPrev,
+        incassoCons: evIncassoCons,
+        diffIncasso: evIncassoCons - evIncassoPrev,
+        marginePrev: evIncassoPrev - evSpesaPrev,
+        margineCons: evMargineLordo,
+        diffMargine: (evIncassoCons - evSpesaCons) - (evIncassoPrev - evSpesaPrev),
+        quotaProLoco: evQuotaProLoco
+      };
+    });
+
+    const diffSpesa = totSpesaCons - totSpesaPrev;
+    const diffIncasso = totIncassoCons - totIncassoPrev;
+    const marginePrev = totIncassoPrev - totSpesaPrev;
+    const margineCons = totIncassoCons - totSpesaCons;
+    const diffMargine = margineCons - marginePrev;
+
+    const totQuotaProLoco = eventiStandList.reduce((sum, item) => sum + item.quotaProLoco, 0);
+
+    const incidenzaSpese = bilancioGlobale.totaleUscite > 0 
+      ? Math.min(100, Math.round((totSpesaCons / bilancioGlobale.totaleUscite) * 100)) 
+      : 0;
+    const incidenzaIncassi = bilancioGlobale.totaleEntrate > 0 
+      ? Math.min(100, Math.round((totIncassoCons / bilancioGlobale.totaleEntrate) * 100)) 
+      : 0;
+
+    return {
+      totSpesaPrev,
+      totSpesaCons,
+      diffSpesa,
+      totIncassoPrev,
+      totIncassoCons,
+      diffIncasso,
+      marginePrev,
+      margineCons,
+      diffMargine,
+      totQuotaProLoco,
+      totalStandCount,
+      foodCount,
+      nonFoodCount,
+      spesaFoodCons,
+      incassoFoodCons,
+      margineFoodCons: incassoFoodCons - spesaFoodCons,
+      spesaNonFoodCons,
+      incassoNonFoodCons,
+      margineNonFoodCons: incassoNonFoodCons - spesaNonFoodCons,
+      incidenzaSpese,
+      incidenzaIncassi,
+      perModello,
+      eventiStandList
+    };
+  }, [eventiFiltrati, bilancioGlobale.totaleUscite, bilancioGlobale.totaleEntrate]);
+
   // Dati per Grafico a Torta delle ENTRATE
   const datiGraficoEntrate = useMemo(() => {
+    const incassoFood = consolidatoGlobaleStand.incassoFoodCons > 0 
+      ? consolidatoGlobaleStand.incassoFoodCons 
+      : Math.round(totaliEventi.entrateRealizzate * 0.65);
+    const incassoNonFood = consolidatoGlobaleStand.incassoNonFoodCons > 0 
+      ? consolidatoGlobaleStand.incassoNonFoodCons 
+      : 0;
+    const altreEntrate = Math.max(0, totaliEventi.entrateRealizzate - (incassoFood + incassoNonFood));
+
     return [
       { name: 'Quote Tesseramento', value: totaleQuote, color: '#059669' },
-      { name: 'Food & Stand Gastronomici', value: Math.round(totaliEventi.entrateRealizzate * 0.65), color: '#0d9488' },
-      { name: 'Sponsor & Biglietteria Eventi', value: Math.round(totaliEventi.entrateRealizzate * 0.25), color: '#0284c7' },
-      { name: 'Offerte & Contributi', value: Math.round(totaliEventi.entrateRealizzate * 0.10), color: '#8b5cf6' }
+      ...(totaleDonazioni > 0 ? [{ name: 'Donazioni da Terzi (Art. 83 CTS)', value: totaleDonazioni, color: '#e11d48' }] : []),
+      { name: 'Food & Stand Gastronomici', value: incassoFood, color: '#0d9488' },
+      ...(incassoNonFood > 0 ? [{ name: 'Stand Servizi & Mercatini', value: incassoNonFood, color: '#6366f1' }] : []),
+      { name: 'Sponsor & Altre Entrate', value: altreEntrate > 0 ? altreEntrate : Math.round(totaliEventi.entrateRealizzate * 0.25), color: '#0284c7' }
     ].filter(item => item.value > 0);
-  }, [totaleQuote, totaliEventi.entrateRealizzate]);
+  }, [totaleQuote, totaleDonazioni, totaliEventi.entrateRealizzate, consolidatoGlobaleStand]);
 
   // Dati per Grafico a Torta delle USCITE
   const datiGraficoUscite = useMemo(() => {
+    const spesaFood = consolidatoGlobaleStand.spesaFoodCons > 0 
+      ? consolidatoGlobaleStand.spesaFoodCons 
+      : totaliEventi.food;
+    const spesaAllestimenti = totaliEventi.altreSpese + (consolidatoGlobaleStand.spesaNonFoodCons > 0 ? consolidatoGlobaleStand.spesaNonFoodCons : 0);
+
     return [
-      { name: 'Food & Forniture Gastronomiche', value: totaliEventi.food, color: '#059669' },
+      { name: 'Food & Materie Prime Stand', value: spesaFood, color: '#059669' },
       { name: 'Musica, Artisti & SIAE', value: totaliEventi.intrattenimento, color: '#7c3aed' },
-      { name: 'Noleggi, Palco & Logistica', value: totaliEventi.altreSpese, color: '#0284c7' },
-      { name: 'Tipografia, Permessi & Varie', value: totaliEventi.varie, color: '#d97706' }
+      { name: 'Allestimenti, Palco & Stand No-Food', value: spesaAllestimenti, color: '#0284c7' },
+      { name: 'Tipografia, Permessi & Oneri Vari', value: totaliEventi.varie, color: '#d97706' }
     ].filter(item => item.value > 0);
-  }, [totaliEventi]);
+  }, [totaliEventi, consolidatoGlobaleStand]);
+
+  // Filtro circuiti per la Tabella Consolidata nel Quadro Generale
+  const eventiStandFiltratiPerCircuito = useMemo(() => {
+    if (filtroCircuitoStandQuadro === 'food') {
+      return consolidatoGlobaleStand.eventiStandList.filter(item => item.foodCount > 0);
+    }
+    if (filtroCircuitoStandQuadro === 'non_food') {
+      return consolidatoGlobaleStand.eventiStandList.filter(item => item.nonFoodCount > 0);
+    }
+    return consolidatoGlobaleStand.eventiStandList;
+  }, [consolidatoGlobaleStand.eventiStandList, filtroCircuitoStandQuadro]);
+
+  // Totali della tabella consolidata stand filtrata
+  const totaliTabellaStandFiltrata = useMemo(() => {
+    let totStands = 0;
+    let totFood = 0;
+    let totNonFood = 0;
+    let spesaPrev = 0;
+    let spesaCons = 0;
+    let incassoPrev = 0;
+    let incassoCons = 0;
+    let margineCons = 0;
+    let quotaProLoco = 0;
+
+    eventiStandFiltratiPerCircuito.forEach(item => {
+      totStands += item.standsCount;
+      totFood += item.foodCount;
+      totNonFood += item.nonFoodCount;
+      spesaPrev += item.spesaPrev;
+      spesaCons += item.spesaCons;
+      incassoPrev += item.incassoPrev;
+      incassoCons += item.incassoCons;
+      margineCons += item.margineCons;
+      quotaProLoco += item.quotaProLoco;
+    });
+
+    return {
+      totStands,
+      totFood,
+      totNonFood,
+      spesaPrev,
+      spesaCons,
+      diffSpesa: spesaCons - spesaPrev,
+      incassoPrev,
+      incassoCons,
+      diffIncasso: incassoCons - incassoPrev,
+      margineCons,
+      quotaProLoco
+    };
+  }, [eventiStandFiltratiPerCircuito]);
 
   // Dati per Grafico a Barre Comparativo Eventi (Preventivo, Consuntivo, Entrate, Margine Pro Loco)
   const datiGraficoBarreEventi = useMemo(() => {
@@ -334,6 +769,74 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
       config, 
       filtroAnno === 'tutti' ? undefined : filtroAnno
     );
+  };
+
+  // Esportazione CSV Consolidato di Tutti gli Stand Numerati (Tutte le Manifestazioni)
+  const handleEsportaTuttiStandCSV = () => {
+    const intestazioni = [
+      'Manifestazione',
+      'Data Inizio',
+      'Modello Economico',
+      'Numero Stand',
+      'Denominazione Stand',
+      'Tipologia',
+      'Circuito Ristorazione (Food & Beverage)',
+      'Responsabile Stand',
+      'Spesa Preventivo (€)',
+      'Spesa Consuntivo (€)',
+      'Differenza Spese (€)',
+      'Incasso Previsto (€)',
+      'Incasso Consuntivo (€)',
+      'Differenza Incassi (€)',
+      'Margine Netto Stand (€)',
+      'Quota Spettante Cassa Pro Loco (€)'
+    ];
+
+    const righe: string[] = [];
+    consolidatoGlobaleStand.eventiStandList.forEach(({ evento, stands, quotaProLoco, margineCons }) => {
+      const quotaRatio = stands.length > 0 && margineCons !== 0 ? (quotaProLoco / margineCons) : 1;
+      stands.forEach(s => {
+        const spP = Number(s.spesaPreventivo) || 0;
+        const spC = Number(s.spesaConsuntivo) || 0;
+        const inP = Number(s.incassoPrevisto) || Number(s.incassoStimato) || 0;
+        const inC = Number(s.incassoConsuntivo) || Number(s.incassoStimato) || 0;
+        const mC = inC - spC;
+        const qStand = Math.round(mC * quotaRatio);
+
+        let mod = 'Nativo (100% Pro Loco)';
+        if (evento.tipoEvento === 'ibrido') mod = `Ibrido (${evento.percentualeEntrateProLoco || 50}% Pro Loco)`;
+        else if (evento.tipoEvento === 'gestione') mod = `Gestione (${evento.committenteNome || 'Comune'})`;
+
+        righe.push([
+          `"${(evento.titolo || '').replace(/"/g, '""')}"`,
+          `"${evento.dataInizio || ''}"`,
+          `"${mod}"`,
+          `"#${s.numero}"`,
+          `"${(s.nome || '').replace(/"/g, '""')}"`,
+          `"${(s.tipologia || '').replace(/"/g, '""')}"`,
+          `"${s.riferimentoFood ? 'SI (Food & Beverage)' : 'NO (Servizi / No-Food)'}"`,
+          `"${(s.responsabile || '').replace(/"/g, '""')}"`,
+          `"${spP}"`,
+          `"${spC}"`,
+          `"${spC - spP}"`,
+          `"${inP}"`,
+          `"${inC}"`,
+          `"${inC - inP}"`,
+          `"${mC}"`,
+          `"${qStand}"`
+        ].join(';'));
+      });
+    });
+
+    const csvContent = '\uFEFF' + [intestazioni.join(';'), ...righe].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Consolidato_Stand_Bilancio_${filtroAnno === 'tutti' ? 'Globale' : filtroAnno}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -410,7 +913,7 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
       </div>
 
       {/* 2. LE METRICHE DI BILANCIO GLOBALE */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
         
         {/* KPI 1: Totale Entrate Complessive */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
@@ -425,9 +928,10 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
               {(bilancioGlobale.totaleEntrate || 0).toLocaleString('it-IT')} €
             </span>
           </div>
-          <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between">
-            <span>Tesseramenti: <strong>{(totaleQuote || 0).toLocaleString('it-IT')} €</strong></span>
+          <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-500 flex flex-wrap justify-between gap-1">
+            <span>Quote: <strong>{(totaleQuote || 0).toLocaleString('it-IT')} €</strong></span>
             <span>Eventi: <strong>{(totaliEventi.entrateRealizzate || 0).toLocaleString('it-IT')} €</strong></span>
+            <span className="text-emerald-700">Donazioni: <strong>{(totaleDonazioni || 0).toLocaleString('it-IT')} €</strong></span>
           </div>
         </div>
 
@@ -544,6 +1048,32 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
           </div>
         </div>
 
+        {/* KPI 6: Economia Stand Numerati & Circuiti */}
+        <div 
+          onClick={() => {
+            const el = document.getElementById('sezione-macro-stand-consolidata');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}
+          className="bg-white hover:bg-emerald-50/40 transition-colors cursor-pointer p-4 rounded-xl border border-slate-200 hover:border-emerald-300 shadow-2xs space-y-2 group"
+          title="Clicca per visualizzare il Consolidato Stand nel Bilancio Generale"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider group-hover:text-emerald-700">6. Stand Numerati</span>
+            <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center group-hover:bg-teal-200">
+              <Store className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-1.5">
+            <span className={`text-2xl font-black font-mono ${consolidatoGlobaleStand.margineCons >= 0 ? 'text-emerald-900' : 'text-rose-700'}`}>
+              {consolidatoGlobaleStand.margineCons >= 0 ? '+' : ''}{(consolidatoGlobaleStand.margineCons || 0).toLocaleString('it-IT')} €
+            </span>
+          </div>
+          <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between">
+            <span>Stand: <strong>{consolidatoGlobaleStand.totalStandCount}</strong> ({consolidatoGlobaleStand.foodCount} Food)</span>
+            <span className="text-emerald-700 font-bold group-hover:underline">Consolidato ↓</span>
+          </div>
+        </div>
+
       </div>
 
       {/* BANNER PROPOSTA QUOTE DA INCASSARE & SCADENZA STATUTARIA */}
@@ -639,6 +1169,18 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
         </button>
 
         <button
+          onClick={() => setSottoTab('donazioni')}
+          className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+            sottoTab === 'donazioni' 
+              ? 'bg-rose-700 text-white shadow-xs' 
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <HeartHandshake className="w-4 h-4 text-rose-400" />
+          <span>Donazioni da Terzi ({donazioniFiltrate.length} • € {totaleDonazioni.toLocaleString('it-IT')})</span>
+        </button>
+
+        <button
           onClick={() => setSottoTab('runts')}
           className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
             sottoTab === 'runts' 
@@ -647,7 +1189,7 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
           }`}
         >
           <Building2 className="w-4 h-4" />
-          <span>Schema Ufficiale RUNTS (Mod. D)</span>
+          <span>Bilancio RUNTS & Normativa (Mod. D)</span>
         </button>
 
         <button
@@ -823,6 +1365,527 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
               </div>
             </div>
           )}
+
+          {/* ========================================================================= */}
+          {/* QUADRO MACRO ECONOMICO CONSOLIDATO DEGLI STAND NUMERATI & MODELLI DI GESTIONE */}
+          {/* ========================================================================= */}
+          <div id="sezione-macro-stand-consolidata" className="space-y-6 pt-3">
+            
+            {/* Header di Sezione con Gradiente Scuro e Strumenti */}
+            <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-emerald-950 rounded-2xl p-5 text-white shadow-sm border border-emerald-500/30 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
+                    <Store className="w-3 h-3 text-emerald-400" />
+                    <span>Consolidato Macro Stand & Circuiti Enogastronomici</span>
+                  </span>
+                  <span className="text-xs text-slate-300">
+                    Esercizio: <strong>{filtroAnno === 'tutti' ? 'Storico Globale' : `Anno ${filtroAnno}`}</strong>
+                  </span>
+                </div>
+
+                <h3 className="text-base sm:text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
+                  <span>Quadro Economico Generale degli Stand Numerati</span>
+                </h3>
+
+                <p className="text-xs text-slate-300 max-w-3xl font-normal leading-relaxed">
+                  Aggregazione in tempo reale di tutti gli stand numerati operativi ({consolidatoGlobaleStand.totalStandCount} stand totali: {consolidatoGlobaleStand.foodCount} Food & Beverage, {consolidatoGlobaleStand.nonFoodCount} Servizi / No-Food) con quadratura tra preventivo e consuntivo, differenze di cassa e integrazione diretta con i 3 modelli economici (Nativi 100%, Ibridi e Gestione).
+                </p>
+              </div>
+
+              {/* Bottoni Rapidi Azione */}
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  onClick={handleEsportaTuttiStandCSV}
+                  className="px-3.5 py-2 rounded-xl bg-white text-slate-900 hover:bg-emerald-50 text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Esporta foglio Excel/CSV con tutti gli stand di tutte le manifestazioni"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Esporta CSV Stand</span>
+                </button>
+
+                <button
+                  onClick={() => setSottoTab('eventi')}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Accedi al dettaglio dei singoli eventi e modifica i singoli stand"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Dettaglio Manifestazioni</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 4 Macro KPI Card Stand nel Bilancio Generale */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              
+              {/* KPI 1: Spese Stand Consolidate */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">1. Spese Stand Consolidate</span>
+                  <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+                    <TrendingDown className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-black text-slate-900 font-mono">
+                    {(consolidatoGlobaleStand.totSpesaCons || 0).toLocaleString('it-IT')} €
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between">
+                  <span>Preventivo: <strong>{(consolidatoGlobaleStand.totSpesaPrev || 0).toLocaleString('it-IT')} €</strong></span>
+                  <span className={(consolidatoGlobaleStand.diffSpesa || 0) <= 0 ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
+                    {(consolidatoGlobaleStand.diffSpesa || 0) > 0 ? `+${(consolidatoGlobaleStand.diffSpesa || 0).toLocaleString('it-IT')}` : (consolidatoGlobaleStand.diffSpesa || 0).toLocaleString('it-IT')} €
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  Incidenza uscite ente: <strong>{consolidatoGlobaleStand.incidenzaSpese}%</strong>
+                </div>
+              </div>
+
+              {/* KPI 2: Incassi Stand Consolidati */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">2. Incassi Stand Consolidati</span>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-black text-slate-900 font-mono">
+                    {(consolidatoGlobaleStand.totIncassoCons || 0).toLocaleString('it-IT')} €
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between">
+                  <span>Previsto: <strong>{(consolidatoGlobaleStand.totIncassoPrev || 0).toLocaleString('it-IT')} €</strong></span>
+                  <span className={(consolidatoGlobaleStand.diffIncasso || 0) >= 0 ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
+                    {(consolidatoGlobaleStand.diffIncasso || 0) >= 0 ? `+${(consolidatoGlobaleStand.diffIncasso || 0).toLocaleString('it-IT')}` : (consolidatoGlobaleStand.diffIncasso || 0).toLocaleString('it-IT')} €
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  Incidenza entrate ente: <strong>{consolidatoGlobaleStand.incidenzaIncassi}%</strong>
+                </div>
+              </div>
+
+              {/* KPI 3: Margine Operativo Stand Netto */}
+              <div className={`p-4 rounded-xl border shadow-2xs space-y-2 ${
+                (consolidatoGlobaleStand.margineCons || 0) >= 0 ? 'bg-emerald-50/70 border-emerald-300' : 'bg-rose-50/70 border-rose-300'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs font-bold uppercase tracking-wider ${
+                    (consolidatoGlobaleStand.margineCons || 0) >= 0 ? 'text-emerald-900' : 'text-rose-900'
+                  }`}>
+                    3. Margine Netto Stand
+                  </span>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+                    (consolidatoGlobaleStand.margineCons || 0) >= 0 ? 'bg-emerald-200 text-emerald-800' : 'bg-rose-200 text-rose-800'
+                  }`}>
+                    <Euro className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className={`text-2xl font-black font-mono ${
+                    (consolidatoGlobaleStand.margineCons || 0) >= 0 ? 'text-emerald-900' : 'text-rose-700'
+                  }`}>
+                    {(consolidatoGlobaleStand.margineCons || 0) >= 0 ? '+' : ''}
+                    {(consolidatoGlobaleStand.margineCons || 0).toLocaleString('it-IT')} €
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-slate-200/60 text-[11px] text-slate-700 flex justify-between">
+                  <span>Quota Cassa Pro Loco:</span>
+                  <strong className="text-emerald-800 font-mono font-black">+{(consolidatoGlobaleStand.totQuotaProLoco || 0).toLocaleString('it-IT')} €</strong>
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Scostamento vs preventivo: {consolidatoGlobaleStand.diffMargine >= 0 ? `+${consolidatoGlobaleStand.diffMargine.toLocaleString('it-IT')} €` : `${consolidatoGlobaleStand.diffMargine.toLocaleString('it-IT')} €`}
+                </div>
+              </div>
+
+              {/* KPI 4: Presidio Stand & Circuiti */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">4. Stand Attivi & Circuiti</span>
+                  <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center">
+                    <Store className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-black text-slate-900 font-mono">
+                    {consolidatoGlobaleStand.totalStandCount}
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium">postazioni complessive</span>
+                </div>
+                <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-600 flex justify-between">
+                  <span>Food & Beverage: <strong>{consolidatoGlobaleStand.foodCount}</strong></span>
+                  <span>Servizi / No-Food: <strong>{consolidatoGlobaleStand.nonFoodCount}</strong></span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  Food incassi: <strong>{(consolidatoGlobaleStand.incassoFoodCons || 0).toLocaleString('it-IT')} €</strong> (spesa: {(consolidatoGlobaleStand.spesaFoodCons || 0).toLocaleString('it-IT')} €)
+                </div>
+              </div>
+
+            </div>
+
+            {/* Matrice Comparativa dei 3 Modelli di Gestione Economica */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Confronto Flussi Finanziari per Modello di Gestione Economica</span>
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Spaccato dei 3 regimi operativi adottati per le manifestazioni territoriali
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                
+                {/* Modello 1: Eventi Nativi (100% Pro Loco) */}
+                <div className="bg-white rounded-xl border border-emerald-200 shadow-2xs p-4 space-y-3 border-t-4 border-t-emerald-600">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      <span>1. Eventi Nativi (100% Pro Loco)</span>
+                    </span>
+                    <span className="text-xs font-bold text-slate-500 font-mono">{consolidatoGlobaleStand.perModello.nativo.eventi} manifestazioni</span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Organizzazione e rischio d'impresa interamente in capo alla Pro Loco. Il 100% delle spese e degli incassi confluisce nel bilancio dell'ente.
+                  </p>
+
+                  <div className="space-y-1.5 text-xs pt-2 border-t border-slate-100">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Stand Operativi:</span>
+                      <strong className="text-slate-900 font-mono">{consolidatoGlobaleStand.perModello.nativo.stand} postazioni</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Spese Stand (Prev / Cons):</span>
+                      <span className="font-mono text-slate-900">
+                        {consolidatoGlobaleStand.perModello.nativo.spesaPrev.toLocaleString('it-IT')} € / <strong>{consolidatoGlobaleStand.perModello.nativo.spesaCons.toLocaleString('it-IT')} €</strong>
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Incassi Stand (Prev / Cons):</span>
+                      <span className="font-mono text-slate-900">
+                        {consolidatoGlobaleStand.perModello.nativo.incassoPrev.toLocaleString('it-IT')} € / <strong>{consolidatoGlobaleStand.perModello.nativo.incassoCons.toLocaleString('it-IT')} €</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-900">Utile Netto a Cassa Pro Loco:</span>
+                    <span className="text-sm font-black text-emerald-950 font-mono">
+                      +{consolidatoGlobaleStand.perModello.nativo.quotaProLoco.toLocaleString('it-IT')} €
+                    </span>
+                  </div>
+                </div>
+
+                {/* Modello 2: Eventi Ibridi (Co-organizzati) */}
+                <div className="bg-white rounded-xl border border-violet-200 shadow-2xs p-4 space-y-3 border-t-4 border-t-violet-600">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-violet-100 text-violet-800 flex items-center gap-1">
+                      <Handshake className="w-3 h-3" />
+                      <span>2. Eventi Ibridi (Co-organizzati)</span>
+                    </span>
+                    <span className="text-xs font-bold text-slate-500 font-mono">{consolidatoGlobaleStand.perModello.ibrido.eventi} manifestazioni</span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Manifestazioni in convenzione con partner (Comune, Commercianti). Spese ed entrate lorde degli stand ripartite secondo quote pattuite.
+                  </p>
+
+                  <div className="space-y-1.5 text-xs pt-2 border-t border-slate-100">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Stand Operativi:</span>
+                      <strong className="text-slate-900 font-mono">{consolidatoGlobaleStand.perModello.ibrido.stand} postazioni</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Spese Lorde Stand:</span>
+                      <span className="font-mono text-slate-900 font-semibold">{consolidatoGlobaleStand.perModello.ibrido.spesaCons.toLocaleString('it-IT')} €</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Incassi Lordi Stand:</span>
+                      <span className="font-mono text-slate-900 font-semibold">{consolidatoGlobaleStand.perModello.ibrido.incassoCons.toLocaleString('it-IT')} €</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-500">Quota Spettante Partner:</span>
+                      <span className="font-mono text-violet-700 font-bold">+{consolidatoGlobaleStand.perModello.ibrido.quotaPartner.toLocaleString('it-IT')} €</span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-violet-50 border border-violet-200 flex items-center justify-between">
+                    <span className="text-xs font-bold text-violet-900">Quota Utile Netto Pro Loco:</span>
+                    <span className="text-sm font-black text-violet-950 font-mono">
+                      +{consolidatoGlobaleStand.perModello.ibrido.quotaProLoco.toLocaleString('it-IT')} €
+                    </span>
+                  </div>
+                </div>
+
+                {/* Modello 3: Eventi Gestione (Conto Terzi) */}
+                <div className="bg-white rounded-xl border border-amber-200 shadow-2xs p-4 space-y-3 border-t-4 border-t-amber-600">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 flex items-center gap-1">
+                      <Briefcase className="w-3 h-3" />
+                      <span>3. Eventi Gestione (Conto Terzi)</span>
+                    </span>
+                    <span className="text-xs font-bold text-slate-500 font-mono">{consolidatoGlobaleStand.perModello.gestione.eventi} manifestazioni</span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Gestione logistica ed enogastronomica su commissione. Spese stand anticipate e integralmente rimborsate a piè di lista + compenso di gestione garantito.
+                  </p>
+
+                  <div className="space-y-1.5 text-xs pt-2 border-t border-slate-100">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Stand Operativi:</span>
+                      <strong className="text-slate-900 font-mono">{consolidatoGlobaleStand.perModello.gestione.stand} postazioni</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Spese Anticipate Stand:</span>
+                      <span className="font-mono text-slate-900">{consolidatoGlobaleStand.perModello.gestione.spesaCons.toLocaleString('it-IT')} €</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Rimborsi Committente (100%):</span>
+                      <span className="font-mono text-slate-900 font-semibold">{consolidatoGlobaleStand.perModello.gestione.rimborsi.toLocaleString('it-IT')} €</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-500">Rischio d'Impresa:</span>
+                      <span className="font-bold text-emerald-700">Rischio Zero Garantito</span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-900">Compenso Netto Pro Loco (Fee):</span>
+                    <span className="text-sm font-black text-amber-950 font-mono">
+                      +{consolidatoGlobaleStand.perModello.gestione.quotaProLoco.toLocaleString('it-IT')} €
+                    </span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Tabella Riassuntiva Macro di Tutti gli Eventi con Stand Numerati */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden space-y-4 p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                    <Store className="w-4 h-4 text-emerald-700" />
+                    <span>Tabella Riassuntiva Stand Consolidata di Tutte le Manifestazioni</span>
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Prospetto macro con sommatoria totale di preventivi, consuntivi, differenze e ripartizione
+                  </p>
+                </div>
+
+                {/* Filtri Circuito Stand */}
+                <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
+                  <button
+                    onClick={() => setFiltroCircuitoStandQuadro('tutti')}
+                    className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer ${
+                      filtroCircuitoStandQuadro === 'tutti'
+                        ? 'bg-white text-emerald-800 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Tutti gli Stand ({consolidatoGlobaleStand.totalStandCount})
+                  </button>
+                  <button
+                    onClick={() => setFiltroCircuitoStandQuadro('food')}
+                    className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer ${
+                      filtroCircuitoStandQuadro === 'food'
+                        ? 'bg-white text-emerald-800 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Food & Beverage ({consolidatoGlobaleStand.foodCount})
+                  </button>
+                  <button
+                    onClick={() => setFiltroCircuitoStandQuadro('non_food')}
+                    className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer ${
+                      filtroCircuitoStandQuadro === 'non_food'
+                        ? 'bg-white text-emerald-800 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Servizi / No-Food ({consolidatoGlobaleStand.nonFoodCount})
+                  </button>
+                </div>
+              </div>
+
+              {/* Tabella con Overflow Orizzontale */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10.5px]">
+                      <th className="p-3">Manifestazione</th>
+                      <th className="p-3 text-center">Modello Economico</th>
+                      <th className="p-3 text-center">N° Stand Attivi</th>
+                      <th className="p-3 text-right">Spesa Prev. (€)</th>
+                      <th className="p-3 text-right">Spesa Cons. (€)</th>
+                      <th className="p-3 text-right">Diff. Spesa (€)</th>
+                      <th className="p-3 text-right">Incasso Prev. (€)</th>
+                      <th className="p-3 text-right">Incasso Cons. (€)</th>
+                      <th className="p-3 text-right">Diff. Incasso (€)</th>
+                      <th className="p-3 text-right font-black">Margine Stand (€)</th>
+                      <th className="p-3 text-right font-black">Quota Cassa Pro Loco (€)</th>
+                      <th className="p-3 text-center">Azione</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {eventiStandFiltratiPerCircuito.map(({ evento, standsCount, foodCount, nonFoodCount, spesaPrev, spesaCons, diffSpesa, incassoPrev, incassoCons, diffIncasso, margineCons, quotaProLoco }) => {
+                      const tipo = evento.tipoEvento || 'nativo';
+                      let badge = (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">
+                          Nativo (100%)
+                        </span>
+                      );
+                      if (tipo === 'ibrido') {
+                        badge = (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-800 border border-violet-200 whitespace-nowrap">
+                            Ibrido ({evento.percentualeEntrateProLoco || 50}%)
+                          </span>
+                        );
+                      } else if (tipo === 'gestione') {
+                        badge = (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">
+                            Gestione ({evento.committenteNome || 'Comune'})
+                          </span>
+                        );
+                      }
+
+                      return (
+                        <tr key={evento.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-3 font-medium">
+                            <span className="block text-slate-900 font-bold">{evento.titolo}</span>
+                            <span className="text-[11px] text-slate-500">{evento.categoria} • {evento.dataInizio} • {evento.luogo}</span>
+                          </td>
+                          <td className="p-3 text-center">
+                            {badge}
+                          </td>
+                          <td className="p-3 text-center font-mono">
+                            <span className="font-bold text-slate-900">{standsCount} stand</span>
+                            <span className="block text-[10px] text-slate-500 font-normal">
+                              ({foodCount} F&B • {nonFoodCount} Servizi)
+                            </span>
+                          </td>
+                          <td className="p-3 text-right font-mono text-slate-700">
+                            {(spesaPrev || 0).toLocaleString('it-IT')} €
+                          </td>
+                          <td className="p-3 text-right font-mono font-bold text-slate-900">
+                            {(spesaCons || 0).toLocaleString('it-IT')} €
+                          </td>
+                          <td className="p-3 text-right font-mono text-[11px]">
+                            <span className={`px-2 py-0.5 rounded-md font-bold inline-block ${
+                              diffSpesa <= 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              {diffSpesa <= 0 ? `${diffSpesa.toLocaleString('it-IT')} €` : `+${diffSpesa.toLocaleString('it-IT')} €`}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right font-mono text-slate-700">
+                            {(incassoPrev || 0).toLocaleString('it-IT')} €
+                          </td>
+                          <td className="p-3 text-right font-mono font-bold text-emerald-800">
+                            {(incassoCons || 0).toLocaleString('it-IT')} €
+                          </td>
+                          <td className="p-3 text-right font-mono text-[11px]">
+                            <span className={`px-2 py-0.5 rounded-md font-bold inline-block ${
+                              diffIncasso >= 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}>
+                              {diffIncasso >= 0 ? `+${diffIncasso.toLocaleString('it-IT')} €` : `${diffIncasso.toLocaleString('it-IT')} €`}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right font-mono font-bold text-slate-900">
+                            <span className={margineCons >= 0 ? 'text-emerald-800' : 'text-rose-700'}>
+                              {margineCons >= 0 ? '+' : ''}{margineCons.toLocaleString('it-IT')} €
+                            </span>
+                          </td>
+                          <td className="p-3 text-right font-mono font-black text-slate-950">
+                            <span className={quotaProLoco >= 0 ? 'text-emerald-900 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200 inline-block' : 'text-rose-900 bg-rose-50 px-2 py-1 rounded-md border border-rose-200 inline-block'}>
+                              {quotaProLoco >= 0 ? '+' : ''}{quotaProLoco.toLocaleString('it-IT')} €
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              onClick={() => {
+                                setSottoTab('eventi');
+                                setEventoSelezionatoPerStandId(evento.id);
+                                setTimeout(() => {
+                                  const el = document.getElementById('sezione-macro-stand');
+                                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                                }, 150);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-200 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                              title="Visualizza e gestisci gli stand di questa specifica manifestazione"
+                            >
+                              <Store className="w-3 h-3" />
+                              <span>Stand Singoli</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+
+                  {/* Riga TFOOT con la Sommatoria Complessiva */}
+                  <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-300 text-slate-950">
+                    <tr>
+                      <td colSpan={2} className="p-3 font-black uppercase text-slate-900">
+                        TOTALE MACRO GENERALE {filtroCircuitoStandQuadro === 'food' ? 'CIRCUITO FOOD & BEVERAGE' : filtroCircuitoStandQuadro === 'non_food' ? 'CIRCUITO SERVIZI & NO-FOOD' : 'TUTTI GLI STAND'}
+                      </td>
+                      <td className="p-3 text-center font-mono">
+                        {totaliTabellaStandFiltrata.totStands} stand
+                        <span className="block text-[10px] text-slate-500 font-normal">
+                          ({totaliTabellaStandFiltrata.totFood} F&B • {totaliTabellaStandFiltrata.totNonFood} Servizi)
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-slate-900">
+                        {(totaliTabellaStandFiltrata.spesaPrev || 0).toLocaleString('it-IT')} €
+                      </td>
+                      <td className="p-3 text-right font-mono font-black text-slate-950">
+                        {(totaliTabellaStandFiltrata.spesaCons || 0).toLocaleString('it-IT')} €
+                      </td>
+                      <td className="p-3 text-right font-mono text-[11px]">
+                        <span className={`px-2 py-0.5 rounded-md font-black inline-block ${
+                          totaliTabellaStandFiltrata.diffSpesa <= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {totaliTabellaStandFiltrata.diffSpesa <= 0 ? `${totaliTabellaStandFiltrata.diffSpesa.toLocaleString('it-IT')} €` : `+${totaliTabellaStandFiltrata.diffSpesa.toLocaleString('it-IT')} €`}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-slate-900">
+                        {(totaliTabellaStandFiltrata.incassoPrev || 0).toLocaleString('it-IT')} €
+                      </td>
+                      <td className="p-3 text-right font-mono font-black text-emerald-950">
+                        {(totaliTabellaStandFiltrata.incassoCons || 0).toLocaleString('it-IT')} €
+                      </td>
+                      <td className="p-3 text-right font-mono text-[11px]">
+                        <span className={`px-2 py-0.5 rounded-md font-black inline-block ${
+                          totaliTabellaStandFiltrata.diffIncasso >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {totaliTabellaStandFiltrata.diffIncasso >= 0 ? `+${totaliTabellaStandFiltrata.diffIncasso.toLocaleString('it-IT')} €` : `${totaliTabellaStandFiltrata.diffIncasso.toLocaleString('it-IT')} €`}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-mono font-black text-slate-950">
+                        <span className={totaliTabellaStandFiltrata.margineCons >= 0 ? 'text-emerald-900' : 'text-rose-800'}>
+                          {totaliTabellaStandFiltrata.margineCons >= 0 ? '+' : ''}{totaliTabellaStandFiltrata.margineCons.toLocaleString('it-IT')} €
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-mono font-black text-emerald-950">
+                        <span className="bg-emerald-100 text-emerald-950 px-2 py-1 rounded-md border border-emerald-300 inline-block font-mono">
+                          +{totaliTabellaStandFiltrata.quotaProLoco.toLocaleString('it-IT')} €
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className="text-[10px] text-slate-500 font-normal">Consolidato</span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+          </div>
 
         </div>
       )}
@@ -1438,6 +2501,545 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
             </div>
           </div>
 
+          {/* SEZIONE DEDICATA: VISIONE MACRO ECONOMIA MANIFESTAZIONE (TABELLA AGGREGAZIONE STAND NUMERATI) */}
+          <div id="sezione-macro-stand" className="bg-white rounded-2xl border-2 border-emerald-500/40 p-5 sm:p-6 space-y-6 shadow-xs">
+            
+            {/* Header Sezione con Selettore Evento & Azioni */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 shrink-0">
+                    <Store className="w-5 h-5 text-emerald-800" />
+                  </span>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-base sm:text-lg flex items-center gap-2">
+                      <span>Visione Macro Economia della Manifestazione: Aggregazione Stand Numerati</span>
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Quadro consolidato dei preventivi e consuntivi di tutti gli stand dell'evento per analizzare la sostenibilità economica e il saldo operativo.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Selettore Manifestazione ed Esportazione */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+                  <label htmlFor="select-evento-stand" className="text-xs font-bold text-slate-600 whitespace-nowrap">
+                    Manifestazione:
+                  </label>
+                  <select
+                    id="select-evento-stand"
+                    value={eventoPerMacroStand?.id || ''}
+                    onChange={e => setEventoSelezionatoPerStandId(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-slate-900 outline-none cursor-pointer pr-2 max-w-[200px] sm:max-w-xs truncate"
+                  >
+                    {eventi.map(ev => {
+                      const numStands = ev.standNumerati?.length || STAND_SIMULATI_DEFAULT.length;
+                      return (
+                        <option key={ev.id} value={ev.id}>
+                          {ev.titolo} ({numStands} Stand)
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {eventoPerMacroStand && (
+                  <button
+                    type="button"
+                    id="btn-esporta-macro-stand"
+                    onClick={() => esportaStandEventoCSV(eventoPerMacroStand, standsEventoSelezionato)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                    title="Scarica il bilancio analitico aggregato degli stand in formato CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Esporta Stand (CSV)</span>
+                  </button>
+                )}
+
+                {onVaiAEvento && eventoPerMacroStand && (
+                  <button
+                    type="button"
+                    id="btn-vai-gestione-evento"
+                    onClick={() => onVaiAEvento(eventoPerMacroStand.id)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                    title="Apri la gestione completa dell'evento"
+                  >
+                    <span>Gestisci Evento</span>
+                    <ArrowRight className="w-3 h-3 text-slate-500" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Switch rapido tra eventi registrati */}
+            {eventi.length > 1 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                <span className="text-slate-400 font-medium text-[11px] whitespace-nowrap">Eventi:</span>
+                {eventi.map(ev => {
+                  const isSelezionato = eventoPerMacroStand?.id === ev.id;
+                  const numStands = ev.standNumerati?.length || STAND_SIMULATI_DEFAULT.length;
+                  return (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      onClick={() => setEventoSelezionatoPerStandId(ev.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 border ${
+                        isSelezionato
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                          : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      <Store className={`w-3 h-3 ${isSelezionato ? 'text-emerald-400' : 'text-slate-400'}`} />
+                      <span className="truncate max-w-[180px]">{ev.titolo}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                        isSelezionato ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {numStands}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Banner Informativo sulla Manifestazione Selezionata */}
+            {eventoPerMacroStand ? (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-black text-slate-900">
+                      {eventoPerMacroStand.titolo}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      eventoPerMacroStand.tipoEvento === 'ibrido' ? 'bg-violet-100 text-violet-800 border border-violet-200' :
+                      eventoPerMacroStand.tipoEvento === 'gestione' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                      'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                    }`}>
+                      {getInfoTipoEvento(eventoPerMacroStand.tipoEvento || 'nativo').etichettaBreve}
+                    </span>
+                    <span className="text-xs text-slate-500 font-mono">
+                      📅 {eventoPerMacroStand.dataInizio}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      📍 {eventoPerMacroStand.luogo}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Spese complessive evento: <strong className="font-mono text-slate-900">{(eventoPerMacroStand.costiSostenuti || 0).toLocaleString('it-IT')} €</strong> (prev. {(eventoPerMacroStand.budgetPrevisto || 0).toLocaleString('it-IT')} €) • 
+                    Incassi complessivi: <strong className="font-mono text-emerald-800">{(eventoPerMacroStand.entrateRealizzate || 0).toLocaleString('it-IT')} €</strong> (prev. {(eventoPerMacroStand.entratePreviste || 0).toLocaleString('it-IT')} €)
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">Incidenza Stand / Evento</span>
+                    <span className="text-xs font-bold text-slate-900">
+                      {macroEconomiaStand.incidenzaIncassi.toFixed(1)}% Incassi • {macroEconomiaStand.incidenzaSpese.toFixed(1)}% Spese
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* 4 Card Macro KPI dell'Economia degli Stand */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              
+              {/* KPI 1: SPESE TOTALI STAND */}
+              <div className="p-4 rounded-xl border border-rose-200 bg-rose-50/50 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                    <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Spese Totali Stand</span>
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    macroEconomiaStand.diffSpesa <= 0 
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                      : 'bg-rose-200 text-rose-900 border border-rose-300'
+                  }`}>
+                    {macroEconomiaStand.diffSpesa <= 0 
+                      ? `Risparmio: ${(Math.abs(macroEconomiaStand.diffSpesa)).toLocaleString('it-IT')} €` 
+                      : `Scostamento: +${(macroEconomiaStand.diffSpesa).toLocaleString('it-IT')} €`}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-2xl font-black font-mono text-rose-950 block">
+                    {(macroEconomiaStand.totSpesaCons || 0).toLocaleString('it-IT')} €
+                  </span>
+                  <div className="flex items-center justify-between text-[11px] text-rose-800">
+                    <span>Preventivo stimato:</span>
+                    <strong className="font-mono">{(macroEconomiaStand.totSpesaPrev || 0).toLocaleString('it-IT')} €</strong>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-rose-200/80 text-[10px] text-rose-700 flex justify-between">
+                  <span>Incidenza su spesa totale:</span>
+                  <strong className="font-mono font-bold">{macroEconomiaStand.incidenzaSpese.toFixed(1)}%</strong>
+                </div>
+              </div>
+
+              {/* KPI 2: INCASSI TOTALI STAND */}
+              <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Incassi Totali Stand</span>
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    macroEconomiaStand.diffIncasso >= 0 
+                      ? 'bg-emerald-200 text-emerald-900 border border-emerald-300' 
+                      : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  }`}>
+                    {macroEconomiaStand.diffIncasso >= 0 
+                      ? `+${(macroEconomiaStand.diffIncasso).toLocaleString('it-IT')} € Extra` 
+                      : `${(macroEconomiaStand.diffIncasso).toLocaleString('it-IT')} € Minori`}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-2xl font-black font-mono text-emerald-950 block">
+                    {(macroEconomiaStand.totIncassoCons || 0).toLocaleString('it-IT')} €
+                  </span>
+                  <div className="flex items-center justify-between text-[11px] text-emerald-800">
+                    <span>Preventivo stimato:</span>
+                    <strong className="font-mono">{(macroEconomiaStand.totIncassoPrev || 0).toLocaleString('it-IT')} €</strong>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-emerald-200/80 text-[10px] text-emerald-700 flex justify-between">
+                  <span>Incidenza su entrate totali:</span>
+                  <strong className="font-mono font-bold">{macroEconomiaStand.incidenzaIncassi.toFixed(1)}%</strong>
+                </div>
+              </div>
+
+              {/* KPI 3: MARGINE OPERATIVO NETTO STAND */}
+              <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                    <Euro className="w-3.5 h-3.5 text-blue-700" />
+                    <span>Margine Netto Stand</span>
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    macroEconomiaStand.diffMargine >= 0 
+                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' 
+                      : 'bg-rose-100 text-rose-900 border border-rose-300'
+                  }`}>
+                    {macroEconomiaStand.diffMargine >= 0 ? '+' : ''}{(macroEconomiaStand.diffMargine).toLocaleString('it-IT')} € Scost.
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  <span className={`text-2xl font-black font-mono block ${
+                    macroEconomiaStand.margineCons >= 0 ? 'text-blue-950' : 'text-rose-900'
+                  }`}>
+                    {macroEconomiaStand.margineCons >= 0 ? '+' : ''}{(macroEconomiaStand.margineCons || 0).toLocaleString('it-IT')} €
+                  </span>
+                  <div className="flex items-center justify-between text-[11px] text-blue-800">
+                    <span>Margine preventivato:</span>
+                    <strong className="font-mono">{macroEconomiaStand.marginePrev >= 0 ? '+' : ''}{(macroEconomiaStand.marginePrev || 0).toLocaleString('it-IT')} €</strong>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-blue-200/80 text-[10px] text-blue-700 flex justify-between">
+                  <span>Redditività operativa stand:</span>
+                  <strong className="font-mono font-bold">
+                    {macroEconomiaStand.totIncassoCons > 0 
+                      ? ((macroEconomiaStand.margineCons / macroEconomiaStand.totIncassoCons) * 100).toFixed(1) 
+                      : '0'}%
+                  </strong>
+                </div>
+              </div>
+
+              {/* KPI 4: COMPOSIZIONE & PRESIDIO */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Presidio & Ripartizione</span>
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-800">
+                    {macroEconomiaStand.totaleStand} Stand Attivi
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-emerald-800 font-semibold flex items-center gap-1">
+                      <Utensils className="w-3 h-3" /> Food & Beverage:
+                    </span>
+                    <strong className="font-mono text-slate-900">{macroEconomiaStand.foodCount} stand ({macroEconomiaStand.totaleStand > 0 ? ((macroEconomiaStand.foodCount / macroEconomiaStand.totaleStand) * 100).toFixed(0) : 0}%)</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-600 font-semibold flex items-center gap-1">
+                      <Store className="w-3 h-3" /> Servizi & No-Food:
+                    </span>
+                    <strong className="font-mono text-slate-900">{macroEconomiaStand.nonFoodCount} stand ({macroEconomiaStand.totaleStand > 0 ? ((macroEconomiaStand.nonFoodCount / macroEconomiaStand.totaleStand) * 100).toFixed(0) : 0}%)</strong>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-slate-200 text-[10px] text-slate-500 flex justify-between">
+                  <span>Riconciliazione:</span>
+                  <span className="font-bold text-emerald-800">Bilancio Sociale Allineato</span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Barra Filtri Segmentazione Stand */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1 mr-1">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Filtra Stand:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFiltroTipoStand('tutti')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer border ${
+                    filtroTipoStand === 'tutti'
+                      ? 'bg-slate-800 text-white border-slate-800 shadow-2xs'
+                      : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  Tutti ({standsEventoSelezionato.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroTipoStand('food')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer border ${
+                    filtroTipoStand === 'food'
+                      ? 'bg-emerald-700 text-white border-emerald-800 shadow-2xs'
+                      : 'bg-white hover:bg-slate-50 text-emerald-800 border-emerald-200'
+                  }`}
+                >
+                  Solo Food & Beverage ({macroEconomiaStand.foodCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroTipoStand('non_food')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer border ${
+                    filtroTipoStand === 'non_food'
+                      ? 'bg-slate-700 text-white border-slate-800 shadow-2xs'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  Solo Servizi / No-Food ({macroEconomiaStand.nonFoodCount})
+                </button>
+              </div>
+
+              <span className="text-xs text-slate-500">
+                Visualizzati <strong className="text-slate-800">{standsVisualizzati.length}</strong> su <strong className="text-slate-800">{standsEventoSelezionato.length}</strong> stand configurati
+              </span>
+            </div>
+
+            {/* TABELLA RIASSUNTIVA ANALITICA DEGLI STAND DEL SINGOLO EVENTO */}
+            <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-2xs">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-bold text-[11px] uppercase tracking-wider border-b border-slate-200">
+                    <th className="py-2.5 px-3">N° & Denominazione Stand</th>
+                    <th className="py-2.5 px-3">Tipologia</th>
+                    <th className="py-2.5 px-3 text-center">Circuito</th>
+                    <th className="py-2.5 px-3 text-right">Spesa Prev.</th>
+                    <th className="py-2.5 px-3 text-right">Spesa Cons.</th>
+                    <th className="py-2.5 px-3 text-right">Diff. Spesa</th>
+                    <th className="py-2.5 px-3 text-right">Incasso Prev.</th>
+                    <th className="py-2.5 px-3 text-right">Incasso Cons.</th>
+                    <th className="py-2.5 px-3 text-right">Diff. Incasso</th>
+                    <th className="py-2.5 px-3 text-right font-black">Margine Prev.</th>
+                    <th className="py-2.5 px-3 text-right font-black">Margine Cons.</th>
+                    <th className="py-2.5 px-3 text-right font-black">Scost. Margine</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {standsVisualizzati.map(st => {
+                    const spP = Number(st.spesaPreventivo) || 0;
+                    const spC = Number(st.spesaConsuntivo) || 0;
+                    const diffS = spC - spP;
+                    const isRisparmio = diffS <= 0;
+
+                    const inP = Number(st.incassoPrevisto) || Number(st.incassoStimato) || 0;
+                    const inC = Number(st.incassoConsuntivo) || Number(st.incassoStimato) || 0;
+                    const diffI = inC - inP;
+
+                    const mP = inP - spP;
+                    const mC = inC - spC;
+                    const diffM = mC - mP;
+
+                    return (
+                      <tr key={st.id || `st-${st.numero}`} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md font-bold text-xs shrink-0 ${
+                              st.riferimentoFood 
+                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-200' 
+                                : 'bg-slate-200 text-slate-800 border border-slate-300'
+                            }`}>
+                              #{st.numero}
+                            </span>
+                            <div>
+                              <strong className="text-slate-900 block leading-tight">{st.nome}</strong>
+                              {st.responsabile && (
+                                <span className="text-[10px] text-slate-500 block truncate max-w-[200px]">
+                                  Ref: {st.responsabile}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
+                          {st.tipologia}
+                        </td>
+
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          {st.riferimentoFood ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <Utensils className="w-2.5 h-2.5" />
+                              <span>Food & Beverage</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                              <Store className="w-2.5 h-2.5" />
+                              <span>Servizi / No-Food</span>
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-500">
+                          {spP.toLocaleString('it-IT')} €
+                        </td>
+
+                        <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
+                          {spC.toLocaleString('it-IT')} €
+                        </td>
+
+                        <td className="py-2.5 px-3 text-right font-mono">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            isRisparmio 
+                              ? 'bg-emerald-100 text-emerald-800' 
+                              : 'bg-rose-100 text-rose-800'
+                          }`} title={isRisparmio ? 'Risparmio di spesa rispetto al preventivo' : 'Scostamento di spesa in eccesso'}>
+                            {diffS <= 0 ? `${diffS.toLocaleString('it-IT')} €` : `+${diffS.toLocaleString('it-IT')} €`}
+                          </span>
+                        </td>
+
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-500">
+                          {inP.toLocaleString('it-IT')} €
+                        </td>
+
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">
+                          {inC.toLocaleString('it-IT')} €
+                        </td>
+
+                        <td className="py-2.5 px-3 text-right font-mono">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            diffI >= 0 
+                              ? 'bg-emerald-100 text-emerald-800' 
+                              : 'bg-amber-100 text-amber-800'
+                          }`} title={diffI >= 0 ? 'Extra incasso rispetto alla stima' : 'Minori entrate rispetto alla stima'}>
+                            {diffI >= 0 ? `+${diffI.toLocaleString('it-IT')} €` : `${diffI.toLocaleString('it-IT')} €`}
+                          </span>
+                        </td>
+
+                        <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-700">
+                          {mP >= 0 ? '+' : ''}{mP.toLocaleString('it-IT')} €
+                        </td>
+
+                        <td className={`py-2.5 px-3 text-right font-mono font-black ${
+                          mC >= 0 ? 'text-emerald-800' : 'text-rose-700'
+                        }`}>
+                          {mC >= 0 ? '+' : ''}{mC.toLocaleString('it-IT')} €
+                        </td>
+
+                        <td className={`py-2.5 px-3 text-right font-mono font-bold text-[10.5px] ${
+                          diffM >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                        }`}>
+                          {diffM >= 0 ? `+${diffM.toLocaleString('it-IT')} €` : `${diffM.toLocaleString('it-IT')} €`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+
+                {/* TFOOT: TOTALI MACRO AGGREGATI STAND */}
+                <tfoot>
+                  <tr className="bg-slate-900 text-white font-bold text-xs border-t-2 border-slate-700">
+                    <td colSpan={3} className="py-3 px-3 uppercase tracking-wide">
+                      <div className="flex items-center gap-2">
+                        <Store className="w-4 h-4 text-emerald-400" />
+                        <span>TOTALI AGGREGATI STAND ({standsVisualizzati.length} DI {standsEventoSelezionato.length})</span>
+                      </div>
+                    </td>
+
+                    {/* Somma Spesa Prev */}
+                    <td className="py-3 px-3 text-right font-mono text-slate-300">
+                      {(macroEconomiaStand.totSpesaPrev || 0).toLocaleString('it-IT')} €
+                    </td>
+
+                    {/* Somma Spesa Cons */}
+                    <td className="py-3 px-3 text-right font-mono text-white font-black">
+                      {(macroEconomiaStand.totSpesaCons || 0).toLocaleString('it-IT')} €
+                    </td>
+
+                    {/* Differenza Spese */}
+                    <td className="py-3 px-3 text-right font-mono">
+                      <span className={macroEconomiaStand.diffSpesa <= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                        {macroEconomiaStand.diffSpesa <= 0 
+                          ? `${macroEconomiaStand.diffSpesa.toLocaleString('it-IT')} €` 
+                          : `+${macroEconomiaStand.diffSpesa.toLocaleString('it-IT')} €`}
+                      </span>
+                    </td>
+
+                    {/* Somma Incasso Prev */}
+                    <td className="py-3 px-3 text-right font-mono text-slate-300">
+                      {(macroEconomiaStand.totIncassoPrev || 0).toLocaleString('it-IT')} €
+                    </td>
+
+                    {/* Somma Incasso Cons */}
+                    <td className="py-3 px-3 text-right font-mono text-emerald-300 font-black">
+                      {(macroEconomiaStand.totIncassoCons || 0).toLocaleString('it-IT')} €
+                    </td>
+
+                    {/* Differenza Incassi */}
+                    <td className="py-3 px-3 text-right font-mono">
+                      <span className={macroEconomiaStand.diffIncasso >= 0 ? 'text-emerald-300' : 'text-amber-300'}>
+                        {macroEconomiaStand.diffIncasso >= 0 
+                          ? `+${macroEconomiaStand.diffIncasso.toLocaleString('it-IT')} €` 
+                          : `${macroEconomiaStand.diffIncasso.toLocaleString('it-IT')} €`}
+                      </span>
+                    </td>
+
+                    {/* Somma Margine Prev */}
+                    <td className="py-3 px-3 text-right font-mono text-slate-300 font-bold">
+                      {macroEconomiaStand.marginePrev >= 0 ? '+' : ''}{(macroEconomiaStand.marginePrev || 0).toLocaleString('it-IT')} €
+                    </td>
+
+                    {/* Somma Margine Cons */}
+                    <td className="py-3 px-3 text-right font-mono text-emerald-300 font-black">
+                      {macroEconomiaStand.margineCons >= 0 ? '+' : ''}{(macroEconomiaStand.margineCons || 0).toLocaleString('it-IT')} €
+                    </td>
+
+                    {/* Somma Scostamento Margine */}
+                    <td className={`py-3 px-3 text-right font-mono font-black ${
+                      macroEconomiaStand.diffMargine >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                    }`}>
+                      {macroEconomiaStand.diffMargine >= 0 ? `+${macroEconomiaStand.diffMargine.toLocaleString('it-IT')} €` : `${macroEconomiaStand.diffMargine.toLocaleString('it-IT')} €`}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Note Descrittive di Visione Macro Economica */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 flex items-start gap-2.5">
+              <Info className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-bold text-slate-900 block">
+                  Analisi Macro Economica della Manifestazione ({eventoPerMacroStand?.titolo}):
+                </span>
+                <p className="text-[11.5px] text-slate-600 leading-relaxed">
+                  L'aggregazione di tutti i <strong>{standsEventoSelezionato.length} stand numerati</strong> produce un volume complessivo di spesa a consuntivo pari a <strong>{(macroEconomiaStand.totSpesaCons || 0).toLocaleString('it-IT')} €</strong> (a fronte di un preventivo di {(macroEconomiaStand.totSpesaPrev || 0).toLocaleString('it-IT')} €) e ricavi effettivi realizzati per <strong>{(macroEconomiaStand.totIncassoCons || 0).toLocaleString('it-IT')} €</strong> (a fronte di una stima di {(macroEconomiaStand.totIncassoPrev || 0).toLocaleString('it-IT')} €). Il margine operativo netto generato dagli stand ammonta a <strong className={macroEconomiaStand.margineCons >= 0 ? 'text-emerald-800' : 'text-rose-700'}>{macroEconomiaStand.margineCons >= 0 ? '+' : ''}{(macroEconomiaStand.margineCons || 0).toLocaleString('it-IT')} €</strong>, rappresentando il perno di sostenibilità per l'intero evento.
+                </p>
+              </div>
+            </div>
+
+          </div>
+
           {/* Tabella Comparativa Eventi con Totali e Segno Positivo Differenza */}
           <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-2xs">
             <table className="w-full text-left text-xs border-collapse">
@@ -1445,6 +3047,7 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
                 <tr className="bg-slate-100 text-slate-700 font-bold text-[11px] uppercase tracking-wider border-b border-slate-200">
                   <th className="py-2.5 px-3">Manifestazione & Tipologia</th>
                   <th className="py-2.5 px-3">Data</th>
+                  <th className="py-2.5 px-3 text-center">Stand</th>
                   <th className="py-2.5 px-3 text-right">Preventivo</th>
                   <th className="py-2.5 px-3 text-right">Consuntivo</th>
                   <th className="py-2.5 px-3 text-right text-emerald-800">Diff. (+)</th>
@@ -1496,6 +3099,25 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
                       <td className="py-2.5 px-3 font-mono text-slate-600 whitespace-nowrap">
                         {e.dataInizio}
                       </td>
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEventoSelezionatoPerStandId(e.id);
+                            const el = document.getElementById('sezione-macro-stand');
+                            el?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold transition-colors cursor-pointer border ${
+                            eventoPerMacroStand?.id === e.id
+                              ? 'bg-emerald-700 text-white border-emerald-800 shadow-2xs'
+                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                          }`}
+                          title="Visualizza aggregazione macro di tutti gli stand per questa manifestazione"
+                        >
+                          <Store className="w-3 h-3" />
+                          <span>{e.standNumerati?.length || STAND_SIMULATI_DEFAULT.length} Stand</span>
+                        </button>
+                      </td>
                       <td className="py-2.5 px-3 text-right font-mono text-slate-500">
                         {(prevLordo || 0).toLocaleString('it-IT')} €
                       </td>
@@ -1546,6 +3168,9 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
                   <td className="py-3 px-3 font-mono text-slate-300">
                     {annoAttivo || 'Tutti'}
                   </td>
+                  <td className="py-3 px-3 text-center font-mono text-[10px] text-slate-300">
+                    Macro Stand
+                  </td>
                   <td className="py-3 px-3 text-right font-mono text-slate-300">
                     {(totaliEventi.budgetPrevisto || 0).toLocaleString('it-IT')} €
                   </td>
@@ -1589,7 +3214,357 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
         </div>
       )}
 
-      {/* SOTTO-TAB 4: SCHEMA UFFICIALE RUNTS PER PRO LOCO / APS (MODELLO D) */}
+      {/* SOTTO-TAB: GESTIONE DONAZIONI DA TERZI ED EROGAZIONI LIBERALI (ART. 83 CTS) */}
+      {sottoTab === 'donazioni' && (
+        <div className="space-y-6">
+          
+          {/* Header del modulo Donazioni */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <HeartHandshake className="w-4 h-4" />
+                </div>
+                <h3 className="font-extrabold text-slate-900 text-base">
+                  Donazioni da Terzi & Erogazioni Liberali
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Art. 83 D.Lgs. 117/2017 (CTS)
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 max-w-2xl">
+                Registro ufficiale delle donazioni, lasciti ed erogazioni liberali ricevute da cittadini, aziende, banche ed enti.
+                Emissione ricevute con validità fiscale per detrazione/deduzione IRPEF e IRES.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => esportaDonazioniCSV(donazioniFiltrate, annoAttivo || config.annoCorrente)}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-200"
+                title="Esporta elenco donazioni in foglio Excel/CSV"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Esporta CSV</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setDonazioneInModifica(null);
+                  setModalDonazioneAperta(true);
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Registra Nuova Donazione</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Metric Cards Donazioni */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Totale Donazioni ({annoAttivo ? `Anno ${annoAttivo}` : 'Storico'})
+              </span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-black text-rose-700 font-mono">
+                  € {totaleDonazioni.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-500 block mt-1">
+                Incidenza entrate: <strong>{bilancioGlobale.percDonazioni.toFixed(1)}%</strong> sul bilancio
+              </span>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Agevolabili Art. 83 CTS
+              </span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-black text-emerald-700 font-mono">
+                  € {totaleDonazioniDetraibili.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <span className="text-[11px] text-emerald-800 font-medium block mt-1">
+                {donazioniFiltrate.filter(d => d.detraibileFiscale).length} con ricevuta fiscale tracciata
+              </span>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Donazione Media
+              </span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-black text-slate-800 font-mono">
+                  € {donazioneMedia.toLocaleString('it-IT')}
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-500 block mt-1">
+                Calcolato su {donazioniFiltrate.length} erogazioni
+              </span>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Tipologia Donatori
+              </span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-black text-slate-800 font-mono">
+                  {donazioniFiltrate.length}
+                </span>
+                <span className="text-xs text-slate-500">atti di liberalità</span>
+              </div>
+              <span className="text-[11px] text-slate-500 block mt-1 truncate">
+                Privati, aziende, fondazioni ed enti
+              </span>
+            </div>
+
+          </div>
+
+          {/* Filtri & Barra di Ricerca Donazioni */}
+          <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            <div className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={filtroRicercaDonatore}
+                  onChange={(e) => setFiltroRicercaDonatore(e.target.value)}
+                  placeholder="Cerca donatore, C.F./P.IVA, n° ricevuta o causale..."
+                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 bg-white"
+                />
+              </div>
+
+              <select
+                value={filtroTipoDonatore}
+                onChange={(e) => setFiltroTipoDonatore(e.target.value as 'tutti' | TipoDonatore)}
+                className="text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 bg-white font-medium"
+              >
+                <option value="tutti">Tutti i Donatori</option>
+                <option value="privato">Persona Fisica (Privato)</option>
+                <option value="azienda">Impresa / Azienda</option>
+                <option value="fondazione">Fondazione Bancaria</option>
+                <option value="ente_benefico">Ente Terzo Settore / Onlus</option>
+                <option value="associazione">Associazione consorella</option>
+                <option value="anonimo">Anonimo / Offerta</option>
+              </select>
+
+              {(filtroRicercaDonatore || filtroTipoDonatore !== 'tutti') && (
+                <button
+                  onClick={() => {
+                    setFiltroRicercaDonatore('');
+                    setFiltroTipoDonatore('tutti');
+                  }}
+                  className="px-2.5 py-1.5 text-xs text-rose-700 hover:bg-rose-50 rounded-lg font-semibold transition-colors"
+                >
+                  Resetta
+                </button>
+              )}
+            </div>
+
+            <div className="text-xs text-slate-500 self-center">
+              Visualizzati: <strong>{donazioniFiltrate.length}</strong> record
+            </div>
+          </div>
+
+          {/* Tabella Dettaglio Donazioni */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10.5px]">
+                    <th className="py-3 px-3.5">N° Ricevuta / Data</th>
+                    <th className="py-3 px-3.5">Donatore / Ente</th>
+                    <th className="py-3 px-3.5">Tipologia</th>
+                    <th className="py-3 px-3.5">Causale & Destinazione</th>
+                    <th className="py-3 px-3.5">Metodo Pagamento</th>
+                    <th className="py-3 px-3.5 text-right">Importo (€)</th>
+                    <th className="py-3 px-3.5 text-center">Art. 83 CTS</th>
+                    <th className="py-3 px-3.5 text-center">Azioni</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {donazioniFiltrate.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-10 text-center text-slate-500">
+                        <HeartHandshake className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p className="font-semibold text-sm text-slate-700">Nessuna donazione registrata</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {filtroRicercaDonatore || filtroTipoDonatore !== 'tutti'
+                            ? 'Nessun risultato con i filtri applicati.'
+                            : 'Registra la prima erogazione liberale per questo esercizio finanziario.'}
+                        </p>
+                        <button
+                          onClick={() => {
+                            setDonazioneInModifica(null);
+                            setModalDonazioneAperta(true);
+                          }}
+                          className="mt-3 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Aggiungi Donazione</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    donazioniFiltrate.map((d) => (
+                      <tr key={d.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-2.5 px-3.5">
+                          <span className="font-mono font-bold text-slate-900 block">
+                            {d.ricevutaNumero}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block">
+                            {d.data}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3.5">
+                          <span className="font-bold text-slate-900 block">
+                            {d.donatore}
+                          </span>
+                          {d.codiceFiscalePartitaIva && (
+                            <span className="text-[10.5px] font-mono text-slate-500 block">
+                              CF/P.IVA: {d.codiceFiscalePartitaIva}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3.5">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                            d.tipoDonatore === 'privato' ? 'bg-blue-100 text-blue-800' :
+                            d.tipoDonatore === 'azienda' ? 'bg-amber-100 text-amber-900' :
+                            d.tipoDonatore === 'fondazione' ? 'bg-purple-100 text-purple-900' :
+                            d.tipoDonatore === 'ente_benefico' ? 'bg-emerald-100 text-emerald-800' :
+                            d.tipoDonatore === 'associazione' ? 'bg-teal-100 text-teal-800' :
+                            'bg-slate-100 text-slate-700'
+                          }`}>
+                            {d.tipoDonatore === 'privato' ? 'Persona Fisica' :
+                             d.tipoDonatore === 'azienda' ? 'Impresa' :
+                             d.tipoDonatore === 'fondazione' ? 'Fondazione' :
+                             d.tipoDonatore === 'ente_benefico' ? 'Terzo Settore' :
+                             d.tipoDonatore === 'associazione' ? 'Consorella' : 'Anonimo'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3.5 max-w-xs">
+                          <span className="text-slate-800 block truncate" title={d.causale}>
+                            {d.causale}
+                          </span>
+                          {d.destinazione && (
+                            <span className="text-[10.5px] text-emerald-700 font-semibold block">
+                              Destinazione: {d.destinazione}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3.5 font-medium text-slate-700">
+                          <span className="inline-flex items-center gap-1">
+                            {d.metodo}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-900 text-sm">
+                          € {(d.importo || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-2.5 px-3.5 text-center">
+                          {d.detraibileFiscale ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200" title="Erogazione tracciabile agevolabile fiscalmente ex Art. 83 D.Lgs. 117/2017">
+                              <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                              <span>Detraibile 30%</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              Ordinaria
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3.5 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => setDonazioneRicevutaStampa(d)}
+                              className="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                              title="Visualizza e Stampa Ricevuta Ufficiale / Quietanza"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setDonazioneInModifica(d);
+                                setModalDonazioneAperta(true);
+                              }}
+                              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                              title="Modifica donazione"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setConfermaEliminaDonazioneId(d.id)}
+                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              title="Elimina donazione dal registro"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {donazioniFiltrate.length > 0 && (
+                  <tfoot>
+                    <tr className="bg-slate-900 text-white font-bold text-xs border-t-2 border-slate-700">
+                      <td colSpan={5} className="py-3 px-3.5 uppercase tracking-wide">
+                        Totale Erogazioni Registrate ({donazioniFiltrate.length} donazioni)
+                      </td>
+                      <td className="py-3 px-3.5 text-right font-mono text-emerald-300 text-sm">
+                        € {totaleDonazioni.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3 px-3.5 text-center text-slate-300 text-[10px]">
+                        {donazioniFiltrate.filter(d => d.detraibileFiscale).length} con ricevuta
+                      </td>
+                      <td className="py-3 px-3.5 text-center">
+                        <button
+                          onClick={() => esportaDonazioniCSV(donazioniFiltrate, annoAttivo || config.annoCorrente)}
+                          className="text-[10px] text-emerald-300 hover:underline cursor-pointer"
+                        >
+                          Scarica CSV
+                        </button>
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+
+          {/* Vademecum Fiscale & Normativo Art. 83 Codice del Terzo Settore */}
+          <div className="bg-gradient-to-r from-emerald-900 to-teal-900 text-white p-5 rounded-2xl shadow-xs border border-emerald-700/50 space-y-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+              <h4 className="font-extrabold text-sm text-white">
+                Vademecum Fiscale: Regime delle Erogazioni Liberali per le Pro Loco (Art. 83 D.Lgs. 117/2017)
+              </h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-emerald-100">
+              <div className="bg-white/10 p-3 rounded-xl border border-white/10">
+                <strong className="text-white block font-bold mb-1">Persone Fisiche (Cittadini)</strong>
+                <p className="leading-relaxed">
+                  Detrazione dall'IRPEF pari al <strong>30%</strong> dell'erogazione liberale effettuata, calcolata su un importo massimo di <strong>30.000 €</strong> per ciascun periodo d'imposta (oppure deduzione fino al 10% del reddito complessivo).
+                </p>
+              </div>
+              <div className="bg-white/10 p-3 rounded-xl border border-white/10">
+                <strong className="text-white block font-bold mb-1">Imprese, Aziende e Società</strong>
+                <p className="leading-relaxed">
+                  Deduzione dal reddito complessivo netto del soggetto erogatore nel limite del <strong>10%</strong> del reddito complessivo dichiarato, senza tetti massimi fissi di spesa.
+                </p>
+              </div>
+              <div className="bg-white/10 p-3 rounded-xl border border-white/10">
+                <strong className="text-white block font-bold mb-1">Obbligo di Tracciabilità</strong>
+                <p className="leading-relaxed">
+                  Le erogazioni liberali devono essere effettuate tramite banche, uffici postali o altri sistemi tracciabili (bonifico, bollettino, carte, assegni). I contanti non danno diritto a detrazione.
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      )}
       {sottoTab === 'runts' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs p-6 space-y-6">
           <div className="border-b border-slate-200 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -1624,16 +3599,29 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
                   A) Entrate da attività di interesse generale (Manifestazioni, Sagre, Feste)
                 </div>
                 <div className="px-4 py-2 flex justify-between">
-                  <span>1. Entrate da stand gastronomico e somministrazione sagre</span>
-                  <span className="font-mono font-medium">{Math.round((totaliEventi.entrateRealizzate || 0) * 0.70).toLocaleString('it-IT')} €</span>
+                  <span>1. Entrate da stand gastronomico e somministrazione sagre (Food & Beverage)</span>
+                  <span className="font-mono font-medium">
+                    {(consolidatoGlobaleStand.incassoFoodCons > 0 
+                      ? consolidatoGlobaleStand.incassoFoodCons 
+                      : Math.round((totaliEventi.entrateRealizzate || 0) * 0.70)).toLocaleString('it-IT')} €
+                  </span>
                 </div>
                 <div className="px-4 py-2 flex justify-between">
-                  <span>2. Biglietti, diritti di partecipazione e mostre</span>
-                  <span className="font-mono font-medium">{Math.round((totaliEventi.entrateRealizzate || 0) * 0.20).toLocaleString('it-IT')} €</span>
+                  <span>2. Biglietti, mostre, mercatini e stand no-food</span>
+                  <span className="font-mono font-medium">
+                    {(consolidatoGlobaleStand.incassoNonFoodCons > 0 
+                      ? consolidatoGlobaleStand.incassoNonFoodCons 
+                      : Math.round((totaliEventi.entrateRealizzate || 0) * 0.20)).toLocaleString('it-IT')} €
+                  </span>
                 </div>
                 <div className="px-4 py-2 flex justify-between">
-                  <span>3. Sponsorizzazioni e contributi privati su eventi</span>
-                  <span className="font-mono font-medium">{Math.round((totaliEventi.entrateRealizzate || 0) * 0.10).toLocaleString('it-IT')} €</span>
+                  <span>3. Sponsorizzazioni, contributi ed entrate da partner/gestione</span>
+                  <span className="font-mono font-medium">
+                    {Math.max(0, (totaliEventi.entrateRealizzate || 0) - (
+                      (consolidatoGlobaleStand.incassoFoodCons > 0 ? consolidatoGlobaleStand.incassoFoodCons : Math.round((totaliEventi.entrateRealizzate || 0) * 0.70)) +
+                      (consolidatoGlobaleStand.incassoNonFoodCons > 0 ? consolidatoGlobaleStand.incassoNonFoodCons : 0)
+                    )).toLocaleString('it-IT')} €
+                  </span>
                 </div>
                 <div className="p-3 bg-slate-50 font-bold text-slate-900">
                   B) Entrate da attività associative e quote tesseramento
@@ -1641,6 +3629,28 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
                 <div className="px-4 py-2 flex justify-between">
                   <span>1. Quote associative annuali versate dai soci</span>
                   <span className="font-mono font-medium">{(totaleQuote || 0).toLocaleString('it-IT')} €</span>
+                </div>
+                <div className="p-3 bg-slate-50 font-bold text-slate-900 flex justify-between items-center">
+                  <span>C) Entrate da raccolte fondi ed erogazioni liberali da terzi (Art. 7 e 83 CTS)</span>
+                  <span className="text-[10px] text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded font-bold">Art. 83 CTS</span>
+                </div>
+                <div className="px-4 py-2 flex justify-between">
+                  <span>1. Erogazioni liberali da persone fisiche e privati</span>
+                  <span className="font-mono font-medium">
+                    {donazioniFiltrate.filter(d => d.tipoDonatore === 'privato' || d.tipoDonatore === 'anonimo').reduce((a, b) => a + (b.importo || 0), 0).toLocaleString('it-IT')} €
+                  </span>
+                </div>
+                <div className="px-4 py-2 flex justify-between">
+                  <span>2. Donazioni da imprese, fondazioni ed enti terzi</span>
+                  <span className="font-mono font-medium">
+                    {donazioniFiltrate.filter(d => d.tipoDonatore !== 'privato' && d.tipoDonatore !== 'anonimo').reduce((a, b) => a + (b.importo || 0), 0).toLocaleString('it-IT')} €
+                  </span>
+                </div>
+                <div className="px-4 py-1.5 bg-slate-50 text-[10.5px] text-slate-500 flex justify-between italic">
+                  <span>Quota donazioni detraibili tracciate ex Art. 83 CTS:</span>
+                  <span className="font-mono font-bold text-emerald-700">
+                    {(totaleDonazioniDetraibili || 0).toLocaleString('it-IT')} €
+                  </span>
                 </div>
                 <div className="p-3 bg-emerald-50 font-black text-emerald-950 flex justify-between text-sm">
                   <span>TOTALE GENERALE ENTRATE</span>
@@ -1661,15 +3671,19 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
                 </div>
                 <div className="px-4 py-2 flex justify-between">
                   <span>1. Materie prime alimentari e bevande (Food & Stand)</span>
-                  <span className="font-mono font-medium">{(totaliEventi.food || 0).toLocaleString('it-IT')} €</span>
+                  <span className="font-mono font-medium">
+                    {(consolidatoGlobaleStand.spesaFoodCons > 0 ? consolidatoGlobaleStand.spesaFoodCons : (totaliEventi.food || 0)).toLocaleString('it-IT')} €
+                  </span>
                 </div>
                 <div className="px-4 py-2 flex justify-between">
                   <span>2. Servizi artistici, musicali, service e diritti SIAE</span>
                   <span className="font-mono font-medium">{(totaliEventi.intrattenimento || 0).toLocaleString('it-IT')} €</span>
                 </div>
                 <div className="px-4 py-2 flex justify-between">
-                  <span>3. Noleggi palchi, tensostrutture, gazebo e sicurezza</span>
-                  <span className="font-mono font-medium">{(totaliEventi.altreSpese || 0).toLocaleString('it-IT')} €</span>
+                  <span>3. Noleggi palchi, tensostrutture, stand no-food e logistica</span>
+                  <span className="font-mono font-medium">
+                    {((totaliEventi.altreSpese || 0) + (consolidatoGlobaleStand.spesaNonFoodCons > 0 ? consolidatoGlobaleStand.spesaNonFoodCons : 0)).toLocaleString('it-IT')} €
+                  </span>
                 </div>
                 <div className="px-4 py-2 flex justify-between">
                   <span>4. Oneri vari, pubblicità, tipografia e permessi</span>
@@ -1717,6 +3731,120 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
             >
               Genera Verbale Assemblea
             </button>
+          </div>
+
+          {/* GUIDA NORMATIVA COMPLETA: TERZO SETTORE, RUNTS & ADEMPIMENTI PRO LOCO */}
+          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs bg-slate-50">
+            <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-emerald-400" />
+                <h4 className="text-sm font-bold">
+                  Quadro Normativo D.Lgs. 117/2017 & Guida Fiscale per Pro Loco (APS)
+                </h4>
+              </div>
+              <span className="text-[11px] font-mono bg-emerald-800/80 px-2 py-0.5 rounded text-emerald-200 border border-emerald-700">
+                CTS • D.M. 05/03/2020 • RUNTS
+              </span>
+            </div>
+
+            <div className="p-5 space-y-5 text-xs text-slate-700">
+              
+              {/* Sezione 1: Schemi di Bilancio e Cassa */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-2">
+                  <div className="flex items-center gap-1.5 text-slate-900 font-bold">
+                    <Building2 className="w-4 h-4 text-emerald-700" />
+                    <span>Rendiconto per Cassa (Modello D) - D.M. 5 marzo 2020</span>
+                  </div>
+                  <p className="text-slate-600 leading-relaxed">
+                    Gli Enti del Terzo Settore con ricavi, rendite, proventi o entrate complessive inferiori alla soglia di legge (fino a 220.000 € / 300.000 € in sede di revisione) possono redigere il bilancio di esercizio nella forma del <strong>Rendiconto per Cassa (Modello D)</strong> anziché per competenza (Mod. A Stato Patrimoniale e Mod. B Rendiconto Gestionale).
+                  </p>
+                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-600">
+                    <strong>Principio contabile:</strong> Vengono registrate esclusivamente le entrate effettivamente incassate e le uscite monetarie pagate nell'esercizio finanziario di riferimento.
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-2">
+                  <div className="flex items-center gap-1.5 text-slate-900 font-bold">
+                    <Calendar className="w-4 h-4 text-blue-700" />
+                    <span>Calendario Istituzionale & Deposito RUNTS</span>
+                  </div>
+                  <ul className="space-y-1.5 text-slate-600 leading-relaxed list-disc list-inside">
+                    <li>
+                      <strong>Entro Marzo:</strong> Il Consiglio Direttivo predispone ed approva la bozza del Rendiconto consuntivo e la relazione di missione/accompagnatoria.
+                    </li>
+                    <li>
+                      <strong>Entro 30 Aprile (120 giorni):</strong> L'Assemblea ordinaria dei Soci approva il bilancio con apposito verbale (prorogabile a 180 giorni se previsto da statuto).
+                    </li>
+                    <li>
+                      <strong>Entro il 30 Giugno:</strong> Obbligo inderogabile di deposito telematico sul portale RUNTS di bilancio approvato, verbale assembleare ed eventuali relazioni.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Sezione 2: Focus Erogazioni Liberali e Donazioni da Terzi Art. 83 */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+                <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                  <HeartHandshake className="w-4 h-4 text-rose-600" />
+                  <span>Regime Fiscale delle Erogazioni Liberali (Art. 83 Codice del Terzo Settore)</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="bg-emerald-50/60 p-3 rounded-lg border border-emerald-200">
+                    <strong className="text-emerald-950 font-bold block mb-1">Per i Cittadini (Privati)</strong>
+                    <p className="text-[11px] text-emerald-900 leading-relaxed">
+                      Detrazione IRPEF del <strong>30%</strong> dell'importo donato fino a un massimo di <strong>30.000 €</strong> per anno, oppure deduzione dal reddito complessivo nel limite del <strong>10%</strong>.
+                    </p>
+                  </div>
+                  <div className="bg-amber-50/60 p-3 rounded-lg border border-amber-200">
+                    <strong className="text-amber-950 font-bold block mb-1">Per Imprese & Società</strong>
+                    <p className="text-[11px] text-amber-900 leading-relaxed">
+                      Deduzione dal reddito complessivo netto dichiarato fino al limite del <strong>10%</strong>. L'eccedenza può essere computata negli esercizi successivi fino al quarto.
+                    </p>
+                  </div>
+                  <div className="bg-blue-50/60 p-3 rounded-lg border border-blue-200">
+                    <strong className="text-blue-950 font-bold block mb-1">Tracciabilità Obbligatoria</strong>
+                    <p className="text-[11px] text-blue-900 leading-relaxed">
+                      Le donazioni in contanti non beneficiano di agevolazioni. Il pagamento deve avvenire a mezzo bonifico bancario/postale, carta di credito/debito, POS o assegno.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sezione 3: Altri obblighi di legge */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-slate-900 font-bold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Registro Volontari (Art. 18 CTS)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Obbligo di tenuta del registro dei volontari non occasionali, preventivamente vidimato o con marcatura temporale, e stipula della polizza infortuni, malattie e RCT.
+                  </p>
+                </div>
+
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-slate-900 font-bold">
+                    <BookOpen className="w-3.5 h-3.5 text-violet-700" />
+                    <span>Libri Sociali Obbligatori (Art. 15 CTS)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Libro degli associati (Soci ordinari e onorari), Libro delle adunanze e delle deliberazioni delle assemblee dei soci, Libro dell'organo di amministrazione (Consiglio Direttivo).
+                  </p>
+                </div>
+
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-slate-900 font-bold">
+                    <Building2 className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Trasparenza Contributi P.A. (L. 124/2017)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Obbligo di pubblicazione sul proprio portale web entro il 30 giugno di sovvenzioni, sussidi o vantaggi economici ricevuti dalla Pubblica Amministrazione superiori a <strong>10.000 €</strong> complessivi.
+                  </p>
+                </div>
+              </div>
+
+            </div>
           </div>
 
         </div>
@@ -1784,7 +3912,7 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
             </h4>
             <div className="flex flex-wrap items-center gap-3">
               <button
-                onClick={() => esportaBackupJSON(soci, config, eventi)}
+                onClick={() => esportaBackupJSON(soci, config, eventi, listaDonazioni)}
                 className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Download className="w-4 h-4" />
@@ -1820,6 +3948,62 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
           onClose={() => setMostraModalPromemoria(false)}
           onRegistraPagamento={onRegistraPagamento}
         />
+      )}
+
+      {/* MODALE REGISTRAZIONE / MODIFICA DONAZIONE DA TERZI */}
+      {modalDonazioneAperta && (
+        <DonazioneModal
+          donazioneIniziale={donazioneInModifica || undefined}
+          annoRiferimento={annoAttivo || config.annoCorrente}
+          onSalva={handleSalvaDonazione}
+          onChiudi={() => {
+            setModalDonazioneAperta(false);
+            setDonazioneInModifica(null);
+          }}
+        />
+      )}
+
+      {/* MODALE STAMPA RICEVUTA UFFICIALE QUIETANZA FISCALE */}
+      {donazioneRicevutaStampa && (
+        <DonazioneRicevutaModal
+          donazione={donazioneRicevutaStampa}
+          config={config}
+          onClose={() => setDonazioneRicevutaStampa(null)}
+        />
+      )}
+
+      {/* MODALE CONFERMA ELIMINAZIONE DONAZIONE */}
+      {confermaEliminaDonazioneId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 border border-slate-200 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">Elimina Donazione</h4>
+                <p className="text-xs text-slate-500">Confermi l'eliminazione dal registro?</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Questa azione cancellerà permanentemente la ricevuta dal registro delle entrate e aggiornerà i totali di bilancio.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setConfermaEliminaDonazioneId(null)}
+                className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors cursor-pointer"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={() => handleEliminaDonazione(confermaEliminaDonazioneId)}
+                className="px-3.5 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold transition-colors cursor-pointer"
+              >
+                Elimina definitivamente
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

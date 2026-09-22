@@ -23,7 +23,12 @@ import {
   Sparkles,
   Info,
   CheckCircle2,
-  Store
+  Store,
+  Plus,
+  Trash2,
+  ArrowUpDown,
+  RotateCcw,
+  RefreshCw
 } from 'lucide-react';
 import { EventBudgetChart } from './EventBudgetChart';
 import { calcolaEconomiaEvento, getInfoTipoEvento } from '../utils/eventoHelpers';
@@ -159,11 +164,140 @@ export const EventModal: React.FC<EventModalProps> = ({
   const [responsabileId, setResponsabileId] = useState<string>(evento?.responsabileId || (soci[0]?.id || ''));
 
   // Stand Numerati con Tipologia e Riferimento Food
-  const [standNumerati, setStandNumerati] = useState<StandEvento[]>(
-    evento?.standNumerati && evento.standNumerati.length > 0
+  const [standNumerati, setStandNumerati] = useState<StandEvento[]>(() => {
+    const list = evento?.standNumerati && evento.standNumerati.length > 0
       ? evento.standNumerati
-      : STAND_SIMULATI_DEFAULT
-  );
+      : STAND_SIMULATI_DEFAULT;
+
+    return list.map((s, idx) => {
+      const def = STAND_SIMULATI_DEFAULT[idx] || STAND_SIMULATI_DEFAULT.find(d => d.numero === s.numero);
+      return {
+        ...s,
+        spesaPreventivo: s.spesaPreventivo ?? def?.spesaPreventivo ?? 0,
+        spesaConsuntivo: s.spesaConsuntivo ?? def?.spesaConsuntivo ?? 0,
+        incassoPrevisto: s.incassoPrevisto ?? def?.incassoPrevisto ?? (s.incassoStimato || 0),
+        incassoConsuntivo: s.incassoConsuntivo ?? def?.incassoConsuntivo ?? (s.incassoStimato || 0),
+      };
+    });
+  });
+
+  // Calcolo aggregato cifre stand (spese, incassi, margini e differenze)
+  const totaliStand = useMemo(() => {
+    let totSpesePrev = 0;
+    let totSpeseCons = 0;
+    let totIncassiPrev = 0;
+    let totIncassiCons = 0;
+    let totFoodSpesePrev = 0;
+    let totFoodSpeseCons = 0;
+    let totAltreSpesePrev = 0;
+    let totAltreSpeseCons = 0;
+
+    standNumerati.forEach(s => {
+      const spP = Number(s.spesaPreventivo) || 0;
+      const spC = Number(s.spesaConsuntivo) || 0;
+      const inP = Number(s.incassoPrevisto) || 0;
+      const inC = Number(s.incassoConsuntivo) || 0;
+
+      totSpesePrev += spP;
+      totSpeseCons += spC;
+      totIncassiPrev += inP;
+      totIncassiCons += inC;
+
+      if (s.riferimentoFood) {
+        totFoodSpesePrev += spP;
+        totFoodSpeseCons += spC;
+      } else {
+        totAltreSpesePrev += spP;
+        totAltreSpeseCons += spC;
+      }
+    });
+
+    const diffSpese = totSpeseCons - totSpesePrev;
+    const diffIncassi = totIncassiCons - totIncassiPrev;
+    const margineCons = totIncassiCons - totSpeseCons;
+    const marginePrev = totIncassiPrev - totSpesePrev;
+
+    return {
+      totSpesePrev,
+      totSpeseCons,
+      diffSpese,
+      totIncassiPrev,
+      totIncassiCons,
+      diffIncassi,
+      margineCons,
+      marginePrev,
+      totFoodSpesePrev,
+      totFoodSpeseCons,
+      totAltreSpesePrev,
+      totAltreSpeseCons,
+      conteggioFood: standNumerati.filter(s => s.riferimentoFood).length
+    };
+  }, [standNumerati]);
+
+  const handleAggiornaStand = (index: number, campo: keyof StandEvento, valore: any) => {
+    setStandNumerati(prev => {
+      const copy = [...prev];
+      copy[index] = {
+        ...copy[index],
+        [campo]: valore
+      };
+      return copy;
+    });
+  };
+
+  const handleAggiungiStand = () => {
+    const maxNum = standNumerati.reduce((max, s) => Math.max(max, Number(s.numero) || 0), 0);
+    const nuovoNum = maxNum + 1;
+    const nuovoStand: StandEvento = {
+      id: `std-${Date.now()}`,
+      numero: nuovoNum,
+      nome: `Stand #${nuovoNum}`,
+      tipologia: 'Food / Gastronomia',
+      riferimentoFood: true,
+      responsabile: '',
+      spesaPreventivo: 0,
+      spesaConsuntivo: 0,
+      incassoPrevisto: 0,
+      incassoConsuntivo: 0,
+      descrizione: ''
+    };
+    setStandNumerati(prev => [...prev, nuovoStand]);
+  };
+
+  const handleRimuoviStand = (index: number) => {
+    if (standNumerati.length <= 1) {
+      alert('È necessario mantenere almeno uno stand configurato.');
+      return;
+    }
+    setStandNumerati(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleOrdinaStandPerNumero = () => {
+    setStandNumerati(prev => [...prev].sort((a, b) => (Number(a.numero) || 0) - (Number(b.numero) || 0)));
+  };
+
+  const handleRipristinaStandPredefiniti = () => {
+    setStandNumerati(STAND_SIMULATI_DEFAULT);
+  };
+
+  const handleSincronizzaTotaliStand = () => {
+    setSpesePrev(prev => ({
+      ...prev,
+      food: totaliStand.totFoodSpesePrev > 0 ? totaliStand.totFoodSpesePrev : prev.food,
+      altreSpese: totaliStand.totAltreSpesePrev > 0 ? totaliStand.totAltreSpesePrev : prev.altreSpese
+    }));
+    setSpeseCons(prev => ({
+      ...prev,
+      food: totaliStand.totFoodSpeseCons > 0 ? totaliStand.totFoodSpeseCons : prev.food,
+      altreSpese: totaliStand.totAltreSpeseCons > 0 ? totaliStand.totAltreSpeseCons : prev.altreSpese
+    }));
+    if (totaliStand.totIncassiPrev > 0) {
+      setEntratePreviste(totaliStand.totIncassiPrev);
+    }
+    if (totaliStand.totIncassiCons > 0) {
+      setEntrateRealizzate(totaliStand.totIncassiCons);
+    }
+  };
 
   // Calcolo dinamico dell'economia specifica per tipologia evento
   const economiaCalcolata = useMemo(() => {
@@ -1367,74 +1501,366 @@ export const EventModal: React.FC<EventModalProps> = ({
             </div>
           </div>
 
-          {/* Sezione 5: Stand Numerati & Riferimento Food (Specifiche di Allestimento) */}
-          <div id="sezione-stand-evento" className="border border-slate-200 p-3.5 rounded-xl bg-slate-50/70 space-y-3 scroll-mt-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-slate-200">
-              <h4 className="font-bold text-slate-900 flex items-center gap-1.5 text-xs sm:text-sm">
-                <Store className="w-4 h-4 text-amber-600" />
-                <span>Stand Numerati, Tipologia & Riferimento Food ({standNumerati.length} Stand)</span>
-              </h4>
-              <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
-                {standNumerati.filter(s => s.riferimentoFood).length} Stand con Somministrazione Food & Beverage
-              </span>
-            </div>
-
-            <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-2.5 text-[11px] text-amber-900 flex items-start gap-2">
-              <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+          {/* Sezione 5: Stand Numerati & Riferimento Food (Specifiche di Allestimento ed Economia Analitica) */}
+          <div id="sezione-stand-evento" className="border border-slate-200 p-3.5 sm:p-4 rounded-xl bg-slate-50/80 space-y-3.5 scroll-mt-2">
+            
+            {/* Intestazione Sezione Stand */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-200">
               <div>
-                <strong>Dotazione Operativa Condivisa:</strong> Tutti e tre i modelli (1. Nativo, 2. Ibrido, 3. Gestione) sono allestiti con la stessa identica struttura di stand numerati, tipologie merceologiche e voci di costo. L'unica variazione risiede nell'architettura della gestione economica.
+                <h4 className="font-bold text-slate-900 flex items-center gap-1.5 text-xs sm:text-sm">
+                  <Store className="w-4 h-4 text-amber-600" />
+                  <span>Stand Numerati: Inserimento Preventivo, Consuntivo e Differenza</span>
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Definisci i numeri di stand in base alle esigenze e registra le voci economiche analitiche.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                  {totaliStand.conteggioFood} Stand Food & Beverage
+                </span>
+                <span className="text-[10px] font-semibold text-slate-700 bg-slate-200 px-2 py-0.5 rounded">
+                  {standNumerati.length} Stand Totali
+                </span>
               </div>
             </div>
 
-            {/* Griglia Stand Numerati */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {standNumerati.map((stand, idx) => (
-                <div
-                  key={stand.id || stand.numero}
-                  className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs text-xs space-y-1.5"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-6 h-6 rounded-md font-mono font-bold text-[11px] flex items-center justify-center text-white shrink-0 ${
-                        stand.riferimentoFood ? 'bg-emerald-700' : 'bg-slate-700'
-                      }`}>
-                        #{stand.numero}
-                      </span>
-                      <strong className="text-slate-900 text-xs truncate max-w-[180px]">
-                        {stand.nome}
-                      </strong>
-                    </div>
-                    <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded border shrink-0 ${
-                      stand.riferimentoFood
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                        : 'bg-slate-100 text-slate-700 border-slate-200'
-                    }`}>
-                      {stand.riferimentoFood ? 'Rif. Food & Beverage' : 'Servizi / No-Food'}
+            {/* Riepilogo Analitico Totali Stand */}
+            <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-800">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                
+                {/* Spese Stand */}
+                <div className="bg-slate-800/80 p-2 rounded-lg border border-slate-700/60">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                    Spese Stand (Cons. vs Prev.)
+                  </span>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className="text-base font-black font-mono text-white">
+                      {totaliStand.totSpeseCons.toLocaleString('it-IT')} €
+                    </span>
+                    <span className="text-[10.5px] text-slate-400 font-mono">
+                      (prev. {totaliStand.totSpesePrev.toLocaleString('it-IT')} €)
                     </span>
                   </div>
-
-                  <div className="text-[11px] text-slate-600 flex items-center justify-between pt-1 border-t border-slate-100">
-                    <span className="font-semibold text-slate-700">Tipologia:</span>
-                    <span className="text-slate-900 font-medium">{stand.tipologia}</span>
-                  </div>
-
-                  {stand.descrizione && (
-                    <p className="text-[10px] text-slate-500 italic leading-snug">
-                      {stand.descrizione}
-                    </p>
-                  )}
-
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-100">
-                    <span>Ref: <strong className="text-slate-700 font-normal">{stand.responsabile || 'In assegnazione'}</strong></span>
-                    {stand.incassoStimato ? (
-                      <span className="font-mono text-emerald-800 font-bold">
-                        Stima: {(stand.incassoStimato || 0).toLocaleString('it-IT')} €
+                  <div className="text-[10px] font-mono mt-0.5">
+                    {totaliStand.diffSpese <= 0 ? (
+                      <span className="text-emerald-400 font-bold">
+                        Diff: {totaliStand.diffSpese.toLocaleString('it-IT')} € (Risparmio)
                       </span>
-                    ) : null}
+                    ) : (
+                      <span className="text-rose-400 font-bold">
+                        Diff: +{totaliStand.diffSpese.toLocaleString('it-IT')} € (Scostamento)
+                      </span>
+                    )}
                   </div>
                 </div>
-              ))}
+
+                {/* Incassi Stand */}
+                <div className="bg-slate-800/80 p-2 rounded-lg border border-slate-700/60">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                    Incassi Stand (Cons. vs Prev.)
+                  </span>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className="text-base font-black font-mono text-emerald-400">
+                      {totaliStand.totIncassiCons.toLocaleString('it-IT')} €
+                    </span>
+                    <span className="text-[10.5px] text-slate-400 font-mono">
+                      (prev. {totaliStand.totIncassiPrev.toLocaleString('it-IT')} €)
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-mono mt-0.5">
+                    {totaliStand.diffIncassi >= 0 ? (
+                      <span className="text-emerald-400 font-bold">
+                        Diff: +{totaliStand.diffIncassi.toLocaleString('it-IT')} € (Extra ricavi)
+                      </span>
+                    ) : (
+                      <span className="text-amber-400 font-bold">
+                        Diff: {totaliStand.diffIncassi.toLocaleString('it-IT')} € (Minori ricavi)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Margine Netto Stand */}
+                <div className="bg-slate-800/80 p-2 rounded-lg border border-slate-700/60">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                    Margine Operativo Stand
+                  </span>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className={`text-base font-black font-mono ${
+                      totaliStand.margineCons >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                    }`}>
+                      {totaliStand.margineCons >= 0 ? `+${totaliStand.margineCons.toLocaleString('it-IT')}` : totaliStand.margineCons.toLocaleString('it-IT')} €
+                    </span>
+                    <span className="text-[10.5px] text-slate-400 font-mono">
+                      (prev. {totaliStand.marginePrev >= 0 ? `+${totaliStand.marginePrev.toLocaleString('it-IT')}` : totaliStand.marginePrev.toLocaleString('it-IT')} €)
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Somma netta incassi meno spese stand
+                  </div>
+                </div>
+
+              </div>
             </div>
+
+            {/* Barra Operazioni Stand */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleAggiungiStand}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition-colors cursor-pointer shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Aggiungi Stand</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOrdinaStandPerNumero}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium text-xs transition-colors cursor-pointer"
+                  title="Ordina la lista per numero progressivo"
+                >
+                  <ArrowUpDown className="w-3 h-3 text-slate-500" />
+                  <span>Ordina per Numero</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRipristinaStandPredefiniti}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 font-medium text-xs transition-colors cursor-pointer"
+                  title="Ripristina la configurazione tipica con 6 stand"
+                >
+                  <RotateCcw className="w-3 h-3 text-slate-400" />
+                  <span>Reimposta 6 Stand</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSincronizzaTotaliStand}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-semibold text-xs transition-colors cursor-pointer"
+                title="Copia i totali calcolati degli stand nelle voci Food e Ricavi della Sezione Economica sopra"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-amber-700" />
+                <span>Sincronizza Voci Economiche con i Totali Stand</span>
+              </button>
+            </div>
+
+            {/* Elenco Schede Stand Editabili */}
+            <div className="space-y-3 pt-1">
+              {standNumerati.map((stand, idx) => {
+                const spPrev = Number(stand.spesaPreventivo) || 0;
+                const spCons = Number(stand.spesaConsuntivo) || 0;
+                const diffSp = spCons - spPrev;
+                const isRisparmio = diffSp <= 0;
+
+                const inPrev = Number(stand.incassoPrevisto) || 0;
+                const inCons = Number(stand.incassoConsuntivo) || 0;
+                const diffIn = inCons - inPrev;
+                const isExtra = diffIn >= 0;
+
+                const margine = inCons - spCons;
+
+                return (
+                  <div
+                    key={stand.id || idx}
+                    className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs hover:border-slate-300 transition-all space-y-2.5 text-xs"
+                  >
+                    {/* Header Singolo Stand */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                      <div className="flex flex-wrap items-center gap-2 flex-1">
+                        
+                        {/* Numero Stand Editabile */}
+                        <div className="flex items-center gap-1 bg-slate-100 px-1.5 py-1 rounded-md border border-slate-200">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase">
+                            N°
+                          </span>
+                          <input
+                            type="number"
+                            min="1"
+                            max="999"
+                            value={stand.numero}
+                            onChange={(e) => handleAggiornaStand(idx, 'numero', Math.max(1, Number(e.target.value)))}
+                            className="w-12 px-1 py-0.5 bg-white border border-slate-300 rounded font-mono font-black text-center text-xs text-slate-900 focus:ring-1 focus:ring-emerald-500 outline-none"
+                            title="Numero dello stand (in base all'esigenza organizzativa)"
+                          />
+                        </div>
+
+                        {/* Nome Stand */}
+                        <div className="flex-1 min-w-[180px]">
+                          <input
+                            type="text"
+                            value={stand.nome}
+                            onChange={(e) => handleAggiornaStand(idx, 'nome', e.target.value)}
+                            placeholder="Denominazione stand..."
+                            className="w-full px-2.5 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-900 focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none"
+                          />
+                        </div>
+
+                        {/* Tipologia Stand */}
+                        <div className="min-w-[160px]">
+                          <select
+                            value={stand.tipologia}
+                            onChange={(e) => handleAggiornaStand(idx, 'tipologia', e.target.value)}
+                            className="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none"
+                          >
+                            <option value="Food / Gastronomia">Food / Gastronomia</option>
+                            <option value="Food / Griglia & Brace">Food / Griglia & Brace</option>
+                            <option value="Food / Friggitoria & Dolci">Food / Friggitoria & Dolci</option>
+                            <option value="Beverage / Bar & Vini">Beverage / Bar & Vini</option>
+                            <option value="Cassa & Ticket">Cassa & Ticket</option>
+                            <option value="Mercatino & Artigianato">Mercatino & Artigianato</option>
+                            <option value="Info Point & Servizi">Info Point & Servizi</option>
+                          </select>
+                        </div>
+
+                        {/* Toggle Riferimento Food */}
+                        <button
+                          type="button"
+                          onClick={() => handleAggiornaStand(idx, 'riferimentoFood', !stand.riferimentoFood)}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold border transition-colors cursor-pointer ${
+                            stand.riferimentoFood
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                          }`}
+                        >
+                          <Utensils className={`w-3 h-3 ${stand.riferimentoFood ? 'text-emerald-700' : 'text-slate-400'}`} />
+                          <span>{stand.riferimentoFood ? 'Rif. Food & Beverage' : 'Servizi / No-Food'}</span>
+                        </button>
+
+                      </div>
+
+                      {/* Referente & Elimina */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <input
+                          type="text"
+                          value={stand.responsabile || ''}
+                          onChange={(e) => handleAggiornaStand(idx, 'responsabile', e.target.value)}
+                          placeholder="Referente stand..."
+                          className="w-32 px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-[11px] text-slate-700 focus:bg-white outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRimuoviStand(idx)}
+                          className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                          title="Elimina stand"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Griglia Inserimento Dati Economici: Preventivo, Consuntivo e Differenza */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-slate-50/70 p-2 rounded-lg border border-slate-200">
+                      
+                      {/* Spese Stand */}
+                      <div className="bg-white p-2 rounded-md border border-slate-200 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10.5px] font-bold text-slate-700">Spesa Stand</span>
+                          <span className={`text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                            isRisparmio ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {diffSp <= 0 ? `Diff: ${diffSp} €` : `Diff: +${diffSp} €`}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div>
+                            <span className="block text-[9.5px] text-slate-400">Preventivo (€)</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="10"
+                              value={stand.spesaPreventivo ?? ''}
+                              onChange={(e) => handleAggiornaStand(idx, 'spesaPreventivo', Math.max(0, Number(e.target.value)))}
+                              className="w-full px-1.5 py-0.5 border border-slate-300 rounded font-mono text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <span className="block text-[9.5px] text-slate-400">Consuntivo (€)</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="10"
+                              value={stand.spesaConsuntivo ?? ''}
+                              onChange={(e) => handleAggiornaStand(idx, 'spesaConsuntivo', Math.max(0, Number(e.target.value)))}
+                              className="w-full px-1.5 py-0.5 border border-slate-300 rounded font-mono font-bold text-slate-900 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Incassi Stand */}
+                      <div className="bg-white p-2 rounded-md border border-slate-200 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10.5px] font-bold text-slate-700">Incasso Stand</span>
+                          <span className={`text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                            isExtra ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {diffIn >= 0 ? `Diff: +${diffIn} €` : `Diff: ${diffIn} €`}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div>
+                            <span className="block text-[9.5px] text-slate-400">Preventivo (€)</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="10"
+                              value={stand.incassoPrevisto ?? ''}
+                              onChange={(e) => handleAggiornaStand(idx, 'incassoPrevisto', Math.max(0, Number(e.target.value)))}
+                              className="w-full px-1.5 py-0.5 border border-slate-300 rounded font-mono text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <span className="block text-[9.5px] text-slate-400">Consuntivo (€)</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="10"
+                              value={stand.incassoConsuntivo ?? ''}
+                              onChange={(e) => handleAggiornaStand(idx, 'incassoConsuntivo', Math.max(0, Number(e.target.value)))}
+                              className="w-full px-1.5 py-0.5 border border-slate-300 rounded font-mono font-bold text-emerald-800 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Margine Netto Stand */}
+                      <div className="bg-white p-2 rounded-md border border-slate-200 flex flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10.5px] font-bold text-slate-700">Margine Stand</span>
+                          <span className="text-[9.5px] text-slate-400 font-mono">Consuntivo</span>
+                        </div>
+                        <div className="flex items-baseline justify-between pt-1">
+                          <span className="text-[10.5px] text-slate-500">Netto:</span>
+                          <span className={`text-sm font-black font-mono ${
+                            margine >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                          }`}>
+                            {margine >= 0 ? `+${margine.toLocaleString('it-IT')}` : margine.toLocaleString('it-IT')} €
+                          </span>
+                        </div>
+                        <div className="text-[9.5px] text-slate-400 font-mono text-right">
+                          Previsto: {(inPrev - spPrev) >= 0 ? `+${inPrev - spPrev}` : inPrev - spPrev} €
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Descrizione opzionale */}
+                    <div>
+                      <input
+                        type="text"
+                        value={stand.descrizione || ''}
+                        onChange={(e) => handleAggiornaStand(idx, 'descrizione', e.target.value)}
+                        placeholder="Note o dettagli per lo stand..."
+                        className="w-full px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10.5px] text-slate-600 italic focus:bg-white outline-none"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
           </div>
 
           {/* Sezione 6: Conformità e Burocrazia Pro Loco */}
