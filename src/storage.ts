@@ -1,4 +1,4 @@
-import { Socio, ProLocoInfo, QuotaAssociativa, StatoQuota, ProLocoEvento, StandEvento, SitoWebConfig, GiornalinoConfig, ArticoloGiornalino, EdizioneGiornalino, DonazioneTerzi } from './types';
+import { Socio, ProLocoInfo, QuotaAssociativa, StatoQuota, ProLocoEvento, StandEvento, SitoWebConfig, GiornalinoConfig, ArticoloGiornalino, EdizioneGiornalino, DonazioneTerzi, CampagnaRaccoltaFondi } from './types';
 
 const STORAGE_KEY_SOCI = 'proloco_gestione_soci_v1';
 const STORAGE_KEY_CONFIG = 'proloco_gestione_config_v1';
@@ -8,6 +8,7 @@ const STORAGE_KEY_GIORNALINO = 'proloco_gestione_giornalino_v1';
 export const STORAGE_KEY_ARCHIVIO_GIORNALINI = 'proloco_archivio_giornalini_v1';
 export const STORAGE_KEY_GIORNALINO_ATTIVO_ID = 'proloco_giornalino_attivo_id_v1';
 export const STORAGE_KEY_DONAZIONI = 'proloco_gestione_donazioni_v1';
+export const STORAGE_KEY_CAMPAGNE_DONAZIONI = 'proloco_campagne_donazioni_v1';
 
 export const DEFAULT_GIORNALINO_CONFIG: GiornalinoConfig = {
   testata: 'La Voce della Pro Loco',
@@ -216,6 +217,7 @@ export const DEFAULT_PRO_LOCO: ProLocoInfo = {
   comune: 'Colle di Val d\'Elsa',
   provincia: 'SI',
   email: 'info@prolocovaldelsa.it',
+  pec: 'prolocovaldelsa@pec.it',
   telefono: '+39 0577 920314',
   sitoWeb: 'www.prolocovaldelsa.it',
   codiceUnpli: 'UNPLI-TOS-5219',
@@ -225,8 +227,57 @@ export const DEFAULT_PRO_LOCO: ProLocoInfo = {
   quotaStandardSostenitore: 30,
   quotaStandardGiovane: 10,
   nomePresidente: 'Marco Valenti',
-  motto: 'Custodi delle tradizioni, promotori del territorio e della comunità'
+  motto: 'Custodi delle tradizioni, promotori del territorio e della comunità',
+  iban: 'IT89C0848971840000000123456',
+  banca: 'BCC Credito Cooperativo del Territorio - Filiale Sede'
 };
+
+export const INITIAL_CAMPAGNE_FONDI: CampagnaRaccoltaFondi[] = [
+  {
+    id: 'camp-2026-restauro',
+    titolo: 'Restauro Storico Fontana e Lavatoio del Trecento',
+    descrizione: 'Raccolta fondi dedicata al recupero architettonico e valorizzazione del patrimonio storico monumentale del borgo.',
+    obiettivoImporto: 5000,
+    anno: 2026,
+    attiva: true,
+    dataInizio: '2026-01-10',
+    dataFine: '2026-10-31',
+    responsabileProgetto: 'Arch. Alessandro Monti (Consigliere Delegato Patrimonio)'
+  },
+  {
+    id: 'camp-2026-sicurezza',
+    titolo: 'Postazioni Salvavita DAE (Defibrillatori) per Sagre ed Eventi',
+    descrizione: 'Acquisto defibrillatori semiautomatici, teche termoriscaldate esterne e corsi BLSD certificati per i volontari.',
+    obiettivoImporto: 3000,
+    anno: 2026,
+    attiva: true,
+    dataInizio: '2026-02-01',
+    dataFine: '2026-08-31',
+    responsabileProgetto: 'Marco Valenti (Presidente)'
+  },
+  {
+    id: 'camp-2026-giovani',
+    titolo: 'Fondo Borse di Studio "Aldo Rinaldi" & Giovani Volontari',
+    descrizione: 'Incentivi e riconoscimenti per studenti meritevoli e progetti di digitalizzazione e promozione culturale promossi dai giovani.',
+    obiettivoImporto: 2500,
+    anno: 2026,
+    attiva: true,
+    dataInizio: '2026-01-01',
+    dataFine: '2026-12-31',
+    responsabileProgetto: 'Elena Bianchi (Tesoriere)'
+  },
+  {
+    id: 'camp-2026-feste',
+    titolo: 'Eco-Sagre: Allestimento Stand Gastronomici Green & Impianti a LED',
+    descrizione: 'Rinnovamento stoviglie biodegradabili e illuminazione sostenibile a basso consumo energetico.',
+    obiettivoImporto: 4000,
+    anno: 2026,
+    attiva: true,
+    dataInizio: '2026-03-01',
+    dataFine: '2026-09-30',
+    responsabileProgetto: 'Comitato Feste & Manifestazioni'
+  }
+];
 
 export const INITIAL_SOCI: Socio[] = [
   {
@@ -569,11 +620,19 @@ export const INITIAL_DONAZIONI: DonazioneTerzi[] = [
     donatore: 'Fondazione Cassa di Risparmio Territoriale',
     tipoDonatore: 'fondazione',
     codiceFiscalePartitaIva: '01458920521',
+    indirizzoDonatore: 'Corso Cavour, 28',
+    cittaDonatore: 'Siena',
+    capDonatore: '53100',
+    emailDonatore: 'contributi@fondazionecrt.it',
     importo: 3500,
     data: '2026-02-12',
     anno: 2026,
+    tipoErogazione: 'progetto_vincolato',
+    campagnaId: 'camp-2026-restauro',
     causale: 'Erogazione liberale per recupero sentieristica storico-ambientale e fontana monumentale del Trecento',
     metodo: 'Bonifico Bancario',
+    estremiTracciabilita: 'CRO/TRN 0481920391823 - Banca MPS',
+    deliberaConsiglio: 'Delibera C.D. Verbale n. 2 del 20/01/2026',
     ricevutaNumero: 'DON-2026/001',
     destinazione: 'Cultura, Territorio & Ambiente',
     detraibileFiscale: true,
@@ -584,11 +643,19 @@ export const INITIAL_DONAZIONI: DonazioneTerzi[] = [
     donatore: 'BCC - Banca di Credito Cooperativo del Territorio',
     tipoDonatore: 'azienda',
     codiceFiscalePartitaIva: '00984710528',
+    indirizzoDonatore: 'Viale dei Mille, 14',
+    cittaDonatore: 'Colle di Val d\'Elsa',
+    capDonatore: '53034',
+    emailDonatore: 'direzione@bccterritorio.it',
     importo: 2000,
     data: '2026-03-05',
     anno: 2026,
+    tipoErogazione: 'progetto_vincolato',
+    campagnaId: 'camp-2026-sicurezza',
     causale: 'Contributo liberale per acquisto postazione DAE (defibrillatore) e presidio sicurezza sagre paesane',
     metodo: 'Bonifico Bancario',
+    estremiTracciabilita: 'TRN 1928401928301 - BCC Territorio',
+    deliberaConsiglio: 'Delibera C.D. Verbale n. 3 del 15/02/2026',
     ricevutaNumero: 'DON-2026/002',
     destinazione: 'Sicurezza & Protezione Civile Pro Loco',
     detraibileFiscale: true,
@@ -599,11 +666,18 @@ export const INITIAL_DONAZIONI: DonazioneTerzi[] = [
     donatore: 'Azienda Meccanica Valdelsa S.r.l.',
     tipoDonatore: 'azienda',
     codiceFiscalePartitaIva: '02341290526',
+    indirizzoDonatore: 'Zona Industriale Belvedere, 4',
+    cittaDonatore: 'Colle di Val d\'Elsa',
+    capDonatore: '53034',
+    emailDonatore: 'amministrazione@meccanicavaldelsa.it',
     importo: 1200,
     data: '2026-04-18',
     anno: 2026,
+    tipoErogazione: 'progetto_vincolato',
+    campagnaId: 'camp-2026-feste',
     causale: 'Erogazione liberale per allestimento stand gastronomici e impianto luci a basso consumo',
     metodo: 'Bonifico Bancario',
+    estremiTracciabilita: 'CRO 93827104928 - Intesa Sanpaolo',
     ricevutaNumero: 'DON-2026/003',
     destinazione: 'Feste & Sagre Popolari',
     detraibileFiscale: true,
@@ -614,11 +688,19 @@ export const INITIAL_DONAZIONI: DonazioneTerzi[] = [
     donatore: 'Famiglia Rinaldi (in memoria del Cav. Aldo)',
     tipoDonatore: 'privato',
     codiceFiscalePartitaIva: 'RNLLDA42A15G752M',
+    indirizzoDonatore: 'Via delle Fonti, 9',
+    cittaDonatore: 'Colle di Val d\'Elsa',
+    capDonatore: '53034',
+    emailDonatore: 'famiglia.rinaldi@email.it',
     importo: 800,
     data: '2026-01-20',
     anno: 2026,
+    tipoErogazione: 'in_memoria',
+    campagnaId: 'camp-2026-giovani',
     causale: 'Donazione privata in memoria del socio fondatore per premio borse di studio giovani volontari',
     metodo: 'Bonifico Bancario',
+    estremiTracciabilita: 'CRO 01928472910 - BancoPosta',
+    deliberaConsiglio: 'Delibera C.D. Verbale n. 1 del 10/01/2026',
     ricevutaNumero: 'DON-2026/004',
     destinazione: 'Progetti Giovani & Borse di Studio',
     detraibileFiscale: true,
@@ -629,11 +711,17 @@ export const INITIAL_DONAZIONI: DonazioneTerzi[] = [
     donatore: 'Tenuta Vitivinicola Colle Antico',
     tipoDonatore: 'azienda',
     codiceFiscalePartitaIva: '01784920524',
+    indirizzoDonatore: 'Strada del Chianti, 72',
+    cittaDonatore: 'Castellina in Chianti',
+    capDonatore: '53011',
+    emailDonatore: 'info@colleanticovini.it',
     importo: 1000,
     data: '2026-05-15',
     anno: 2026,
+    tipoErogazione: 'erogazione_liberale_denaro',
     causale: 'Erogazione liberale a supporto della valorizzazione dei prodotti enogastronomici tipici locali',
     metodo: 'Bonifico Bancario',
+    estremiTracciabilita: 'TRN 8271049283710 - Credit Agricole',
     ricevutaNumero: 'DON-2026/005',
     destinazione: 'Enogastronomia & Prodotti Tipici',
     detraibileFiscale: true,
@@ -646,6 +734,7 @@ export const INITIAL_DONAZIONI: DonazioneTerzi[] = [
     importo: 450,
     data: '2026-05-02',
     anno: 2026,
+    tipoErogazione: 'raccolta_fondi_pubblica',
     causale: 'Raccolta offerte libere con cassetta sigillata durante la giornata ecologica e pulizia sentieri',
     metodo: 'Contanti',
     ricevutaNumero: 'DON-2026/006',
@@ -1817,20 +1906,53 @@ export function saveDonazioni(donazioni: DonazioneTerzi[]): void {
   }
 }
 
+export function loadCampagneFondi(): CampagnaRaccoltaFondi[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CAMPAGNE_DONAZIONI);
+    if (raw === null) {
+      saveCampagneFondi(INITIAL_CAMPAGNE_FONDI);
+      return INITIAL_CAMPAGNE_FONDI;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      saveCampagneFondi(INITIAL_CAMPAGNE_FONDI);
+      return INITIAL_CAMPAGNE_FONDI;
+    }
+    return parsed;
+  } catch (err) {
+    console.error('Errore nel caricamento delle campagne fondi:', err);
+    return INITIAL_CAMPAGNE_FONDI;
+  }
+}
+
+export function saveCampagneFondi(campagne: CampagnaRaccoltaFondi[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_CAMPAGNE_DONAZIONI, JSON.stringify(campagne));
+  } catch (err) {
+    console.error('Errore nel salvataggio delle campagne fondi:', err);
+  }
+}
+
 export function esportaDonazioniCSV(donazioni: DonazioneTerzi[], anno?: number): void {
   const intestazioni = [
-    'ID Ricevuta',
-    'Data Donazione',
-    'Esercizio (Anno)',
-    'Donatore / Ente Erogante',
-    'Tipologia Donatore',
-    'C.F. / P.IVA',
-    'Importo Donazione (€)',
-    'Causale Erogazione',
-    'Destinazione / Progetto',
-    'Metodo Pagamento',
-    'Detraibile Terzo Settore (Art. 83 CTS)',
-    'Note'
+    'N. Ricevuta / Protocollo',
+    'Data Ricezione',
+    'Esercizio Finanziario',
+    'Soggetto Erogatore (Donatore)',
+    'Tipologia Soggetto',
+    'Codice Fiscale / Partita IVA',
+    'Indirizzo / Sede',
+    'Comune / CAP',
+    'Email Contatto',
+    'Importo Erogazione (€)',
+    'Natura Erogazione',
+    'Causale Fiscale',
+    'Destinazione Statutaria / Progetto',
+    'Modalità di Pagamento',
+    'Estremi Tracciabilità Bancaria (CRO/TRN)',
+    'Delibera Consiglio Direttivo',
+    'Detraibilità Fiscale Art. 83 CTS',
+    'Note Amministrative'
   ];
 
   const filtrati = anno ? donazioni.filter(d => d.anno === anno) : donazioni;
@@ -1842,11 +1964,17 @@ export function esportaDonazioniCSV(donazioni: DonazioneTerzi[], anno?: number):
     `"${d.donatore.replace(/"/g, '""')}"`,
     `"${d.tipoDonatore.toUpperCase()}"`,
     `"${d.codiceFiscalePartitaIva || ''}"`,
+    `"${(d.indirizzoDonatore || '').replace(/"/g, '""')}"`,
+    `"${((d.capDonatore ? d.capDonatore + ' ' : '') + (d.cittaDonatore || '')).replace(/"/g, '""')}"`,
+    `"${(d.emailDonatore || '').replace(/"/g, '""')}"`,
     `"${d.importo.toFixed(2)}"`,
+    `"${(d.tipoErogazione || 'erogazione_liberale_denaro').replace(/_/g, ' ').toUpperCase()}"`,
     `"${d.causale.replace(/"/g, '""')}"`,
-    `"${(d.destinazione || 'Attività Generali').replace(/"/g, '""')}"`,
+    `"${(d.destinazione || 'Attività Statutarie Generali').replace(/"/g, '""')}"`,
     `"${d.metodo}"`,
-    `"${d.detraibileFiscale ? 'SI (Detraibile/Deducibile)' : 'NO'}"`,
+    `"${(d.estremiTracciabilita || '').replace(/"/g, '""')}"`,
+    `"${(d.deliberaConsiglio || '').replace(/"/g, '""')}"`,
+    `"${d.detraibileFiscale ? 'SI (Detraibile 30% IRPEF / Deducibile IRES ex Art. 83 CTS)' : 'NO (Ordinaria non tracciata)'}"`,
     `"${(d.note || '').replace(/"/g, '""')}"`
   ].join(';'));
 
@@ -1855,7 +1983,7 @@ export function esportaDonazioniCSV(donazioni: DonazioneTerzi[], anno?: number):
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.setAttribute('href', url);
-  link.setAttribute('download', `Donazioni_Terzi_ProLoco_${anno || 'Globale'}.csv`);
+  link.setAttribute('download', `Registro_Donazioni_Terzi_ProLoco_${anno || 'Globale'}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

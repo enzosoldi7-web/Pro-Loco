@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProLocoInfo, Socio, ProLocoEvento, SitoWebConfig } from '../types';
+import { ProLocoInfo, Socio, ProLocoEvento, SitoWebConfig, DonazioneTerzi } from '../types';
 import { 
   Building2, 
   Calendar, 
@@ -25,7 +25,8 @@ import {
   ArrowLeft,
   LayoutDashboard,
   Newspaper,
-  Database
+  Database,
+  HeartHandshake
 } from 'lucide-react';
 import { esportaLibroSociCSV, esportaBackupJSON, esportaBilancioCompletoCSV } from '../storage';
 
@@ -33,10 +34,11 @@ interface HeaderProps {
   config: ProLocoInfo;
   soci: Socio[];
   eventi: ProLocoEvento[];
+  donazioni?: DonazioneTerzi[];
   sitoConfig?: SitoWebConfig;
-  tabAttivo: 'soci' | 'eventi' | 'bilancio' | 'portale';
+  tabAttivo: 'soci' | 'eventi' | 'bilancio' | 'conto_terzi' | 'portale';
   annoSelezionato: number;
-  onCambiaTab: (tab: 'soci' | 'eventi' | 'bilancio' | 'portale') => void;
+  onCambiaTab: (tab: 'soci' | 'eventi' | 'bilancio' | 'conto_terzi' | 'portale') => void;
   onCambiaAnno: (anno: number) => void;
   onTornaDashboard?: () => void;
   onVaiGiornalino?: () => void;
@@ -56,6 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
   config,
   soci,
   eventi,
+  donazioni,
   sitoConfig,
   tabAttivo,
   annoSelezionato,
@@ -322,38 +325,6 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* Pulsante Vista Sito Web Pubblico / Editor */}
-            <button
-              id="btn-apri-portale-header"
-              onClick={() => onCambiaTab('portale')}
-              title={
-                sitoConfig?.blindatoVisitatori
-                  ? 'Visualizza Sito Web Pubblico (Blindato per i Visitatori)'
-                  : 'Entra nell\'Editor del Sito Web per personalizzare e pubblicare'
-              }
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shadow-2xs cursor-pointer border ${
-                tabAttivo === 'portale'
-                  ? 'bg-emerald-700 text-white border-emerald-700'
-                  : sitoConfig?.blindatoVisitatori
-                    ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300'
-                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
-              }`}
-            >
-              {sitoConfig?.blindatoVisitatori ? (
-                <>
-                  <Globe className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Sito Web Pubblico</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Editor Sito Web</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-200 text-amber-900 font-bold">Bozza</span>
-                </>
-              )}
-            </button>
-
             {/* Pulsante App Android / APK */}
             <button
               id="btn-apri-apk-modal"
@@ -486,45 +457,24 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </button>
 
+          {/* 1.4 DONAZIONI CONTO TERZI */}
           <button
-            id="tab-nav-portale"
-            onClick={() => onCambiaTab('portale')}
+            id="tab-nav-conto-terzi"
+            onClick={() => onCambiaTab('conto_terzi')}
             className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors cursor-pointer shrink-0 ${
-              tabAttivo === 'portale'
+              tabAttivo === 'conto_terzi'
                 ? 'border-emerald-700 text-emerald-800 bg-emerald-50/50 rounded-t-lg'
                 : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
             }`}
           >
-            {sitoConfig?.blindatoVisitatori ? (
-              <Globe className="w-4 h-4 text-emerald-600" />
-            ) : (
-              <Sparkles className="w-4 h-4 text-amber-600" />
-            )}
-            <span>2. Sito Web</span>
+            <HeartHandshake className="w-4 h-4 text-emerald-600" />
+            <span>1.4 Donazioni Conto Terzi</span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-              tabAttivo === 'portale'
-                ? 'bg-emerald-700 text-white'
-                : sitoConfig?.blindatoVisitatori
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-amber-100 text-amber-800'
+              tabAttivo === 'conto_terzi' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
             }`}>
-              {sitoConfig?.blindatoVisitatori ? 'Blindato' : 'Bozza'}
+              Art. 83 CTS
             </span>
           </button>
-
-          {onVaiGiornalino && (
-            <button
-              id="tab-nav-giornalino"
-              onClick={onVaiGiornalino}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300 transition-colors cursor-pointer shrink-0"
-            >
-              <Newspaper className="w-4 h-4 text-indigo-600" />
-              <span>3. Giornalino</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-900">
-                Periodico
-              </span>
-            </button>
-          )}
         </div>
 
       </div>

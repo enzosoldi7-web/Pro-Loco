@@ -8,7 +8,8 @@ import {
   PaginaPrincipale,
   SottoTabGestionale,
   GiornalinoConfig,
-  EdizioneGiornalino
+  EdizioneGiornalino,
+  DonazioneTerzi
 } from './types';
 import { 
   loadSoci, 
@@ -21,6 +22,8 @@ import {
   saveEventi,
   INITIAL_EVENTI,
   ripristinaEventiSimulati,
+  loadDonazioni,
+  saveDonazioni,
   loadSitoWebConfig,
   saveSitoWebConfig,
   loadGiornalinoConfig,
@@ -48,6 +51,7 @@ import { GlobalBudgetPrintModal } from './components/GlobalBudgetPrintModal';
 import { LibroSociPrintModal } from './components/LibroSociPrintModal';
 import { EventsProgramPrintModal } from './components/EventsProgramPrintModal';
 import { MemberSheetPrintModal } from './components/MemberSheetPrintModal';
+import { DonazioniTerziView } from './components/DonazioniTerziView';
 import { PublicWebsitePortal } from './components/PublicWebsitePortal';
 import { WebsiteEditor } from './components/WebsiteEditor';
 import { DashboardView } from './components/DashboardView';
@@ -59,7 +63,8 @@ export default function App() {
   const [config, setConfig] = useState<ProLocoInfo>(() => loadProLocoConfig());
   const [soci, setSoci] = useState<Socio[]>(() => loadSoci());
   const [eventi, setEventi] = useState<ProLocoEvento[]>(() => loadEventi());
-  const [paginaAttiva, setPaginaAttiva] = useState<PaginaPrincipale>('dashboard');
+  const [donazioni, setDonazioni] = useState<DonazioneTerzi[]>(() => loadDonazioni());
+  const [paginaAttiva, setPaginaAttiva] = useState<PaginaPrincipale>('gestionale');
   const [tabGestionale, setTabGestionale] = useState<SottoTabGestionale>('soci');
   const [sitoConfig, setSitoConfig] = useState<SitoWebConfig>(() => loadSitoWebConfig());
   const [giornalinoConfig, setGiornalinoConfig] = useState<GiornalinoConfig>(() => loadGiornalinoConfig());
@@ -175,7 +180,13 @@ export default function App() {
     saveProLocoConfig(nuovaConfig);
   };
 
-  // Ripristino dati di prova realistici (Soci ed Eventi)
+  // Gestione Donazioni Conto Terzi
+  const handleSalvaDonazioni = (nuoveDonazioni: DonazioneTerzi[]) => {
+    setDonazioni(nuoveDonazioni);
+    saveDonazioni(nuoveDonazioni);
+  };
+
+  // Ripristino dati di prova realistici (Soci, Eventi, Donazioni)
   const handleRipristinaDemo = () => {
     setSoci(INITIAL_SOCI);
     saveSoci(INITIAL_SOCI);
@@ -191,12 +202,14 @@ export default function App() {
     setEventi(ripristinati);
   };
 
-  // Azzeramento completo dell'intero database (Soci, Eventi, Quote)
+  // Azzeramento completo dell'intero database (Soci, Eventi, Quote, Donazioni)
   const handleAzzeraDatabase = () => {
     setSoci([]);
     saveSoci([]);
     setEventi([]);
     saveEventi([]);
+    setDonazioni([]);
+    saveDonazioni([]);
     setSocioModale(null);
     setSocioTessera(null);
     setSocioQuote(null);
@@ -207,12 +220,16 @@ export default function App() {
   };
 
   // Importazione backup JSON
-  const handleImportaBackup = (dati: { soci: Socio[]; config: ProLocoInfo; eventi?: ProLocoEvento[] }) => {
+  const handleImportaBackup = (dati: { soci: Socio[]; config: ProLocoInfo; eventi?: ProLocoEvento[]; donazioni?: DonazioneTerzi[] }) => {
     setSoci(dati.soci);
     saveSoci(dati.soci);
     if (dati.eventi && Array.isArray(dati.eventi)) {
       setEventi(dati.eventi);
       saveEventi(dati.eventi);
+    }
+    if (dati.donazioni && Array.isArray(dati.donazioni)) {
+      setDonazioni(dati.donazioni);
+      saveDonazioni(dati.donazioni);
     }
     if (dati.config) {
       setConfig(dati.config);
@@ -441,6 +458,7 @@ export default function App() {
         config={config}
         soci={soci}
         eventi={eventi}
+        donazioni={donazioni}
         sitoConfig={sitoConfig}
         tabAttivo={tabGestionale}
         annoSelezionato={annoSelezionato}
@@ -592,8 +610,16 @@ export default function App() {
               onRipristinaSimulazione={handleRipristinaEventiSimulati}
             />
           </>
+        ) : tabGestionale === 'conto_terzi' ? (
+          /* SEZIONE 1.4: DONAZIONI CONTO TERZI & RACCOLTA FONDI */
+          <DonazioniTerziView
+            donazioni={donazioni}
+            annoSelezionato={annoSelezionato}
+            config={config}
+            onAggiornaDonazioni={handleSalvaDonazioni}
+          />
         ) : (
-          /* SEZIONE 3: GESTIONE RIASSUNTIVA DI TUTTI GLI EVENTI E TESSERAMENTI (BILANCIO COMPLETO & DATABASE) */
+          /* SEZIONE 1.3: BILANCIO GENERALE TERZO SETTORE */
           <GlobalBudgetSummary
             soci={soci}
             eventi={eventi}

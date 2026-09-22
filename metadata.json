@@ -1,6 +1,6 @@
 {
   "name": "Gestione Pro Loco",
-  "description": "Gestionale per associazione Pro Loco con soci e tesseramenti, eventi, bilancio RUNTS, redazione Giornalino con Studio Editor DTP e sponsor, portale sito web con simulatore riquadro interattivo ed esportazione autonoma.",
+  "description": "Sistema integrato per Pro Loco: 1. Gestionale (Soci, Eventi, Bilancio RUNTS Modello D, Donazioni Art. 83 CTS), 2. Portale Sito Web Pubblico, 3. Studio Giornalino DTP A4 e Archivio.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

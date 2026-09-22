@@ -386,21 +386,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* GUIDA & TITOLO SEZIONE DI NAVIGAZIONE */}
+        {/* GUIDA & TITOLO SEZIONE DI NAVIGAZIONE DEI 3 MODULI */}
         <div>
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
-            Seleziona l'ambiente di lavoro
+          <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 inline-block px-2.5 py-1 rounded-full border border-emerald-200">
+            I 3 Moduli della Piattaforma Pro Loco
           </h3>
-          <p className="text-xs text-slate-600 mt-0.5">
-            Tre moduli autonomi e integrati per gestire l'amministrazione interna, la presenza web e la comunicazione editoriale.
+          <p className="text-xs text-slate-600 mt-1">
+            Seleziona l'area operativa: Gestionale Amministrativo (Soci, Eventi, Bilancio, Donazioni), Portale Sito Web Pubblico o Studio Editoriale Giornalino.
           </p>
         </div>
 
-        {/* I TRE GRANDI TASTI / CARD RICHIESTI:
-            1. GESTIONALE (1.1 Albo & Libro Soci, 1.2 Calendario & Gestione Eventi, 1.3 Bilancio Generale)
-            2. SITO WEB (2.1 Editor Sito Web)
-            3. GIORNALINO (3.1 Editor Giornalino)
-        */}
+        {/* I TRE GRANDI BLOCCHI DELLA DASHBOARD */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* CARD 1: GESTIONALE */}
@@ -412,7 +408,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <FolderKanban className="w-7 h-7 text-emerald-700" />
                 </div>
                 <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                  1. Modulo Amministrativo
+                  1. Amministrazione
                 </span>
               </div>
 
@@ -421,75 +417,117 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   1. Gestionale Pro Loco
                 </h3>
                 <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-                  Pannello operativo per il Consiglio Direttivo e la segreteria. Include anagrafica soci, quote, calendario manifestazioni e rendiconto.
+                  Pannello operativo per il Consiglio Direttivo e la segreteria. Include anagrafica soci, quote, calendario manifestazioni, bilancio e donazioni.
                 </p>
               </div>
 
-              {/* Elenco sottomoduli racchiusi nel Gestionale (1.1, 1.2, 1.3) */}
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-3">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                  Sezioni Racchiuse nel Gestionale:
-                </span>
+              {/* Elenco sottomoduli racchiusi nel Gestionale (1.1, 1.2, 1.3, 1.4) */}
+              <div className="bg-slate-50 rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 space-y-2.5">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200/60">
+                  <span className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider">
+                    Sezioni del Gestionale:
+                  </span>
+                  <span className="text-[10.5px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                    UNPLI CTS
+                  </span>
+                </div>
                 
                 <button
+                  type="button"
+                  id="btn-sub-gestionale-soci"
                   onClick={() => onNavigaPagina('gestionale', 'soci')}
-                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 transition flex items-center justify-between cursor-pointer group/item"
+                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-emerald-50/60 border border-slate-200 hover:border-emerald-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Albo Ufficiale dei Soci e Tesseramento"
                 >
                   <div className="flex items-center gap-2.5">
-                    <Users className="w-4 h-4 text-emerald-700" />
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0 border border-emerald-200">
+                      <Users className="w-3.5 h-3.5 text-emerald-700" />
+                    </div>
                     <div>
-                      <span className="text-xs font-bold text-slate-800 group-hover/item:text-emerald-900 block">
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-emerald-900 block">
                         1.1 Albo & Libro Soci
                       </span>
-                      <span className="text-[11px] text-slate-500">
+                      <span className="text-[10.5px] text-slate-500">
                         {soci.length} soci censiti • {totaleSociInRegola} in regola {annoSelezionato}
                       </span>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/item:text-emerald-700" />
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-emerald-700 shrink-0 ml-1" />
                 </button>
 
                 <button
+                  type="button"
+                  id="btn-sub-gestionale-eventi"
                   onClick={() => onNavigaPagina('gestionale', 'eventi')}
-                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-300 transition flex items-center justify-between cursor-pointer group/item"
+                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Calendario Manifestazioni e Budget"
                 >
                   <div className="flex items-center gap-2.5">
-                    <PartyPopper className="w-4 h-4 text-teal-700" />
+                    <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-800 flex items-center justify-center shrink-0 border border-teal-200">
+                      <PartyPopper className="w-3.5 h-3.5 text-teal-700" />
+                    </div>
                     <div>
-                      <span className="text-xs font-bold text-slate-800 group-hover/item:text-teal-900 block">
-                        1.2 Calendario & Gestione Eventi
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-teal-900 block">
+                        1.2 Calendario Eventi
                       </span>
-                      <span className="text-[11px] text-slate-500">
-                        {eventi.length} manifestazioni con budget a 4 voci
+                      <span className="text-[10.5px] text-slate-500">
+                        {eventi.length} manifestazioni con rendiconto
                       </span>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/item:text-teal-700" />
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-teal-700 shrink-0 ml-1" />
                 </button>
 
                 <button
+                  type="button"
+                  id="btn-sub-gestionale-bilancio"
                   onClick={() => onNavigaPagina('gestionale', 'bilancio')}
-                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 transition flex items-center justify-between cursor-pointer group/item"
+                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-emerald-50/60 border border-slate-200 hover:border-emerald-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Rendiconto Generale Terzo Settore RUNTS"
                 >
                   <div className="flex items-center gap-2.5">
-                    <Landmark className="w-4 h-4 text-emerald-800" />
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0 border border-emerald-200">
+                      <Landmark className="w-3.5 h-3.5 text-emerald-800" />
+                    </div>
                     <div>
-                      <span className="text-xs font-bold text-slate-800 group-hover/item:text-emerald-900 block">
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-emerald-900 block">
                         1.3 Bilancio Generale
                       </span>
-                      <span className="text-[11px] text-slate-500">
-                        Rendiconto Terzo Settore RUNTS quote + eventi
+                      <span className="text-[10.5px] text-slate-500">
+                        Rendiconto Cassa CTS Modello D
                       </span>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/item:text-emerald-800" />
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-emerald-800 shrink-0 ml-1" />
                 </button>
 
+                <button
+                  type="button"
+                  id="btn-sub-gestionale-conto-terzi"
+                  onClick={() => onNavigaPagina('gestionale', 'conto_terzi')}
+                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-emerald-50/60 border border-slate-200 hover:border-emerald-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Donazioni Liberali e Raccolta Fondi Art. 83 CTS"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0 border border-emerald-200">
+                      <HeartHandshake className="w-3.5 h-3.5 text-emerald-800" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-emerald-900 block">
+                        1.4 Donazioni Conto Terzi
+                      </span>
+                      <span className="text-[10.5px] text-slate-500">
+                        Art. 83 CTS • Ricevute fiscali
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-emerald-800 shrink-0 ml-1" />
+                </button>
               </div>
 
             </div>
 
-            {/* Pulsante Principale di Ingresso */}
+            {/* Pulsante Principale di Ingresso Gestionale */}
             <div className="pt-6">
               <button
                 id="btn-entra-gestionale"
@@ -502,7 +540,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* CARD 2: SITO WEB - RIQUADRO POTENZIATO */}
+          {/* CARD 2: SITO WEB PUBBLICO */}
           <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-7 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group hover:border-teal-500/60 relative">
             <div className="space-y-5">
               
@@ -555,7 +593,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="bg-slate-50 rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 space-y-2.5">
                 <div className="flex items-center justify-between pb-1 border-b border-slate-200/60">
                   <span className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider">
-                    Moduli & Configurazione Riquadro:
+                    Moduli & Configurazione:
                   </span>
                   <span className="text-[10.5px] font-bold text-teal-800 bg-teal-100/80 px-2 py-0.5 rounded-md">
                     UNPLI Web
@@ -567,7 +605,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   type="button"
                   id="btn-sub-editor-hero"
                   onClick={() => onNavigaPagina('sitoweb', undefined, { forzatureEditor: true, tabEditorSito: 'generale' })}
-                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer"
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
                   title="Modifica Copertina, Titolo e Messaggio di Benvenuto"
                 >
                   <div className="space-y-0.5">
@@ -577,7 +615,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         2.1 Copertina, Hero & Sfondo Borgo
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 line-clamp-1">
+                    <p className="text-[10.5px] text-slate-500 line-clamp-1">
                       Motto: «{sitoConfig.sottotitoloHero || config.motto || 'Custodi delle tradizioni'}»
                     </p>
                   </div>
@@ -589,7 +627,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   type="button"
                   id="btn-sub-editor-sezioni"
                   onClick={() => onNavigaPagina('sitoweb', undefined, { forzatureEditor: true, tabEditorSito: 'sezioni' })}
-                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer"
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
                   title="Gestisci le Sezioni Pubbliche Attive"
                 >
                   <div className="space-y-0.5">
@@ -603,8 +641,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <span>Eventi: <strong>{sitoConfig.abilitaEventi ? `${eventi.length} pubbl.` : 'Off'}</strong></span>
                       <span>•</span>
                       <span>Tessere Online: <strong>{sitoConfig.abilitaTesseramentoOnline ? 'Sì' : 'No'}</strong></span>
-                      <span>•</span>
-                      <span>Direttivo: <strong>{sitoConfig.abilitaDirettivo ? 'Attivo' : 'No'}</strong></span>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-teal-700 shrink-0 ml-1" />
@@ -615,129 +651,116 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   type="button"
                   id="btn-sub-editor-avvisi"
                   onClick={() => onNavigaPagina('sitoweb', undefined, { forzatureEditor: true, tabEditorSito: 'avvisi' })}
-                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer"
-                  title="Configura la Bacheca degli Avvisi Cittadini"
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Bacheca Avvisi e Comunicazioni Importanti"
                 >
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-1.5">
                       <Bell className="w-3.5 h-3.5 text-teal-600" />
                       <span className="text-xs font-bold text-slate-800 group-hover/sub:text-teal-900">
-                        2.3 Bacheca Avviso Cittadini
-                      </span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                        sitoConfig.mostraAvviso ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {sitoConfig.mostraAvviso ? 'Banner Attivo' : 'Spento'}
+                        2.3 Bacheca Avvisi alla Cittadinanza
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 line-clamp-1">
-                      {sitoConfig.avvisoImportante || 'Nessun avviso urgente in corso'}
+                    <p className="text-[10.5px] text-slate-500 line-clamp-1">
+                      {sitoConfig.avvisi?.length || 0} avvisi pubblicati in primo piano
                     </p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-teal-700 shrink-0 ml-1" />
                 </button>
 
-                {/* 2.4 Territorio & Canali Turistici */}
+                {/* 2.4 Guida Territorio & Punti di Interesse */}
                 <button
                   type="button"
                   id="btn-sub-editor-territorio"
                   onClick={() => onNavigaPagina('sitoweb', undefined, { forzatureEditor: true, tabEditorSito: 'territorio' })}
-                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer"
-                  title="Configura Schede Territorio, Orari Sede e Canali Social"
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Punti di Interesse, Luoghi Storici e Sentieri"
                 >
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-1.5">
                       <Compass className="w-3.5 h-3.5 text-teal-600" />
                       <span className="text-xs font-bold text-slate-800 group-hover/sub:text-teal-900">
-                        2.4 Territorio, Schede & Canali Sede
+                        2.4 Guida Territorio & Luoghi Chiave
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-[10.5px] text-slate-500">
-                      <span>{sitoConfig.schedeTerritorio?.length || 3} schede illustrate</span>
-                      <span>•</span>
-                      <span>WhatsApp: {sitoConfig.linkWhatsApp ? 'Attivo' : 'Off'}</span>
-                    </div>
+                    <p className="text-[10.5px] text-slate-500 line-clamp-1">
+                      {sitoConfig.luoghiTerritorio?.length || 0} punti di interesse censiti con foto
+                    </p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-teal-700 shrink-0 ml-1" />
                 </button>
 
-                {/* 2.5 Aspetto Grafico & Sicurezza */}
-                <div className="grid grid-cols-2 gap-2 pt-0.5">
-                  <button
-                    type="button"
-                    id="btn-sub-editor-aspetto"
-                    onClick={() => onNavigaPagina('sitoweb', undefined, { forzatureEditor: true, tabEditorSito: 'aspetto' })}
-                    className="p-2 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 text-left transition cursor-pointer"
-                  >
-                    <div className="flex items-center gap-1 text-slate-700 font-bold text-[11px]">
-                      <Palette className="w-3 h-3 text-teal-600" />
-                      <span>2.5 Aspetto & Tema</span>
+                {/* 2.5 Aspetto Grafico & Identità Visiva */}
+                <button
+                  type="button"
+                  id="btn-sub-editor-stile"
+                  onClick={() => onNavigaPagina('sitoweb', undefined, { forzatureEditor: true, tabEditorSito: 'aspetto' })}
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Personalizza Colori, Tema e Stile Grafico"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Palette className="w-3.5 h-3.5 text-teal-600" />
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-teal-900">
+                        2.5 Aspetto Grafico & Tema Visivo
+                      </span>
                     </div>
-                    <p className="text-[10px] text-slate-500 capitalize">
-                      {sitoConfig.temaColore || 'emerald'} • {sitoConfig.stileTipografico || 'classico'}
+                    <p className="text-[10.5px] text-slate-500">
+                      Tema attivo: <strong className="capitalize text-teal-800">{sitoConfig.temaColore || 'smeraldo'}</strong>
                     </p>
-                  </button>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-teal-700 shrink-0 ml-1" />
+                </button>
 
-                  <button
-                    type="button"
-                    id="btn-sub-editor-sicurezza"
-                    onClick={() => onNavigaPagina('sitoweb', undefined, { forzatureEditor: true, tabEditorSito: 'sicurezza' })}
-                    className="p-2 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 text-left transition cursor-pointer"
-                  >
-                    <div className="flex items-center gap-1 text-slate-700 font-bold text-[11px]">
-                      <Lock className="w-3 h-3 text-teal-600" />
-                      <span>2.6 Sicurezza Kiosk</span>
+                {/* 2.6 Sicurezza, PIN & Esportazione HTML */}
+                <button
+                  type="button"
+                  id="btn-sub-editor-sicurezza"
+                  onClick={() => onNavigaPagina('sitoweb', undefined, { forzatureEditor: true, tabEditorSito: 'sicurezza' })}
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="PIN di Sblocco, Backup ed Esportazione Codice HTML Autonomo"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-teal-600" />
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-teal-900">
+                        2.6 Protezione PIN & Esporta Codice
+                      </span>
                     </div>
-                    <p className="text-[10px] text-slate-500">
-                      PIN: {sitoConfig.pinSbloccoAdmin || '1234'}
+                    <p className="text-[10.5px] text-slate-500">
+                      PIN attivo • Esportazione codice HTML autonomo
                     </p>
-                  </button>
-                </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-teal-700 shrink-0 ml-1" />
+                </button>
 
               </div>
 
             </div>
 
-            {/* Pulsanti di Ingresso e Strumenti Rapidi */}
+            {/* Pulsanti Azione Riquadro Sito Web */}
             <div className="pt-6 space-y-2">
               <button
-                id="btn-entra-sitoweb"
+                id="btn-apri-editor-sito"
                 onClick={() => onNavigaPagina('sitoweb', undefined, { forzatureEditor: true })}
-                className="w-full py-3.5 px-4 bg-teal-800 hover:bg-teal-700 active:bg-teal-900 text-white text-sm font-black rounded-2xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
-                title="Accedi direttamente all'Editor del Sito Web per effettuare modifiche"
+                className="w-full py-3.5 px-4 bg-teal-700 hover:bg-teal-600 active:bg-teal-800 text-white text-sm font-black rounded-2xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
               >
-                <PenTool className="w-4 h-4 text-teal-200" />
                 <span>Accedi all'Editor Sito Web</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  id="btn-anteprima-sito-pubblico"
-                  onClick={() => onNavigaPagina('sitoweb', undefined, { soloPubblico: true })}
-                  className="py-2.5 px-3 text-xs font-bold text-slate-700 hover:text-teal-900 bg-slate-100 hover:bg-teal-50 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200"
-                  title="Visualizza il portale così come appare ai visitatori"
-                >
-                  <Eye className="w-3.5 h-3.5 text-teal-700" />
-                  <span>{sitoConfig.blindatoVisitatori ? 'Portale Pubblico' : 'Anteprima Live'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  id="btn-scarica-sito-html-dashboard"
-                  onClick={() => esportaCodiceSitoHTML(config, eventi, soci, sitoConfig)}
-                  className="py-2.5 px-3 text-xs font-bold text-slate-700 hover:text-teal-900 bg-slate-100 hover:bg-teal-50 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200"
-                  title="Scarica il file HTML autonomo del sito web pronto per essere caricato su qualsiasi server web"
-                >
-                  <Download className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Esporta HTML</span>
-                </button>
-              </div>
+              <button
+                id="btn-apri-portale-pubblico"
+                onClick={() => onNavigaPagina('sitoweb', undefined, { soloPubblico: true })}
+                className="w-full py-2.5 px-4 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold rounded-xl border border-teal-200 transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Anteprima Portale Pubblico Visitatori</span>
+              </button>
             </div>
           </div>
 
-          {/* CARD 3: GIORNALINO */}
+          {/* CARD 3: GIORNALINO DELLA PRO LOCO */}
           <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-7 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group hover:border-indigo-500/60 relative">
             <div className="space-y-5">
               
@@ -745,9 +768,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-800 border border-indigo-200 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
                   <Newspaper className="w-7 h-7 text-indigo-700" />
                 </div>
-                <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-100 text-indigo-900 border border-indigo-300">
-                  3. Periodico Ufficiale
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-100 text-indigo-900 border border-indigo-300">
+                    Edizione #{giornalinoConfig.numeroEdizione || 1} • {giornalinoConfig.anno || annoSelezionato}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-500">
+                    {archivioGiornalini.length} edizioni in archivio
+                  </span>
+                </div>
               </div>
 
               <div>
@@ -755,141 +783,198 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   3. Giornalino Pro Loco
                 </h3>
                 <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-                  Periodico e bollettino d'informazione per la comunità. Redazione articoli, editoriale del Presidente, memorie storiche e stampa A4/PDF.
+                  Studio redazionale e grafico per il notiziario periodico della Pro Loco. Menabò DTP a colonne, rubriche, sponsor e stampa tipografica A4.
                 </p>
               </div>
 
-              {/* Elenco sottomoduli racchiusi nel Giornalino (3.0 Archivio, 3.1 Studio, 3.2 Articoli, 3.3 Sponsor, 3.4 Impaginazione & Stampa) */}
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2.5">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                  Suite Editoriale & Archivio Uscite:
-                </span>
+              {/* Mini-Snapshot Anteprima Copertina Giornalino */}
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-2xs group/snap bg-gradient-to-br from-indigo-900 to-slate-900 p-3.5 text-white">
+                <div className="flex items-start justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
+                    {config.comune} • Notiziario Ufficiale
+                  </span>
+                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md font-bold">
+                    {giornalinoConfig.numeroPagine || 4} Pagine A4
+                  </span>
+                </div>
+                <h4 className="text-sm font-black text-white mt-2 truncate">
+                  {giornalinoConfig.titoloTestata || 'Notiziario Pro Loco'}
+                </h4>
+                <p className="text-[11px] text-indigo-200 line-clamp-1 mt-0.5">
+                  «{giornalinoConfig.sottotitoloTestata || config.nome}»
+                </p>
+                <div className="mt-2.5 pt-2 border-t border-white/15 flex items-center justify-between text-[10.5px] text-indigo-200">
+                  <span>{giornalinoConfig.articoli?.length || 0} articoli redatti</span>
+                  <span>•</span>
+                  <span>{giornalinoConfig.sponsor?.length || 0} sponsor inserzionisti</span>
+                </div>
+              </div>
 
-                {/* 3.0 Archivio Dati Uscite (Novità Dashboard!) */}
-                <div 
-                  id="punto-3-archivio-uscite"
-                  onClick={() => onNavigaPagina('archivio_giornalino')}
-                  className="p-3 rounded-xl bg-gradient-to-br from-indigo-900 to-slate-900 text-white space-y-1.5 hover:shadow-md transition cursor-pointer group"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-md bg-indigo-700 text-white flex items-center justify-center">
-                        <Archive className="w-3 h-3 text-indigo-200" />
-                      </div>
-                      <span className="text-xs font-black text-white">
-                        3.0 Archivio Storico Uscite
-                      </span>
-                    </div>
-                    <span className="text-[9.5px] font-black px-2 py-0.5 rounded-md bg-indigo-800 text-indigo-200 border border-indigo-700">
-                      {archivioGiornalini?.length || 4} USCITE
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    Dashboard uscite catalogate per anno e data, visualizzatore fascicoli, anteprima di visione e selezione rapida del periodico.
-                  </p>
+              {/* Elenco Sottomoduli e Sezioni del Giornalino */}
+              <div className="bg-slate-50 rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 space-y-2.5">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200/60">
+                  <span className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider">
+                    Strumenti di Redazione DTP:
+                  </span>
+                  <span className="text-[10.5px] font-bold text-indigo-800 bg-indigo-100/80 px-2 py-0.5 rounded-md">
+                    DTP Studio
+                  </span>
                 </div>
 
-                {/* 3.1 Studio Editor DTP (Novità Potenziata!) */}
-                <div 
-                  id="punto-3-studio-editor"
+                {/* 3.1 Studio Editor DTP & Layout Menabò */}
+                <button
+                  type="button"
+                  id="btn-sub-giornalino-studio"
                   onClick={() => onNavigaPagina('giornalino', undefined, { tabGiornalino: 'studio' })}
-                  className="p-3 rounded-xl bg-gradient-to-br from-white to-indigo-50/60 border border-indigo-300 space-y-1.5 hover:border-indigo-500 hover:shadow-xs transition cursor-pointer group"
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Studio Grafico Menabò Interattivo"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-md bg-indigo-900 text-white flex items-center justify-center">
-                        <PenTool className="w-3 h-3" />
-                      </div>
-                      <span className="text-xs font-black text-indigo-950">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-indigo-900">
                         3.1 Studio Editor DTP & Menabò
                       </span>
                     </div>
-                    <span className="text-[9.5px] font-black px-2 py-0.5 rounded-md bg-indigo-600 text-white shadow-2xs">
-                      STUDIO PRO
-                    </span>
+                    <p className="text-[10.5px] text-slate-500">
+                      Composizione visiva a colonne con anteprima di stampa A4
+                    </p>
                   </div>
-                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                    Canvas interattivo A4 con righelli millimetrici, gabbia a colonne, temi d'inchiostro, gestione blocchi e visualizzazione a libro (spread).
-                  </p>
-                </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-indigo-700 shrink-0 ml-1" />
+                </button>
 
-                {/* 3.2 Redazione Articoli Word */}
-                <div 
+                {/* 3.2 Redazione Articoli & Rubriche */}
+                <button
+                  type="button"
+                  id="btn-sub-giornalino-articoli"
                   onClick={() => onNavigaPagina('giornalino', undefined, { tabGiornalino: 'articoli' })}
-                  className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1 hover:border-slate-300 transition cursor-pointer group"
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Scrivi e Organizza gli Articoli del Periodico"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <BookOpen className="w-3.5 h-3.5 text-slate-500" />
-                      3.2 Articoli & Redazione Word
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-bold">
-                      {giornalinoConfig.articoli.length} articoli
-                    </span>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <PenTool className="w-3.5 h-3.5 text-indigo-600" />
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-indigo-900">
+                        3.2 Redazione Articoli & Rubriche
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-slate-500">
+                      {giornalinoConfig.articoli?.length || 0} articoli: editoriali, eventi e territorio
+                    </p>
                   </div>
-                  <p className="text-[10.5px] text-slate-500">
-                    Editor stile Word, capolettera decorativo, formattazione ricca e galleria fotografica.
-                  </p>
-                </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-indigo-700 shrink-0 ml-1" />
+                </button>
 
-                {/* 3.3 Gestione Sponsor & Inserzionisti Locali */}
-                <div 
+                {/* 3.3 Sponsor & Spazi Pubblicitari */}
+                <button
+                  type="button"
+                  id="btn-sub-giornalino-sponsor"
                   onClick={() => onNavigaPagina('giornalino', undefined, { tabGiornalino: 'sponsor' })}
-                  className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1 hover:border-amber-300 transition cursor-pointer group"
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Gestione Inserzionisti e Finanziamento del Periodico"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <span className="text-amber-600 font-black text-xs">★</span>
-                      3.3 Sponsor & Inserzioni Locali
-                    </span>
-                    <span className="text-[10px] text-amber-900 bg-amber-100 px-1.5 py-0.2 rounded font-bold">
-                      {(giornalinoConfig.sponsor || []).length} sponsor
-                    </span>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-indigo-900">
+                        3.3 Sponsor & Inserzionisti
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-slate-500">
+                      {giornalinoConfig.sponsor?.length || 0} sostenitori commerciali registrati
+                    </p>
                   </div>
-                  <p className="text-[10.5px] text-slate-500">
-                    Spazi pubblicitari e inserzioni per finanziare le spese di stampa del notiziario.
-                  </p>
-                </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-indigo-700 shrink-0 ml-1" />
+                </button>
 
-                {/* Dati Riepilogativi Giornalino */}
-                <div className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500 text-[10.5px]">Testata Periodico:</span>
-                    <span className="font-bold text-slate-900 text-[11px] truncate max-w-[140px]">
-                      {giornalinoConfig.testata}
-                    </span>
+                {/* 3.4 Impaginazione & Griglia Tipografica */}
+                <button
+                  type="button"
+                  id="btn-sub-giornalino-paginazione"
+                  onClick={() => onNavigaPagina('giornalino', undefined, { tabGiornalino: 'paginazione' })}
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Paginazione Foglio A4 e Densità Testo"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-indigo-900">
+                        3.4 Impaginazione & Griglia A4
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-slate-500">
+                      {giornalinoConfig.numeroPagine || 4} pagine • Griglia tipografica a 2-3 colonne
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500 text-[10.5px]">Edizione Attiva:</span>
-                    <span className="font-bold text-indigo-700 text-[11px]">
-                      {giornalinoConfig.numeroEdizione} ({giornalinoConfig.totalePagine || 4} pag.)
-                    </span>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-indigo-700 shrink-0 ml-1" />
+                </button>
+
+                {/* 3.5 Testata Ufficiale & Layout Intestazione */}
+                <button
+                  type="button"
+                  id="btn-sub-giornalino-testata"
+                  onClick={() => onNavigaPagina('giornalino', undefined, { tabGiornalino: 'testata' })}
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Stile della Testata Giornalistica e Fregi"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-indigo-900">
+                        3.5 Testata Ufficiale & Fregi
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-slate-500">
+                      Layout classico o moderno con stemma e diciture
+                    </p>
                   </div>
-                </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-indigo-700 shrink-0 ml-1" />
+                </button>
+
+                {/* 3.6 Archivio Storico & Stampa Ufficiale */}
+                <button
+                  type="button"
+                  id="btn-sub-giornalino-archivio"
+                  onClick={() => onNavigaPagina('archivio_giornalino')}
+                  className="w-full text-left p-2 rounded-xl bg-white hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Archivio Storico di Tutte le Edizioni e Stampa A4"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Archive className="w-3.5 h-3.5 text-indigo-600" />
+                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-indigo-900">
+                        3.6 Archivio Storico & Stampa A4
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-slate-500">
+                      {archivioGiornalini.length} edizioni conservate • PDF pronto stampa
+                    </p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-indigo-700 shrink-0 ml-1" />
+                </button>
 
               </div>
 
             </div>
 
-            {/* Pulsanti di Ingresso: Archivio Dati Uscite e Studio Editor DTP */}
+            {/* Pulsanti Azione Riquadro Giornalino */}
             <div className="pt-6 space-y-2">
               <button
-                id="btn-archivio-giornalino-card"
-                onClick={() => onNavigaPagina('archivio_giornalino')}
-                className="w-full py-2.5 px-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-950 text-xs font-bold rounded-xl border border-indigo-200 transition flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
-                title="Accedi all'archivio con tutte le uscite catalogate per anno e data"
+                id="btn-apri-studio-giornalino"
+                onClick={() => onNavigaPagina('giornalino', undefined, { tabGiornalino: 'studio' })}
+                className="w-full py-3.5 px-4 bg-indigo-700 hover:bg-indigo-600 active:bg-indigo-800 text-white text-sm font-black rounded-2xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Archive className="w-4 h-4 text-indigo-700" />
-                <span>Archivio Dati & Uscite ({archivioGiornalini?.length || 4} edizioni)</span>
+                <span>Accedi allo Studio Giornalino</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
 
               <button
-                id="btn-entra-giornalino"
-                onClick={() => onNavigaPagina('giornalino', undefined, { tabGiornalino: 'studio' })}
-                className="w-full py-3 px-4 bg-indigo-900 hover:bg-indigo-800 active:bg-black text-white text-sm font-black rounded-2xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+                id="btn-apri-archivio-giornalino"
+                onClick={() => onNavigaPagina('archivio_giornalino')}
+                className="w-full py-2.5 px-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-bold rounded-xl border border-indigo-200 transition flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span>Accedi allo Studio Editor DTP</span>
-                <ArrowRight className="w-4 h-4" />
+                <Archive className="w-3.5 h-3.5" />
+                <span>Archivio Edizioni & Stampa Tipografica</span>
               </button>
             </div>
           </div>
@@ -909,7 +994,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="flex items-center gap-3 text-[11.5px]">
-            <span>Architettura Unificata: Dashboard, Gestionale, Sito Web e Giornalino</span>
+            <span>Piattaforma Unificata Pro Loco: 1. Gestionale • 2. Sito Web • 3. Giornalino</span>
             <span>•</span>
             <span className="text-slate-400">Archivio Locale Sicuro</span>
           </div>

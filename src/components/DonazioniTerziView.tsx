@@ -1,0 +1,1181 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { DonazioneTerzi, ProLocoInfo, TipoDonatore, CampagnaRaccoltaFondi } from '../types';
+import { 
+  HeartHandshake, 
+  Plus, 
+  Search, 
+  Printer, 
+  Edit, 
+  Trash2, 
+  ShieldCheck, 
+  Building2, 
+  Calendar, 
+  CreditCard, 
+  FileSpreadsheet, 
+  CheckCircle2, 
+  Info, 
+  ArrowUpDown,
+  FileCheck,
+  Landmark,
+  UserCheck,
+  TrendingUp,
+  Receipt,
+  Award,
+  BookOpen,
+  Target,
+  Sparkles,
+  ChevronRight,
+  ExternalLink,
+  Users,
+  MapPin,
+  Check
+} from 'lucide-react';
+import { 
+  esportaDonazioniCSV, 
+  saveDonazioni, 
+  loadCampagneFondi, 
+  saveCampagneFondi 
+} from '../storage';
+import { DonazioneModal } from './DonazioneModal';
+import { DonazioneRicevutaModal } from './DonazioneRicevutaModal';
+import { DonazioneCertificatoAnnualeModal } from './DonazioneCertificatoAnnualeModal';
+import { DonazioneRegistroVidimabileModal } from './DonazioneRegistroVidimabileModal';
+import { CampagnaFondiModal } from './CampagnaFondiModal';
+
+interface DonazioniTerziViewProps {
+  donazioni: DonazioneTerzi[];
+  config: ProLocoInfo;
+  annoSelezionato: number;
+  onCambiaAnno?: (anno: number) => void;
+  onAggiornaDonazioni: (nuovaLista: DonazioneTerzi[]) => void;
+}
+
+type SottoScheda = 'elenco' | 'campagne' | 'certificati_annuali' | 'registro_libro';
+
+export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
+  donazioni,
+  config,
+  annoSelezionato,
+  onCambiaAnno,
+  onAggiornaDonazioni
+}) => {
+  const [sottoScheda, setSottoScheda] = useState<SottoScheda>('elenco');
+  const [filtroAnno, setFiltroAnno] = useState<number | 'tutti'>(annoSelezionato);
+  const [ricerca, setRicerca] = useState<string>('');
+  const [filtroTipo, setFiltroTipo] = useState<'tutti' | TipoDonatore>('tutti');
+  const [filtroSoloDetraibili, setFiltroSoloDetraibili] = useState<boolean>(false);
+  const [filtroCampagna, setFiltroCampagna] = useState<string>('tutte');
+  const [ordinamento, setOrdinamento] = useState<'data_desc' | 'data_asc' | 'importo_desc' | 'donatore_asc'>('data_desc');
+
+  // Campagne di raccolta fondi
+  const [campagne, setCampagne] = useState<CampagnaRaccoltaFondi[]>(() => loadCampagneFondi());
+
+  // Modali
+  const [modalDonazioneAperta, setModalDonazioneAperta] = useState<boolean>(false);
+  const [donazioneInModifica, setDonazioneInModifica] = useState<DonazioneTerzi | null>(null);
+  const [donazionePerDocumento, setDonazionePerDocumento] = useState<DonazioneTerzi | null>(null);
+  
+  const [modalCertificatoAnnualeAperta, setModalCertificatoAnnualeAperta] = useState<boolean>(false);
+  const [donatoreSelezionatoCertificato, setDonatoreSelezionatoCertificato] = useState<string | undefined>(undefined);
+
+  const [modalRegistroVidimabileAperta, setModalRegistroVidimabileAperta] = useState<boolean>(false);
+
+  const [modalCampagnaAperta, setModalCampagnaAperta] = useState<boolean>(false);
+  const [campagnaInModifica, setCampagnaInModifica] = useState<CampagnaRaccoltaFondi | null>(null);
+
+  const [idDaEliminare, setIdDaEliminare] = useState<string | null>(null);
+
+  // Anno attivo
+  const annoAttivo = filtroAnno === 'tutti' ? null : filtroAnno;
+
+  // Anni disponibili
+  const anniDisponibili = useMemo(() => {
+    const setAnni = new Set<number>([
+      new Date().getFullYear(),
+      new Date().getFullYear() - 1,
+      annoSelezionato
+    ]);
+    donazioni.forEach(d => {
+      if (d.anno) setAnni.add(d.anno);
+    });
+    return Array.from(setAnni).sort((a, b) => b - a);
+  }, [donazioni, annoSelezionato]);
+
+  // Calcolo automatico del prossimo numero di ricevuta per l'anno di lavoro
+  const prossimoNumeroRicevuta = useMemo(() => {
+    const annoRif = annoAttivo || annoSelezionato;
+    const donazioniAnno = donazioni.filter(d => d.anno === annoRif);
+    const progressivo = donazioniAnno.length + 1;
+    return `DON-${annoRif}/${String(progressivo).padStart(3, '0')}`;
+  }, [donazioni, annoAttivo, annoSelezionato]);
+
+  // Donazioni filtrate
+  const donazioniFiltrate = useMemo(() => {
+    return donazioni.filter(d => {
+      if (annoAttivo && d.anno !== annoAttivo) return false;
+      if (filtroTipo !== 'tutti' && d.tipoDonatore !== filtroTipo) return false;
+      if (filtroSoloDetraibili && !d.detraibileFiscale) return false;
+      if (filtroCampagna !== 'tutte' && d.campagnaId !== filtroCampagna) return false;
+
+      if (ricerca.trim()) {
+        const query = ricerca.toLowerCase().trim();
+        const matchDonatore = d.donatore.toLowerCase().includes(query);
+        const matchCF = (d.codiceFiscalePartitaIva || '').toLowerCase().includes(query);
+        const matchCausale = d.causale.toLowerCase().includes(query);
+        const matchRicevuta = d.ricevutaNumero.toLowerCase().includes(query);
+        const matchDestinazione = (d.destinazione || '').toLowerCase().includes(query);
+        const matchTracciabilita = (d.estremiTracciabilita || '').toLowerCase().includes(query);
+        if (!matchDonatore && !matchCF && !matchCausale && !matchRicevuta && !matchDestinazione && !matchTracciabilita) {
+          return false;
+        }
+      }
+
+      return true;
+    }).sort((a, b) => {
+      if (ordinamento === 'data_desc') return b.data.localeCompare(a.data);
+      if (ordinamento === 'data_asc') return a.data.localeCompare(b.data);
+      if (ordinamento === 'importo_desc') return (b.importo || 0) - (a.importo || 0);
+      if (ordinamento === 'donatore_asc') return a.donatore.localeCompare(b.donatore);
+      return 0;
+    });
+  }, [donazioni, annoAttivo, filtroTipo, filtroSoloDetraibili, filtroCampagna, ricerca, ordinamento]);
+
+  // Metriche Finanziarie Avanzate
+  const metriche = useMemo(() => {
+    const donazioniAnno = annoAttivo ? donazioni.filter(d => d.anno === annoAttivo) : donazioni;
+    const totale = donazioniAnno.reduce((acc, d) => acc + (d.importo || 0), 0);
+    const detraibili = donazioniAnno.filter(d => d.detraibileFiscale);
+    const totaleDetraibili = detraibili.reduce((acc, d) => acc + (d.importo || 0), 0);
+    const totaleCampagne = donazioniAnno.filter(d => d.campagnaId).reduce((acc, d) => acc + (d.importo || 0), 0);
+    
+    // Conteggio donatori unici
+    const donatoriUniciSet = new Set(donazioniAnno.map(d => (d.codiceFiscalePartitaIva || d.donatore).trim().toUpperCase()));
+    
+    const privati = donazioniAnno.filter(d => d.tipoDonatore === 'privato').length;
+    const imprese = donazioniAnno.filter(d => d.tipoDonatore === 'azienda').length;
+    const entiFondazioni = donazioniAnno.filter(d => ['fondazione', 'ente_benefico', 'associazione'].includes(d.tipoDonatore)).length;
+
+    return {
+      totale,
+      conteggio: donazioniAnno.length,
+      totaleDetraibili,
+      totaleCampagne,
+      donatoriUnici: donatoriUniciSet.size,
+      privati,
+      imprese,
+      entiFondazioni
+    };
+  }, [donazioni, annoAttivo]);
+
+  // Donatori raggruppati per scheda "Certificati Annuali"
+  const riepilogoDonatoriAnnuali = useMemo(() => {
+    const annoRif = annoAttivo || annoSelezionato;
+    const mappa = new Map<string, { 
+      donatore: string; 
+      cf?: string; 
+      tipo: TipoDonatore; 
+      totale: number; 
+      conteggio: number; 
+      tracciabili: number;
+      ultimaData: string;
+    }>();
+
+    donazioni
+      .filter(d => d.anno === annoRif && d.tipoDonatore !== 'anonimo')
+      .forEach(d => {
+        const chiave = (d.codiceFiscalePartitaIva || d.donatore).trim().toUpperCase();
+        if (!mappa.has(chiave)) {
+          mappa.set(chiave, {
+            donatore: d.donatore,
+            cf: d.codiceFiscalePartitaIva,
+            tipo: d.tipoDonatore,
+            totale: 0,
+            conteggio: 0,
+            tracciabili: 0,
+            ultimaData: d.data
+          });
+        }
+        const rec = mappa.get(chiave)!;
+        rec.totale += d.importo;
+        rec.conteggio += 1;
+        if (d.detraibileFiscale) rec.tracciabili += d.importo;
+        if (d.data > rec.ultimaData) rec.ultimaData = d.data;
+      });
+
+    return Array.from(mappa.values()).sort((a, b) => b.totale - a.totale);
+  }, [donazioni, annoAttivo, annoSelezionato]);
+
+  // Calcolo avanzamento campagne
+  const campagneConAvanzamento = useMemo(() => {
+    return campagne.map(camp => {
+      const donazioniDellaCampagna = donazioni.filter(d => d.campagnaId === camp.id);
+      const raccolto = donazioniDellaCampagna.reduce((acc, d) => acc + d.importo, 0);
+      const percentuale = Math.min(100, Math.round((raccolto / (camp.obiettivoImporto || 1)) * 100));
+      return {
+        ...camp,
+        raccolto,
+        percentuale,
+        numeroDonazioni: donazioniDellaCampagna.length
+      };
+    });
+  }, [campagne, donazioni]);
+
+  // Salva donazione
+  const handleSalvaDonazione = (donazioneAggiornata: DonazioneTerzi) => {
+    let nuovaLista: DonazioneTerzi[];
+    const esiste = donazioni.some(d => d.id === donazioneAggiornata.id);
+    if (esiste) {
+      nuovaLista = donazioni.map(d => d.id === donazioneAggiornata.id ? donazioneAggiornata : d);
+    } else {
+      nuovaLista = [donazioneAggiornata, ...donazioni];
+    }
+    onAggiornaDonazioni(nuovaLista);
+    saveDonazioni(nuovaLista);
+    setModalDonazioneAperta(false);
+    setDonazioneInModifica(null);
+  };
+
+  // Elimina donazione
+  const handleEliminaDonazione = (id: string) => {
+    const nuovaLista = donazioni.filter(d => d.id !== id);
+    onAggiornaDonazioni(nuovaLista);
+    saveDonazioni(nuovaLista);
+    setIdDaEliminare(null);
+  };
+
+  // Salva Campagna
+  const handleSalvaCampagna = (campagnaSalvata: CampagnaRaccoltaFondi) => {
+    let nuoveCampagne: CampagnaRaccoltaFondi[];
+    const esiste = campagne.some(c => c.id === campagnaSalvata.id);
+    if (esiste) {
+      nuoveCampagne = campagne.map(c => c.id === campagnaSalvata.id ? campagnaSalvata : c);
+    } else {
+      nuoveCampagne = [campagnaSalvata, ...campagne];
+    }
+    setCampagne(nuoveCampagne);
+    saveCampagneFondi(nuoveCampagne);
+    setModalCampagnaAperta(false);
+    setCampagnaInModifica(null);
+  };
+
+  const getBadgeTipoDonatore = (tipo: TipoDonatore) => {
+    switch (tipo) {
+      case 'azienda':
+        return <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-blue-100 text-blue-800">Impresa / Società</span>;
+      case 'privato':
+        return <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-emerald-100 text-emerald-800">Privato Cittadino</span>;
+      case 'fondazione':
+        return <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-purple-100 text-purple-800">Fondazione</span>;
+      case 'ente_benefico':
+        return <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-100 text-amber-900">Ente / Terzo Settore</span>;
+      case 'associazione':
+        return <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-teal-100 text-teal-800">Associazione Consorella</span>;
+      case 'anonimo':
+      default:
+        return <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-slate-100 text-slate-700">Anonimo / Offerte</span>;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      
+      {/* 1. BANNER ISTITUZIONALE SEZIONE 1.4 */}
+      <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-950 rounded-3xl p-5 sm:p-7 text-white shadow-sm border border-emerald-800/40 relative overflow-hidden">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-700/90 text-emerald-100 border border-emerald-500/40 tracking-wide flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+                <span>1.4 Registro Ufficiale Erogazioni Liberali</span>
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/10 text-emerald-200 border border-white/15">
+                Art. 83 CTS (D.Lgs. 117/2017) • Conforme RUNTS
+              </span>
+            </div>
+
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
+              <HeartHandshake className="w-6 h-6 text-emerald-400 shrink-0" />
+              <span>Gestione Professionale Donazioni, Sostenitori & Raccolta Fondi</span>
+            </h2>
+
+            <p className="text-xs sm:text-sm text-slate-200/90 max-w-3xl leading-relaxed">
+              Piattaforma contabile integrata per l'emissione di quietanze fiscali deducibili, diplomi di benemerenza, attestazioni annuali per il Modello 730/Redditi e libro mastro vidimabile.
+            </p>
+          </div>
+
+          {/* Azioni Rapide Banner */}
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {/* Selettore Anno */}
+            <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-xs border border-white/20 px-3 py-1.5 rounded-xl">
+              <Calendar className="w-3.5 h-3.5 text-emerald-300" />
+              <select
+                value={filtroAnno}
+                onChange={(e) => {
+                  const val = e.target.value === 'tutti' ? 'tutti' : Number(e.target.value);
+                  setFiltroAnno(val);
+                  if (onCambiaAnno && typeof val === 'number') onCambiaAnno(val);
+                }}
+                className="bg-transparent text-white text-xs font-bold outline-none cursor-pointer pr-1"
+              >
+                <option value="tutti" className="bg-slate-900 text-white">Tutti gli Esercizi</option>
+                {anniDisponibili.map(anno => (
+                  <option key={anno} value={anno} className="bg-slate-900 text-white">Esercizio {anno}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Pulsante Libro Vidimabile */}
+            <button
+              onClick={() => setModalRegistroVidimabileAperta(true)}
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Visualizza e stampa il Libro Registro Vidimabile ufficiale per RUNTS e Revisori"
+            >
+              <BookOpen className="w-4 h-4 text-amber-300" />
+              <span className="hidden sm:inline">Libro Registro</span>
+            </button>
+
+            {/* Certificato 730 */}
+            <button
+              onClick={() => {
+                setDonatoreSelezionatoCertificato(undefined);
+                setModalCertificatoAnnualeAperta(true);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Genera l'Attestazione Fiscale Annuale per il 730 o Modello Redditi del donatore"
+            >
+              <FileCheck className="w-4 h-4 text-teal-300" />
+              <span className="hidden sm:inline">Attestazione 730</span>
+            </button>
+
+            {/* Esporta CSV */}
+            <button
+              onClick={() => esportaDonazioniCSV(donazioni, annoAttivo || undefined)}
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Scarica il Registro Donazioni completo in formato CSV / Excel"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
+              <span>Esporta CSV</span>
+            </button>
+
+            {/* Registra Donazione */}
+            <button
+              onClick={() => {
+                setDonazioneInModifica(null);
+                setModalDonazioneAperta(true);
+              }}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-slate-950 text-xs font-black transition flex items-center gap-2 cursor-pointer shadow-sm"
+            >
+              <Plus className="w-4 h-4 text-slate-950" />
+              <span>Nuova Donazione</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      {/* 2. STATISTICHE & KPI FINANZIARI DONAZIONI */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* Card 1: Totale Raccolto */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Totale Raccolto {annoAttivo ? `(${annoAttivo})` : ''}
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-slate-900 font-mono">
+              € {metriche.totale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-500 block mt-1">
+            {metriche.conteggio} registrazioni • {metriche.donatoriUnici} donatori unici
+          </span>
+        </div>
+
+        {/* Card 2: Detraibile Art. 83 CTS */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Tracciato Art. 83 CTS
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-teal-800 font-mono">
+              € {metriche.totaleDetraibili.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <span className="text-[11px] text-teal-700 block mt-1 font-semibold">
+            {((metriche.totaleDetraibili / (metriche.totale || 1)) * 100).toFixed(0)}% del totale con tracciabilità fiscale
+          </span>
+        </div>
+
+        {/* Card 3: Campagne e Progetti Vincolati */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Progetti Vincolati
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+              <Target className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-amber-900 font-mono">
+              € {metriche.totaleCampagne.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-500 block mt-1">
+            Fondi vincolati su {campagne.length} campagne attive
+          </span>
+        </div>
+
+        {/* Card 4: Donatori Unici e Tipologie */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Rete Sostenitori
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-xs font-bold text-slate-800">
+            <span>Privati: <strong>{metriche.privati}</strong></span>
+            <span>•</span>
+            <span>Aziende: <strong>{metriche.imprese}</strong></span>
+            <span>•</span>
+            <span>Enti: <strong>{metriche.entiFondazioni}</strong></span>
+          </div>
+          <span className="text-[11px] text-slate-500 block mt-1">
+            Soggetti eroganti registrati nel sistema
+          </span>
+        </div>
+
+      </div>
+
+      {/* 3. BARRA DI NAVIGAZIONE INTERNA SCHEDE */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-1.5 shadow-2xs flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1 overflow-x-auto">
+          <button
+            onClick={() => setSottoScheda('elenco')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              sottoScheda === 'elenco'
+                ? 'bg-emerald-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Receipt className="w-4 h-4" />
+            <span>Tutte le Donazioni & Quietanze ({donazioniFiltrate.length})</span>
+          </button>
+
+          <button
+            onClick={() => setSottoScheda('campagne')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              sottoScheda === 'campagne'
+                ? 'bg-emerald-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Target className="w-4 h-4" />
+            <span>Campagne & Progetti Vincolati ({campagne.length})</span>
+          </button>
+
+          <button
+            onClick={() => setSottoScheda('certificati_annuali')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              sottoScheda === 'certificati_annuali'
+                ? 'bg-emerald-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <FileCheck className="w-4 h-4" />
+            <span>Attestazioni Fiscali Annuali (730 / Redditi)</span>
+          </button>
+
+          <button
+            onClick={() => setSottoScheda('registro_libro')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              sottoScheda === 'registro_libro'
+                ? 'bg-emerald-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Libro Registro Vidimabile CTS</span>
+          </button>
+        </div>
+
+        {sottoScheda === 'campagne' && (
+          <button
+            onClick={() => {
+              setCampagnaInModifica(null);
+              setModalCampagnaAperta(true);
+            }}
+            className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Nuova Campagna</span>
+          </button>
+        )}
+      </div>
+
+      {/* ======================================================== */}
+      {/* VISTA 1: ELENCO DONAZIONI & QUIETANZE                    */}
+      {/* ======================================================== */}
+      {sottoScheda === 'elenco' && (
+        <div className="space-y-4">
+          
+          {/* Barra Filtri e Ricerca */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            
+            {/* Ricerca Testuale */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Cerca per donatore, codice fiscale, causale, ricevuta, CRO/TRN..."
+                value={ricerca}
+                onChange={(e) => setRicerca(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-emerald-600 outline-none transition"
+              />
+              {ricerca && (
+                <button
+                  onClick={() => setRicerca('')}
+                  className="text-[11px] text-slate-400 hover:text-slate-600 absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer font-bold"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Filtri */}
+            <div className="flex flex-wrap items-center gap-2">
+              
+              {/* Filtro Campagna */}
+              <select
+                value={filtroCampagna}
+                onChange={(e) => setFiltroCampagna(e.target.value)}
+                className="px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 bg-white outline-none cursor-pointer"
+              >
+                <option value="tutte">Tutti i Progetti / Fondi</option>
+                {campagne.map(c => (
+                  <option key={c.id} value={c.id}>🎯 {c.titolo}</option>
+                ))}
+              </select>
+
+              {/* Tipo Donatore */}
+              <select
+                value={filtroTipo}
+                onChange={(e) => setFiltroTipo(e.target.value as any)}
+                className="px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 bg-white outline-none cursor-pointer"
+              >
+                <option value="tutti">Tutti i Donatori</option>
+                <option value="privato">Solo Privati</option>
+                <option value="azienda">Solo Aziende</option>
+                <option value="fondazione">Fondazioni</option>
+                <option value="ente_benefico">Enti Terzo Settore</option>
+                <option value="associazione">Associazioni Consorelle</option>
+                <option value="anonimo">Anonimi</option>
+              </select>
+
+              {/* Toggle Detraibili */}
+              <button
+                onClick={() => setFiltroSoloDetraibili(!filtroSoloDetraibili)}
+                className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer ${
+                  filtroSoloDetraibili
+                    ? 'bg-emerald-700 text-white border-emerald-700'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Solo Detraibili Art. 83</span>
+              </button>
+
+              {/* Ordinamento */}
+              <select
+                value={ordinamento}
+                onChange={(e) => setOrdinamento(e.target.value as any)}
+                className="px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 bg-white outline-none cursor-pointer"
+              >
+                <option value="data_desc">Data (Più recenti)</option>
+                <option value="data_asc">Data (Meno recenti)</option>
+                <option value="importo_desc">Importo (€ decrescente)</option>
+                <option value="donatore_asc">Donatore (A-Z)</option>
+              </select>
+
+            </div>
+
+          </div>
+
+          {/* Tabella Donazioni */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-emerald-700" />
+                <span className="text-xs font-bold text-slate-800">
+                  Quietanza & Donazioni ({donazioniFiltrate.length} su {donazioni.length})
+                </span>
+              </div>
+
+              <span className="text-[11px] text-slate-500 font-medium">
+                Totale Parziale Filtrato: <strong className="text-slate-900 font-bold font-mono">€ {donazioniFiltrate.reduce((a, b) => a + (b.importo || 0), 0).toFixed(2)}</strong>
+              </span>
+            </div>
+
+            {donazioniFiltrate.length === 0 ? (
+              <div className="p-12 text-center space-y-3">
+                <HeartHandshake className="w-12 h-12 text-slate-300 mx-auto" />
+                <h4 className="text-sm font-bold text-slate-700">Nessuna donazione trovata</h4>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                  Non risultano donazioni con i filtri attuali. Puoi registrarne una nuova premendo il tasto in alto.
+                </p>
+                <button
+                  onClick={() => {
+                    setDonazioneInModifica(null);
+                    setModalDonazioneAperta(true);
+                  }}
+                  className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  + Registra Donazione
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50/50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      <th className="py-3 px-4">N° Quietanza / Data</th>
+                      <th className="py-3 px-4">Donatore & Dati Fiscali</th>
+                      <th className="py-3 px-4">Tipologia</th>
+                      <th className="py-3 px-4">Causale & Progetto</th>
+                      <th className="py-3 px-4">Metodo & Tracciabilità</th>
+                      <th className="py-3 px-4 text-right">Importo (€)</th>
+                      <th className="py-3 px-4 text-center">Fisco Art. 83</th>
+                      <th className="py-3 px-4 text-right">Documenti & Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {donazioniFiltrate.map((donazione) => (
+                      <tr key={donazione.id} className="hover:bg-slate-50/70 transition-colors">
+                        
+                        {/* Ricevuta & Data */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <FileCheck className="w-3.5 h-3.5 text-emerald-700" />
+                            <span className="font-mono text-emerald-950 font-black">{donazione.ricevutaNumero}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <Calendar className="w-3 h-3 text-slate-400" />
+                            <span>{donazione.data} • Esercizio {donazione.anno}</span>
+                          </div>
+                        </td>
+
+                        {/* Donatore & CF/P.IVA */}
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-slate-900 leading-snug">
+                            {donazione.donatore}
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                            {donazione.codiceFiscalePartitaIva || 'Nessun CF/P.IVA'}
+                          </div>
+                          {(donazione.cittaDonatore || donazione.indirizzoDonatore) && (
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                              <MapPin className="w-2.5 h-2.5" />
+                              <span>{donazione.cittaDonatore || donazione.indirizzoDonatore}</span>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Badge Tipologia */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          {getBadgeTipoDonatore(donazione.tipoDonatore)}
+                        </td>
+
+                        {/* Causale & Destinazione */}
+                        <td className="py-3 px-4 max-w-xs">
+                          <div className="text-slate-800 font-medium line-clamp-1">
+                            {donazione.causale}
+                          </div>
+                          <div className="text-[10.5px] text-emerald-800 font-semibold mt-0.5">
+                            {donazione.destinazione || 'Attività Statutarie Generali'}
+                          </div>
+                          {donazione.campagnaId && (
+                            <span className="inline-block mt-0.5 text-[9.5px] font-bold bg-amber-50 text-amber-900 border border-amber-200 px-1.5 py-0.2 rounded">
+                              🎯 Campagna Fondi
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Metodo & Tracciabilità */}
+                        <td className="py-3 px-4 whitespace-nowrap text-slate-700">
+                          <span className="inline-flex items-center gap-1 font-medium">
+                            <CreditCard className="w-3 h-3 text-slate-400" />
+                            {donazione.metodo}
+                          </span>
+                          {donazione.estremiTracciabilita && (
+                            <div className="text-[10px] font-mono text-slate-400 truncate max-w-[140px]">
+                              {donazione.estremiTracciabilita}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Importo */}
+                        <td className="py-3 px-4 whitespace-nowrap text-right">
+                          <span className="font-black text-slate-900 text-sm font-mono">
+                            € {donazione.importo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </td>
+
+                        {/* Trattamento Fiscale Art. 83 */}
+                        <td className="py-3 px-4 whitespace-nowrap text-center">
+                          {donazione.detraibileFiscale ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-100 text-emerald-800" title="Detraibile 30% IRPEF / Deducibile 10% IRES">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Art. 83 CTS</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10.5px] font-medium bg-slate-100 text-slate-600" title="Non tracciata - Quota ordinaria">
+                              Ordinaria
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Azioni e Documenti */}
+                        <td className="py-3 px-4 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            
+                            {/* Visualizza / Stampa Documenti Ufficiali */}
+                            <button
+                              onClick={() => setDonazionePerDocumento(donazione)}
+                              className="px-2 py-1 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition text-xs font-bold flex items-center gap-1 cursor-pointer border border-emerald-200"
+                              title="Genera Quietanza Fiscale, Diploma di Benemerenza o Lettera del Presidente"
+                            >
+                              <Award className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Certificato / Ricevuta</span>
+                            </button>
+
+                            {/* Modifica */}
+                            <button
+                              onClick={() => {
+                                setDonazioneInModifica(donazione);
+                                setModalDonazioneAperta(true);
+                              }}
+                              className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg transition cursor-pointer"
+                              title="Modifica Dati Donazione"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+
+                            {/* Elimina */}
+                            <button
+                              onClick={() => setIdDaEliminare(donazione.id)}
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Elimina Donazione"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+
+                          </div>
+                        </td>
+
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* VISTA 2: CAMPAGNE & PROGETTI VINCOLATI                   */}
+      {/* ======================================================== */}
+      {sottoScheda === 'campagne' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <Target className="w-5 h-5 text-amber-600" />
+                  <span>Campagne di Raccolta Fondi e Progetti con Destinazione Vincolata</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Istituisci iniziative speciali per attrarre contributi da cittadini, imprese e fondazioni bancarie del territorio
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setCampagnaInModifica(null);
+                  setModalCampagnaAperta(true);
+                }}
+                className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nuova Campagna</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+              {campagneConAvanzamento.map((camp) => (
+                <div 
+                  key={camp.id}
+                  className="rounded-2xl border border-slate-200 p-5 bg-gradient-to-b from-white to-slate-50/50 shadow-2xs hover:border-amber-300 transition-colors space-y-3.5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          camp.attiva 
+                            ? 'bg-emerald-100 text-emerald-800' 
+                            : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {camp.attiva ? 'Campagna Attiva' : 'Conclusa / Chiusa'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono font-bold">
+                          Esercizio {camp.anno}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-black text-slate-900 mt-1.5 leading-snug">
+                        {camp.titolo}
+                      </h4>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setCampagnaInModifica(camp);
+                        setModalCampagnaAperta(true);
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer shrink-0"
+                      title="Modifica Campagna"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {camp.descrizione && (
+                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
+                      {camp.descrizione}
+                    </p>
+                  )}
+
+                  {/* Barra di Avanzamento */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-emerald-950 font-mono text-sm">
+                        € {camp.raccolto.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                        <span className="text-slate-400 text-xs font-normal"> / target € {camp.obiettivoImporto.toLocaleString('it-IT')}</span>
+                      </span>
+                      <span className={`font-black font-mono ${camp.percentuale >= 100 ? 'text-emerald-700' : 'text-amber-800'}`}>
+                        {camp.percentuale}%
+                      </span>
+                    </div>
+
+                    <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          camp.percentuale >= 100 
+                            ? 'bg-emerald-600' 
+                            : 'bg-gradient-to-r from-amber-500 to-orange-600'
+                        }`}
+                        style={{ width: `${Math.min(100, camp.percentuale)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                    <span>{camp.numeroDonazioni} erogazioni liberali ricevute</span>
+                    {camp.responsabileProgetto && (
+                      <span className="text-[11px] italic truncate max-w-[180px]">
+                        Resp: {camp.responsabileProgetto}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* VISTA 3: ATTESTAZIONI FISCALI ANNUALI (730 / REDDITI)    */}
+      {/* ======================================================== */}
+      {sottoScheda === 'certificati_annuali' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <FileCheck className="w-5 h-5 text-teal-700" />
+                  <span>Riepilogo Donatori per Certificazione Fiscale Annuale (Modello 730 / Modello Redditi)</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Genera con un clic l'attestazione cumulativa annuale conforme per il commercialista o CAF del donatore (Art. 83 CTS)
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setDonatoreSelezionatoCertificato(undefined);
+                  setModalCertificatoAnnualeAperta(true);
+                }}
+                className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Apri Finestra Certificati A4</span>
+              </button>
+            </div>
+
+            {riepilogoDonatoriAnnuali.length === 0 ? (
+              <div className="p-10 text-center text-slate-500 text-xs">
+                Nessun donatore registrato per l'esercizio selezionato.
+              </div>
+            ) : (
+              <div className="overflow-x-auto pt-3">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50/60 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      <th className="py-3 px-4">Soggetto Donatore</th>
+                      <th className="py-3 px-4">Codice Fiscale / P.IVA</th>
+                      <th className="py-3 px-4">Tipologia</th>
+                      <th className="py-3 px-4 text-center">N. Donazioni</th>
+                      <th className="py-3 px-4 text-right">Totale Tracciato Detraibile</th>
+                      <th className="py-3 px-4 text-right">Totale Complessivo</th>
+                      <th className="py-3 px-4 text-right">Certificazione 730</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {riepilogoDonatoriAnnuali.map((d) => (
+                      <tr key={d.cf || d.donatore} className="hover:bg-slate-50/80">
+                        <td className="py-3 px-4 font-bold text-slate-900">{d.donatore}</td>
+                        <td className="py-3 px-4 font-mono text-slate-600">{d.cf || '—'}</td>
+                        <td className="py-3 px-4">{getBadgeTipoDonatore(d.tipo)}</td>
+                        <td className="py-3 px-4 text-center font-bold text-slate-700">{d.conteggio}</td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-teal-700">
+                          € {d.tracciabili.toFixed(2)}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-black text-slate-900">
+                          € {d.totale.toFixed(2)}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => {
+                              setDonatoreSelezionatoCertificato(d.cf || d.donatore);
+                              setModalCertificatoAnnualeAperta(true);
+                            }}
+                            className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 rounded-lg text-xs font-bold transition flex items-center gap-1 ml-auto cursor-pointer"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>Genera Certificato</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* VISTA 4: ANTEPRIMA LIBRO REGISTRO VIDIMABILE CTS         */}
+      {/* ======================================================== */}
+      {sottoScheda === 'registro_libro' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-indigo-700" />
+                  <h3 className="text-base font-black text-slate-900">
+                    Libro Registro Vidimabile Erogazioni Liberali Terzo Settore
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Documento contabile ufficiale vidimabile per Organo di Controllo, RUNTS e Collegio dei Revisori dei Conti
+                </p>
+              </div>
+
+              <button
+                onClick={() => setModalRegistroVidimabileAperta(true)}
+                className="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-xs shrink-0"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Stampa Libro Registro Completo</span>
+              </button>
+            </div>
+
+            <div className="p-4 bg-indigo-50/60 rounded-xl border border-indigo-200 text-xs text-indigo-950 space-y-2">
+              <div className="flex items-center gap-2 font-bold">
+                <ShieldCheck className="w-4 h-4 text-indigo-700" />
+                <span>Normativa Registro Cronologico delle Donazioni ex D.Lgs. 117/2017:</span>
+              </div>
+              <p className="text-slate-700 leading-relaxed text-[11.5px]">
+                Ai fini del mantenimento dell'iscrizione al RUNTS e per consentire la verifica fiscale delle erogazioni liberali da parte dell'Agenzia delle Entrate, la Pro Loco deve custodire un registro progressivo che certifichi la data, l'identità del donatore, il mezzo di tracciabilità bancaria e la corrispondenza con gli estratti conto dell'Ente.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={() => setModalRegistroVidimabileAperta(true)}
+                className="w-full py-4 border-2 border-dashed border-indigo-300 rounded-2xl text-center text-xs text-indigo-900 hover:bg-indigo-50/50 transition cursor-pointer font-bold space-y-1"
+              >
+                <BookOpen className="w-6 h-6 text-indigo-700 mx-auto" />
+                <div>Clicca qui per aprire la vista di stampa ufficiale in formato A4 vidimabile</div>
+                <div className="text-[11px] text-slate-500 font-normal">
+                  Include frontespizio, tabella progressiva di cassa e verbale di conformità controfirmabile dal Presidente e Tesoriere
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. BOX GUIDA NORMATIVA AGEVOLAZIONI FISCALI ART. 83 */}
+      <div className="bg-emerald-50/80 rounded-2xl p-5 border border-emerald-200 text-xs text-emerald-950 space-y-3">
+        <div className="flex items-center gap-2 font-bold text-emerald-900 text-sm">
+          <Info className="w-4 h-4 text-emerald-700 shrink-0" />
+          <span>Vademecum Fiscale: Agevolazioni Erogazioni Liberali e Donazioni da Terzi (Art. 83 CTS)</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 text-slate-700 leading-relaxed">
+          <div className="bg-white p-3.5 rounded-xl border border-emerald-100 shadow-2xs space-y-1.5">
+            <h5 className="font-bold text-emerald-900 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+              Persone Fisiche (Privati Cittadini)
+            </h5>
+            <p className="text-[11.5px] text-slate-600 leading-relaxed">
+              Le persone fisiche possono <strong>detrarre dall'IRPEF il 30%</strong> dell'erogazione liberale effettuata a favore della Pro Loco (fino a un massimo di <strong>30.000 €</strong> per periodo d'imposta), oppure in alternativa <strong>dedurre</strong> la donazione dal reddito complessivo netto fino al 10%.
+            </p>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-xl border border-emerald-100 shadow-2xs space-y-1.5">
+            <h5 className="font-bold text-emerald-900 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-teal-600"></span>
+              Aziende, Imprese ed Enti Giuridici
+            </h5>
+            <p className="text-[11.5px] text-slate-600 leading-relaxed">
+              Le aziende e società possono <strong>dedurre dal reddito d'impresa</strong> le donazioni erogate nel limite del <strong>10% del reddito complessivo</strong> dichiarato. L'eccedenza può essere computata in aumento nei periodi d'imposta successivi fino al quarto anno.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 pt-1 text-[11px] text-emerald-800 font-semibold border-t border-emerald-200/60">
+          <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>Condizione essenziale di validità: il pagamento deve obbligatoriamente avvenire tramite sistemi tracciabili (Bonifico bancario/postale, POS, Carta di credito/debito, Assegno). I contanti non danno diritto a detrazione.</span>
+        </div>
+      </div>
+
+      {/* ==================== MODALI ==================== */}
+
+      {/* 1. Modale Registrazione / Modifica Donazione */}
+      {modalDonazioneAperta && (
+        <DonazioneModal
+          donazione={donazioneInModifica}
+          annoSelezionato={annoAttivo || config.annoCorrente}
+          prossimoNumeroRicevuta={prossimoNumeroRicevuta}
+          campagne={campagne.filter(c => c.attiva)}
+          onSalva={handleSalvaDonazione}
+          onClose={() => {
+            setModalDonazioneAperta(false);
+            setDonazioneInModifica(null);
+          }}
+        />
+      )}
+
+      {/* 2. Modale Suite Documenti & Ricevuta Ufficiale A4 */}
+      {donazionePerDocumento && (
+        <DonazioneRicevutaModal
+          donazione={donazionePerDocumento}
+          config={config}
+          onClose={() => setDonazionePerDocumento(null)}
+        />
+      )}
+
+      {/* 3. Modale Certificazione Annuale per Modello 730 */}
+      {modalCertificatoAnnualeAperta && (
+        <DonazioneCertificatoAnnualeModal
+          donazioni={donazioni}
+          config={config}
+          annoSelezionato={annoAttivo || config.annoCorrente}
+          donatoreIniziale={donatoreSelezionatoCertificato}
+          onClose={() => {
+            setModalCertificatoAnnualeAperta(false);
+            setDonatoreSelezionatoCertificato(undefined);
+          }}
+        />
+      )}
+
+      {/* 4. Modale Libro Registro Vidimabile CTS */}
+      {modalRegistroVidimabileAperta && (
+        <DonazioneRegistroVidimabileModal
+          donazioni={donazioni}
+          config={config}
+          annoSelezionato={annoAttivo || undefined}
+          onClose={() => setModalRegistroVidimabileAperta(false)}
+        />
+      )}
+
+      {/* 5. Modale Campagna Raccolta Fondi */}
+      {modalCampagnaAperta && (
+        <CampagnaFondiModal
+          campagna={campagnaInModifica}
+          annoSelezionato={annoAttivo || config.annoCorrente}
+          onSalva={handleSalvaCampagna}
+          onClose={() => {
+            setModalCampagnaAperta(false);
+            setCampagnaInModifica(null);
+          }}
+        />
+      )}
+
+      {/* 6. Modale Conferma Eliminazione */}
+      {idDaEliminare && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 border border-slate-200 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">Elimina Donazione</h4>
+                <p className="text-xs text-slate-500">Confermi l'eliminazione?</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Questa azione cancellerà permanentemente la quietanza fiscale dal registro 1.4 e ricalcolerà i totali di cassa.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setIdDaEliminare(null)}
+                className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition cursor-pointer"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={() => handleEliminaDonazione(idDaEliminare)}
+                className="px-3.5 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold transition cursor-pointer"
+              >
+                Elimina definitivamente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};

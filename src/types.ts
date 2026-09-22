@@ -31,22 +31,53 @@ export type TipoDonatore =
   | 'associazione' 
   | 'anonimo';
 
+export type TipoErogazione = 
+  | 'erogazione_liberale_denaro' // Art. 83 CTS (detraibile/deducibile)
+  | '5_per_mille'                // Quota 5x1000 con rendiconto
+  | 'raccolta_fondi_pubblica'    // Art. 7 CTS (Manifestazione pubblica occasionale)
+  | 'progetto_vincolato'         // Donazione vincolata a scopo statutario specifico
+  | 'in_memoria'                 // Donazione in memoria di persona cara o socio fondatore
+  | 'lascito_testamentario';     // Lascito testamentario / eredità
+
+export interface CampagnaRaccoltaFondi {
+  id: string;
+  titolo: string;
+  descrizione: string;
+  obiettivoImporto: number;
+  anno: number;
+  attiva: boolean;
+  dataInizio: string;
+  dataFine?: string;
+  responsabileProgetto?: string;
+}
+
 export interface DonazioneTerzi {
   id: string;
   donatore: string; // Nome persona fisica, ditta, azienda, ente o fondazione
   tipoDonatore: TipoDonatore;
   codiceFiscalePartitaIva?: string;
+  indirizzoDonatore?: string;
+  cittaDonatore?: string;
+  capDonatore?: string;
+  emailDonatore?: string;
+  telefonoDonatore?: string;
   importo: number; // Importo donazione in Euro (€)
   data: string; // YYYY-MM-DD
   anno: number; // Esercizio finanziario di competenza
   causale: string; // Es. "Erogazione liberale a sostegno delle attività culturali e ambientali"
+  tipoErogazione?: TipoErogazione;
   metodo: MetodoPagamento;
+  estremiTracciabilita?: string; // Es. "CRO/TRN 19283741920 - Intesa Sanpaolo"
   ricevutaNumero: string; // Es. "DON-2026/001"
   destinazione?: string; // Es. "Cultura & Ambiente", "Feste & Sagre", "Solidarietà", "Generale"
+  campagnaId?: string;
   eventoCollegatoId?: string;
   eventoCollegatoTitolo?: string;
+  deliberaConsiglio?: string; // Es. "Delibera C.D. verbale n. 3 del 15/02/2026"
   detraibileFiscale?: boolean; // Attestazione erogazione liberale Terzo Settore (Art. 83 D.Lgs. 117/2017)
   note?: string;
+  inviataQuietanza?: boolean;
+  dataInviataQuietanza?: string;
 }
 
 export interface QuotaAssociativa {
@@ -106,6 +137,9 @@ export interface ProLocoInfo {
   quotaStandardGiovane: number;
   nomePresidente: string;
   motto?: string;
+  iban?: string;
+  banca?: string;
+  pec?: string;
 }
 
 export interface SchedaTerritorio {
@@ -273,7 +307,7 @@ export interface FiltriEventi {
 }
 
 export type PaginaPrincipale = 'dashboard' | 'gestionale' | 'sitoweb' | 'giornalino' | 'archivio_giornalino';
-export type SottoTabGestionale = 'soci' | 'eventi' | 'bilancio';
+export type SottoTabGestionale = 'soci' | 'eventi' | 'bilancio' | 'conto_terzi';
 
 export type CategoriaArticoloGiornalino = 
   | 'editoriale'

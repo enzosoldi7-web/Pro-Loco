@@ -511,108 +511,6 @@ export const EventModal: React.FC<EventModalProps> = ({
             {/* Sezione 1: Dati Essenziali */}
             <div id="sezione-dati-evento" className="space-y-4 scroll-mt-2">
 
-              {/* Specificazione Tipologia Evento: 1. Nativo, 2. Ibrido, 3. Gestione */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                    <Info className="w-4 h-4 text-emerald-700" />
-                    <span>Tipologia Evento & Natura Organizzativa *</span>
-                  </label>
-                  <span className="text-[11px] text-slate-500 font-medium">
-                    Tutte le stesse voci con calcolo economico dedicato
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  {/* 1. Evento Nativo */}
-                  <button
-                    type="button"
-                    onClick={() => setTipoEvento('nativo')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      tipoEvento === 'nativo'
-                        ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
-                        : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold ${
-                          tipoEvento === 'nativo' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800'
-                        }`}>
-                          <Sparkles className="w-3 h-3" />
-                          <span>1. Evento Nativo</span>
-                        </span>
-                        {tipoEvento === 'nativo' && (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                        )}
-                      </div>
-                      <span className="font-bold text-slate-900 block text-xs">100% Pro Loco</span>
-                      <p className="text-[10.5px] text-slate-500 leading-snug mt-1">
-                        Ideato, organizzato e gestito interamente dalla Pro Loco. Spese e incassi al 100% a bilancio.
-                      </p>
-                    </div>
-                  </button>
-
-                  {/* 2. Evento Ibrido */}
-                  <button
-                    type="button"
-                    onClick={() => setTipoEvento('ibrido')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      tipoEvento === 'ibrido'
-                        ? 'bg-violet-50 border-violet-500 ring-2 ring-violet-500/20 shadow-xs'
-                        : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold ${
-                          tipoEvento === 'ibrido' ? 'bg-violet-700 text-white' : 'bg-violet-100 text-violet-800'
-                        }`}>
-                          <Handshake className="w-3 h-3" />
-                          <span>2. Evento Ibrido</span>
-                        </span>
-                        {tipoEvento === 'ibrido' && (
-                          <CheckCircle2 className="w-4 h-4 text-violet-700 shrink-0" />
-                        )}
-                      </div>
-                      <span className="font-bold text-slate-900 block text-xs">Co-organizzato</span>
-                      <p className="text-[10.5px] text-slate-500 leading-snug mt-1">
-                        In collaborazione con Comune o altro ente/associazione. Ripartizione % concordata di costi e ricavi.
-                      </p>
-                    </div>
-                  </button>
-
-                  {/* 3. Evento Gestione */}
-                  <button
-                    type="button"
-                    onClick={() => setTipoEvento('gestione')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      tipoEvento === 'gestione'
-                        ? 'bg-amber-50 border-amber-500 ring-2 ring-amber-500/20 shadow-xs'
-                        : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold ${
-                          tipoEvento === 'gestione' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-900'
-                        }`}>
-                          <Briefcase className="w-3 h-3" />
-                          <span>3. Evento Gestione</span>
-                        </span>
-                        {tipoEvento === 'gestione' && (
-                          <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
-                        )}
-                      </div>
-                      <span className="font-bold text-slate-900 block text-xs">Per Conto Terzi</span>
-                      <p className="text-[10.5px] text-slate-500 leading-snug mt-1">
-                        Servizio commissionato da committente pubblico/privato a fronte di compenso convenzionato o rimborsi.
-                      </p>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2">
                 <label className="block font-semibold text-slate-800 mb-1">
@@ -1120,27 +1018,26 @@ export const EventModal: React.FC<EventModalProps> = ({
               </div>
             </div>
 
-            {/* Gestione Economica Specifica per Tipologia Evento: 1. Nativo, 2. Ibrido, 3. Gestione */}
-            {tipoEvento === 'nativo' && (
-              <div className="bg-emerald-50/70 border border-emerald-300 rounded-xl p-4 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-700 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                      1
-                    </div>
-                    <div>
-                      <h5 className="font-bold text-emerald-950 text-xs sm:text-sm flex items-center gap-1.5">
-                        <span>Gestione Economica: 100% Titolarità Diretta Pro Loco</span>
-                      </h5>
-                      <p className="text-[11px] text-emerald-800">
-                        Tutti i costi operativi e gli incassi confluiscono integralmente nel bilancio d'esercizio dell'associazione
-                      </p>
-                    </div>
+            {/* Riepilogo Economico dell'Evento */}
+            <div className="bg-emerald-50/70 border border-emerald-300 rounded-xl p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-700 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                    <Sparkles className="w-4 h-4" />
                   </div>
-                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-200/80 text-emerald-900 border border-emerald-300 self-start sm:self-auto">
-                    Bilancio Integrale Pro Loco
-                  </span>
+                  <div>
+                    <h5 className="font-bold text-emerald-950 text-xs sm:text-sm flex items-center gap-1.5">
+                      <span>Riepilogo Economico & Risultato d'Esercizio Evento</span>
+                    </h5>
+                    <p className="text-[11px] text-emerald-800">
+                      Tutti i costi operativi e gli incassi confluiscono integralmente nel bilancio d'esercizio dell'associazione
+                    </p>
+                  </div>
                 </div>
+                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-200/80 text-emerald-900 border border-emerald-300 self-start sm:self-auto">
+                  Bilancio Integrale Pro Loco
+                </span>
+              </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3 rounded-lg border border-emerald-200 text-xs">
                   <div>
@@ -1168,7 +1065,6 @@ export const EventModal: React.FC<EventModalProps> = ({
                   </div>
                 </div>
               </div>
-            )}
 
             {tipoEvento === 'ibrido' && (
               <div className="bg-violet-50/70 border border-violet-300 rounded-xl p-4 space-y-3.5">
