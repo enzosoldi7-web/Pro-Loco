@@ -325,7 +325,7 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
             </p>
           </div>
 
-          {/* Azioni Rapide Banner */}
+          {/* Azioni Rapide Banner - Essenziali e pulite, nessun overflow */}
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             {/* Selettore Anno */}
             <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-xs border border-white/20 px-3 py-1.5 rounded-xl">
@@ -346,71 +346,6 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
               </select>
             </div>
 
-            {/* Pulsante Libro Vidimabile */}
-            <button
-              onClick={() => setModalRegistroVidimabileAperta(true)}
-              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Visualizza e stampa il Libro Registro Vidimabile ufficiale per RUNTS e Revisori"
-            >
-              <BookOpen className="w-4 h-4 text-amber-300" />
-              <span className="hidden xl:inline">Libro Registro</span>
-            </button>
-
-            {/* Certificato Vincolo & Proposta */}
-            <button
-              onClick={() => {
-                setDonazionePerCertificatoVincolo(donazioni[0] || null);
-                setModalCertificatoVincoloAperta(true);
-              }}
-              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Attestato Ufficiale di Destinazione Vincolata dei Fondi e Scheda Proposta Bonifico"
-            >
-              <Award className="w-4 h-4 text-amber-400" />
-              <span className="hidden sm:inline">Certificato Vincolo</span>
-            </button>
-
-            {/* Conto Economico */}
-            <button
-              onClick={() => setSottoScheda('conto_economico')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-xs ${
-                sottoScheda === 'conto_economico'
-                  ? 'bg-emerald-600 text-white border-emerald-400'
-                  : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
-              }`}
-              title="Conto Economico e Rendiconto Sezione C per cassa Modello D RUNTS"
-            >
-              <BarChart3 className="w-4 h-4 text-emerald-300" />
-              <span className="hidden sm:inline">Conto Economico</span>
-            </button>
-
-            {/* Stato Patrimoniale */}
-            <button
-              onClick={() => setSottoScheda('stato_patrimoniale')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-xs ${
-                sottoScheda === 'stato_patrimoniale'
-                  ? 'bg-indigo-600 text-white border-indigo-400'
-                  : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
-              }`}
-              title="Stato Patrimoniale Modello C RUNTS per Donazioni e Fondi Vincolati"
-            >
-              <Landmark className="w-4 h-4 text-indigo-300" />
-              <span className="hidden sm:inline">Stato Patrimoniale</span>
-            </button>
-
-            {/* Adempimenti RUNTS & Fiscale */}
-            <button
-              onClick={() => setSottoScheda('adempimenti')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-xs ${
-                sottoScheda === 'adempimenti'
-                  ? 'bg-teal-600 text-white border-teal-400'
-                  : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
-              }`}
-              title="Centro Adempimenti di Legge (730 Precompilato, Art. 87 CTS, Trasparenza L.124/2017)"
-            >
-              <Scale className="w-4 h-4 text-teal-300" />
-              <span className="hidden sm:inline">Adempimenti</span>
-            </button>
-
             {/* Esporta CSV */}
             <button
               onClick={() => esportaDonazioniCSV(donazioni, annoAttivo || undefined)}
@@ -418,7 +353,7 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
               title="Scarica il Registro Donazioni completo in formato CSV / Excel"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
-              <span className="hidden sm:inline">CSV</span>
+              <span>Esporta CSV</span>
             </button>
 
             {/* Registra Donazione */}
@@ -524,107 +459,304 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
 
       </div>
 
-      {/* 3. BARRA DI NAVIGAZIONE INTERNA SCHEDE */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-1.5 shadow-2xs flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1 overflow-x-auto">
-          <button
-            onClick={() => setSottoScheda('elenco')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              sottoScheda === 'elenco'
-                ? 'bg-emerald-800 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Receipt className="w-4 h-4" />
-            <span>Tutte le Donazioni & Quietanze ({donazioniFiltrate.length})</span>
-          </button>
+      {/* 3. STRUTTURA PRINCIPALE: TASTI DI SCELTA VERTICALI (UNO SOTTO L'ALTRO) + CONTENUTO SEZIONE */}
+      <div className="flex flex-col lg:flex-row items-start gap-5">
+        
+        {/* COLONNA TASTI DI SCELTA: DISPOSTI RIGOROSAMENTE UNO SOTTO L'ALTRO */}
+        <aside className="w-full lg:w-72 xl:w-80 shrink-0 space-y-4">
+          
+          <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 px-1">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                Tasti di Scelta Sezioni
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800">
+                7 Viste
+              </span>
+            </div>
 
-          <button
-            onClick={() => setSottoScheda('campagne')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              sottoScheda === 'campagne'
-                ? 'bg-emerald-800 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Target className="w-4 h-4" />
-            <span>Campagne & Vincoli ({campagne.length})</span>
-          </button>
+            {/* I Tasti di Scelta disposti UNO SOTTO L'ALTRO */}
+            <div className="flex flex-col gap-2">
+              
+              {/* 1. Tutte le Donazioni & Quietanze */}
+              <button
+                onClick={() => setSottoScheda('elenco')}
+                className={`w-full text-left p-3 rounded-xl text-xs font-bold transition flex items-center justify-between gap-2.5 cursor-pointer border ${
+                  sottoScheda === 'elenco'
+                    ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+                title="Visualizza il registro completo delle donazioni ed emetti quietanze fiscali"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`p-2 rounded-lg shrink-0 ${
+                    sottoScheda === 'elenco' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700'
+                  }`}>
+                    <Receipt className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-black">Donazioni & Quietanze</div>
+                    <div className={`text-[10px] font-normal truncate ${
+                      sottoScheda === 'elenco' ? 'text-emerald-100' : 'text-slate-400'
+                    }`}>
+                      Registro e quietanze fiscali
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-[10.5px] font-black px-2 py-0.5 rounded-full shrink-0 font-mono ${
+                  sottoScheda === 'elenco' ? 'bg-white text-emerald-900' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {donazioniFiltrate.length}
+                </span>
+              </button>
 
-          <button
-            onClick={() => setSottoScheda('conto_economico')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              sottoScheda === 'conto_economico'
-                ? 'bg-emerald-800 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span>Conto Economico Sez. C (Mod. D)</span>
-          </button>
+              {/* 2. Campagne & Vincoli Fondi */}
+              <button
+                onClick={() => setSottoScheda('campagne')}
+                className={`w-full text-left p-3 rounded-xl text-xs font-bold transition flex items-center justify-between gap-2.5 cursor-pointer border ${
+                  sottoScheda === 'campagne'
+                    ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+                title="Gestione raccolte fondi territoriali e progetti con vincolo di destinazione"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`p-2 rounded-lg shrink-0 ${
+                    sottoScheda === 'campagne' ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-700'
+                  }`}>
+                    <Target className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-black">Campagne & Vincoli</div>
+                    <div className={`text-[10px] font-normal truncate ${
+                      sottoScheda === 'campagne' ? 'text-emerald-100' : 'text-slate-400'
+                    }`}>
+                      Raccolte fondi territoriali
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-[10.5px] font-black px-2 py-0.5 rounded-full shrink-0 font-mono ${
+                  sottoScheda === 'campagne' ? 'bg-white text-emerald-900' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {campagne.length}
+                </span>
+              </button>
 
-          <button
-            onClick={() => setSottoScheda('stato_patrimoniale')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              sottoScheda === 'stato_patrimoniale'
-                ? 'bg-emerald-800 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Landmark className="w-4 h-4" />
-            <span>Stato Patrimoniale & Vincoli (Mod. C)</span>
-          </button>
+              {/* 3. Conto Economico Sez. C (Modello D) */}
+              <button
+                onClick={() => setSottoScheda('conto_economico')}
+                className={`w-full text-left p-3 rounded-xl text-xs font-bold transition flex items-center justify-between gap-2.5 cursor-pointer border ${
+                  sottoScheda === 'conto_economico'
+                    ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+                title="Rendiconto di Cassa Sezione C per il RUNTS ex DM 39/2020"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`p-2 rounded-lg shrink-0 ${
+                    sottoScheda === 'conto_economico' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700'
+                  }`}>
+                    <BarChart3 className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-black">Conto Economico Sez. C</div>
+                    <div className={`text-[10px] font-normal truncate ${
+                      sottoScheda === 'conto_economico' ? 'text-emerald-100' : 'text-slate-400'
+                    }`}>
+                      Rendiconto cassa Mod. D RUNTS
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                  sottoScheda === 'conto_economico' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-800'
+                }`}>
+                  Mod. D
+                </span>
+              </button>
 
-          <button
-            onClick={() => setSottoScheda('adempimenti')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              sottoScheda === 'adempimenti'
-                ? 'bg-emerald-800 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Scale className="w-4 h-4" />
-            <span>Centro Adempimenti (730, Art. 87, L. 124)</span>
-          </button>
+              {/* 4. Stato Patrimoniale & Riserve (Modello C) */}
+              <button
+                onClick={() => setSottoScheda('stato_patrimoniale')}
+                className={`w-full text-left p-3 rounded-xl text-xs font-bold transition flex items-center justify-between gap-2.5 cursor-pointer border ${
+                  sottoScheda === 'stato_patrimoniale'
+                    ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+                title="Stato Patrimoniale e Riserve Vincolate Modello C RUNTS"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`p-2 rounded-lg shrink-0 ${
+                    sottoScheda === 'stato_patrimoniale' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700'
+                  }`}>
+                    <Landmark className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-black">Stato Patrimoniale</div>
+                    <div className={`text-[10px] font-normal truncate ${
+                      sottoScheda === 'stato_patrimoniale' ? 'text-emerald-100' : 'text-slate-400'
+                    }`}>
+                      Patrimonio netto e vincoli
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                  sottoScheda === 'stato_patrimoniale' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-800'
+                }`}>
+                  Mod. C
+                </span>
+              </button>
 
-          <button
-            onClick={() => setSottoScheda('certificati_annuali')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              sottoScheda === 'certificati_annuali'
-                ? 'bg-emerald-800 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <FileCheck className="w-4 h-4" />
-            <span>Attestazioni Fiscali Annuali (730 / Redditi)</span>
-          </button>
+              {/* 5. Centro Adempimenti di Legge */}
+              <button
+                onClick={() => setSottoScheda('adempimenti')}
+                className={`w-full text-left p-3 rounded-xl text-xs font-bold transition flex items-center justify-between gap-2.5 cursor-pointer border ${
+                  sottoScheda === 'adempimenti'
+                    ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+                title="730 Precompilato AdE, Rendicontazione Art. 87 CTS, Trasparenza L. 124/2017"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`p-2 rounded-lg shrink-0 ${
+                    sottoScheda === 'adempimenti' ? 'bg-white/20 text-white' : 'bg-teal-50 text-teal-700'
+                  }`}>
+                    <Scale className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-black">Centro Adempimenti</div>
+                    <div className={`text-[10px] font-normal truncate ${
+                      sottoScheda === 'adempimenti' ? 'text-emerald-100' : 'text-slate-400'
+                    }`}>
+                      730 Precompilato, Art. 87, L. 124
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                  sottoScheda === 'adempimenti' ? 'bg-white/20 text-white' : 'bg-teal-50 text-teal-800'
+                }`}>
+                  Norme
+                </span>
+              </button>
 
-          <button
-            onClick={() => setSottoScheda('registro_libro')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              sottoScheda === 'registro_libro'
-                ? 'bg-emerald-800 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>Libro Registro Vidimabile CTS</span>
-          </button>
-        </div>
+              {/* 6. Attestazioni Fiscali Annuali */}
+              <button
+                onClick={() => setSottoScheda('certificati_annuali')}
+                className={`w-full text-left p-3 rounded-xl text-xs font-bold transition flex items-center justify-between gap-2.5 cursor-pointer border ${
+                  sottoScheda === 'certificati_annuali'
+                    ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+                title="Attestazioni cumulative annuali per CAF e commercialisti dei donatori"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`p-2 rounded-lg shrink-0 ${
+                    sottoScheda === 'certificati_annuali' ? 'bg-white/20 text-white' : 'bg-teal-50 text-teal-700'
+                  }`}>
+                    <FileCheck className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-black">Attestazioni Annuali</div>
+                    <div className={`text-[10px] font-normal truncate ${
+                      sottoScheda === 'certificati_annuali' ? 'text-emerald-100' : 'text-slate-400'
+                    }`}>
+                      Certificati 730 / Redditi
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-[10.5px] font-black px-2 py-0.5 rounded-full shrink-0 font-mono ${
+                  sottoScheda === 'certificati_annuali' ? 'bg-white text-emerald-900' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {riepilogoDonatoriAnnuali.length}
+                </span>
+              </button>
 
-        {sottoScheda === 'campagne' && (
-          <button
-            onClick={() => {
-              setCampagnaInModifica(null);
-              setModalCampagnaAperta(true);
-            }}
-            className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Nuova Campagna</span>
-          </button>
-        )}
-      </div>
+              {/* 7. Libro Registro Vidimabile CTS */}
+              <button
+                onClick={() => setSottoScheda('registro_libro')}
+                className={`w-full text-left p-3 rounded-xl text-xs font-bold transition flex items-center justify-between gap-2.5 cursor-pointer border ${
+                  sottoScheda === 'registro_libro'
+                    ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+                title="Libro Mastro Vidimabile con numerazione pagine conforme RUNTS"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`p-2 rounded-lg shrink-0 ${
+                    sottoScheda === 'registro_libro' ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-700'
+                  }`}>
+                    <BookOpen className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-black">Libro Registro Vidimabile</div>
+                    <div className={`text-[10px] font-normal truncate ${
+                      sottoScheda === 'registro_libro' ? 'text-emerald-100' : 'text-slate-400'
+                    }`}>
+                      Mastro ufficiale RUNTS e Revisori
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                  sottoScheda === 'registro_libro' ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-800'
+                }`}>
+                  A4
+                </span>
+              </button>
+
+            </div>
+          </div>
+
+          {/* Box Documenti Ufficiali & Stampe Rapide */}
+          <div className="bg-slate-900 rounded-2xl p-3.5 text-white border border-slate-800 shadow-xs space-y-2">
+            <div className="text-[10.5px] font-black uppercase tracking-wider text-emerald-400 px-1">
+              Documenti & Stampa Rapida
+            </div>
+            
+            <div className="flex flex-col gap-1.5">
+              {/* Libro Registro Vidimabile Modale */}
+              <button
+                onClick={() => setModalRegistroVidimabileAperta(true)}
+                className="w-full text-left px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold transition flex items-center justify-between gap-2 cursor-pointer border border-white/10"
+              >
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Stampa Libro Registro A4</span>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+
+              {/* Certificato Vincolo Fondi */}
+              <button
+                onClick={() => {
+                  setDonazionePerCertificatoVincolo(donazioni[0] || null);
+                  setModalCertificatoVincoloAperta(true);
+                }}
+                className="w-full text-left px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold transition flex items-center justify-between gap-2 cursor-pointer border border-white/10"
+              >
+                <div className="flex items-center gap-2">
+                  <Award className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Certificato Vincolo & Scheda</span>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+
+              {/* Esporta CSV */}
+              <button
+                onClick={() => esportaDonazioniCSV(donazioni, annoAttivo || undefined)}
+                className="w-full text-left px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold transition flex items-center justify-between gap-2 cursor-pointer border border-white/10"
+              >
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Download Registro CSV / Excel</span>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+            </div>
+          </div>
+
+        </aside>
+
+        {/* CONTENUTO PRINCIPALE DELLA SEZIONE SELEZIONATA */}
+        <main className="flex-1 min-w-0 w-full space-y-4">
 
       {/* ======================================================== */}
       {/* VISTA 1: ELENCO DONAZIONI & QUIETANZE                    */}
@@ -1194,6 +1326,9 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
           </div>
         </div>
       )}
+
+        </main>
+      </div>
 
       {/* 5. BOX GUIDA NORMATIVA AGEVOLAZIONI FISCALI ART. 83 */}
       <div className="bg-emerald-50/80 rounded-2xl p-5 border border-emerald-200 text-xs text-emerald-950 space-y-3">
