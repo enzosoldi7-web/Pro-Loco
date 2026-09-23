@@ -92,6 +92,9 @@ export interface DonazioneTerzi {
   note?: string;
   inviataQuietanza?: boolean;
   dataInviataQuietanza?: string;
+  stato?: 'attiva' | 'annullata_ripensamento';
+  motivoAnnullamento?: string;
+  dataAnnullamento?: string;
 }
 
 export interface QuotaAssociativa {

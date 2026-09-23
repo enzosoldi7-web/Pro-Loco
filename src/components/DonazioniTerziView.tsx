@@ -30,7 +30,13 @@ import {
   MapPin,
   Check,
   BarChart3,
-  Scale
+  Scale,
+  AlertTriangle,
+  CheckSquare,
+  Square,
+  X,
+  RotateCcw,
+  Ban
 } from 'lucide-react';
 import { 
   esportaDonazioniCSV, 
@@ -92,7 +98,16 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
   const [modalCertificatoVincoloAperta, setModalCertificatoVincoloAperta] = useState<boolean>(false);
   const [donazionePerCertificatoVincolo, setDonazionePerCertificatoVincolo] = useState<DonazioneTerzi | null>(null);
 
+  // Gestione cancellazioni per risentimento del donante e selezioni multiple
   const [idDaEliminare, setIdDaEliminare] = useState<string | null>(null);
+  const [donazioneDaCancellare, setDonazioneDaCancellare] = useState<DonazioneTerzi | null>(null);
+  const [selezionatiIds, setSelezionatiIds] = useState<string[]>([]);
+  const [modalCancellazioneTuttiAperta, setModalCancellazioneTuttiAperta] = useState<boolean>(false);
+  const [modalCancellazioneSelezionatiAperta, setModalCancellazioneSelezionatiAperta] = useState<boolean>(false);
+  const [motivoCancellazione, setMotivoCancellazione] = useState<string>('Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione ex art. 800 c.c.)');
+  const [tipoAzioneCancellazione, setTipoAzioneCancellazione] = useState<'definitiva' | 'storno'>('definitiva');
+  const [ambitoCancellazioneTutti, setAmbitoCancellazioneTutti] = useState<'anno' | 'tutti'>('anno');
+  const [feedbackMessaggio, setFeedbackMessaggio] = useState<{ tipo: 'success' | 'info'; testo: string } | null>(null);
 
   // Anno attivo
   const annoAttivo = filtroAnno === 'tutti' ? null : filtroAnno;
@@ -149,9 +164,10 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
     });
   }, [donazioni, annoAttivo, filtroTipo, filtroSoloDetraibili, filtroCampagna, ricerca, ordinamento]);
 
-  // Metriche Finanziarie Avanzate
+  // Metriche Finanziarie Avanzate (escludendo donazioni stornate per risentimento)
   const metriche = useMemo(() => {
-    const donazioniAnno = annoAttivo ? donazioni.filter(d => d.anno === annoAttivo) : donazioni;
+    const donazioniAnno = (annoAttivo ? donazioni.filter(d => d.anno === annoAttivo) : donazioni)
+      .filter(d => d.stato !== 'annullata_ripensamento');
     const totale = donazioniAnno.reduce((acc, d) => acc + (d.importo || 0), 0);
     const detraibili = donazioniAnno.filter(d => d.detraibileFiscale);
     const totaleDetraibili = detraibili.reduce((acc, d) => acc + (d.importo || 0), 0);
@@ -190,7 +206,7 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
     }>();
 
     donazioni
-      .filter(d => d.anno === annoRif && d.tipoDonatore !== 'anonimo')
+      .filter(d => d.anno === annoRif && d.tipoDonatore !== 'anonimo' && d.stato !== 'annullata_ripensamento')
       .forEach(d => {
         const chiave = (d.codiceFiscalePartitaIva || d.donatore).trim().toUpperCase();
         if (!mappa.has(chiave)) {
@@ -217,7 +233,7 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
   // Calcolo avanzamento campagne
   const campagneConAvanzamento = useMemo(() => {
     return campagne.map(camp => {
-      const donazioniDellaCampagna = donazioni.filter(d => d.campagnaId === camp.id);
+      const donazioniDellaCampagna = donazioni.filter(d => d.campagnaId === camp.id && d.stato !== 'annullata_ripensamento');
       const raccolto = donazioniDellaCampagna.reduce((acc, d) => acc + d.importo, 0);
       const percentuale = Math.min(100, Math.round((raccolto / (camp.obiettivoImporto || 1)) * 100));
       return {
@@ -228,6 +244,32 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
       };
     });
   }, [campagne, donazioni]);
+
+  // Feedback temporaneo
+  const mostraFeedback = (testo: string, tipo: 'success' | 'info' = 'success') => {
+    setFeedbackMessaggio({ tipo, testo });
+    setTimeout(() => {
+      setFeedbackMessaggio(null);
+    }, 5000);
+  };
+
+  // Toggle selezione singola
+  const handleToggleSelezione = (id: string) => {
+    setSelezionatiIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  // Seleziona / Deseleziona tutti gli inserimenti filtrati
+  const handleToggleSelezionaTutti = () => {
+    const idsFiltrati = donazioniFiltrate.map(d => d.id);
+    const tuttiSelezionati = idsFiltrati.length > 0 && idsFiltrati.every(id => selezionatiIds.includes(id));
+    if (tuttiSelezionati) {
+      setSelezionatiIds(prev => prev.filter(id => !idsFiltrati.includes(id)));
+    } else {
+      setSelezionatiIds(prev => Array.from(new Set([...prev, ...idsFiltrati])));
+    }
+  };
 
   // Salva donazione
   const handleSalvaDonazione = (donazioneAggiornata: DonazioneTerzi) => {
@@ -242,14 +284,106 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
     saveDonazioni(nuovaLista);
     setModalDonazioneAperta(false);
     setDonazioneInModifica(null);
+    mostraFeedback(`Quietanza ${donazioneAggiornata.ricevutaNumero} registrata con successo.`);
   };
 
-  // Elimina donazione
-  const handleEliminaDonazione = (id: string) => {
-    const nuovaLista = donazioni.filter(d => d.id !== id);
+  // Cancellazione singola per risentimento donante
+  const handleConfermaCancellazioneSingola = () => {
+    const target = donazioneDaCancellare || (idDaEliminare ? donazioni.find(d => d.id === idDaEliminare) : null);
+    if (!target) return;
+    const { id, donatore, ricevutaNumero } = target;
+
+    let nuovaLista: DonazioneTerzi[];
+    if (tipoAzioneCancellazione === 'storno') {
+      nuovaLista = donazioni.map(d => {
+        if (d.id === id) {
+          return {
+            ...d,
+            stato: 'annullata_ripensamento',
+            motivoAnnullamento: motivoCancellazione,
+            dataAnnullamento: new Date().toISOString().split('T')[0]
+          };
+        }
+        return d;
+      });
+      mostraFeedback(`Quietanza ${ricevutaNumero} (${donatore}) stornata per risentimento del donante.`);
+    } else {
+      nuovaLista = donazioni.filter(d => d.id !== id);
+      mostraFeedback(`Inserimento donazione ${ricevutaNumero} (${donatore}) cancellato definitivamente per risentimento del donante.`);
+    }
+
     onAggiornaDonazioni(nuovaLista);
     saveDonazioni(nuovaLista);
+    setSelezionatiIds(prev => prev.filter(x => x !== id));
+    setDonazioneDaCancellare(null);
     setIdDaEliminare(null);
+  };
+
+  // Cancellazione massiva selezionati per risentimento
+  const handleConfermaCancellazioneSelezionati = () => {
+    if (selezionatiIds.length === 0) return;
+    const count = selezionatiIds.length;
+
+    let nuovaLista: DonazioneTerzi[];
+    if (tipoAzioneCancellazione === 'storno') {
+      nuovaLista = donazioni.map(d => {
+        if (selezionatiIds.includes(d.id)) {
+          return {
+            ...d,
+            stato: 'annullata_ripensamento',
+            motivoAnnullamento: motivoCancellazione,
+            dataAnnullamento: new Date().toISOString().split('T')[0]
+          };
+        }
+        return d;
+      });
+      mostraFeedback(`${count} donazioni stornate per risentimento/ripensamento dei donanti.`);
+    } else {
+      nuovaLista = donazioni.filter(d => !selezionatiIds.includes(d.id));
+      mostraFeedback(`${count} inserimenti donazioni cancellati per risentimento dei donanti.`);
+    }
+
+    onAggiornaDonazioni(nuovaLista);
+    saveDonazioni(nuovaLista);
+    setSelezionatiIds([]);
+    setModalCancellazioneSelezionatiAperta(false);
+  };
+
+  // Cancellazione di TUTTI gli inserimenti per risentimento
+  const handleConfermaCancellazioneTutti = () => {
+    let nuovaLista: DonazioneTerzi[];
+    let messaggio = '';
+
+    if (ambitoCancellazioneTutti === 'anno' && annoAttivo) {
+      const cancellate = donazioni.filter(d => d.anno === annoAttivo).length;
+      nuovaLista = donazioni.filter(d => d.anno !== annoAttivo);
+      messaggio = `Cancellati tutti i ${cancellate} inserimenti dell'Esercizio ${annoAttivo} per risentimento dei donanti.`;
+    } else {
+      const totaleCancellate = donazioni.length;
+      nuovaLista = [];
+      messaggio = `Cancellati tutti i ${totaleCancellate} inserimenti dell'intero registro donazioni per risentimento dei donanti.`;
+    }
+
+    onAggiornaDonazioni(nuovaLista);
+    saveDonazioni(nuovaLista);
+    setSelezionatiIds([]);
+    setModalCancellazioneTuttiAperta(false);
+    mostraFeedback(messaggio);
+  };
+
+  // Elimina donazione retrocompatibile
+  const handleEliminaDonazione = (id: string) => {
+    const daEliminare = donazioni.find(d => d.id === id);
+    if (daEliminare) {
+      setDonazioneDaCancellare(daEliminare);
+      setMotivoCancellazione('Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione ex art. 800 c.c.)');
+      setTipoAzioneCancellazione('definitiva');
+    } else {
+      const nuovaLista = donazioni.filter(d => d.id !== id);
+      onAggiornaDonazioni(nuovaLista);
+      saveDonazioni(nuovaLista);
+      setIdDaEliminare(null);
+    }
   };
 
   // Salva Campagna
@@ -753,6 +887,34 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
             </div>
           </div>
 
+          {/* Box Gestione Risentimento & Diritto di Recesso Donanti */}
+          <div className="bg-rose-950/85 rounded-2xl p-3.5 text-white border border-rose-800/70 shadow-xs space-y-2">
+            <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-rose-300 px-1">
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+              <span>Revoca & Risentimento Donante</span>
+            </div>
+            
+            <p className="text-[11px] text-rose-200/80 px-1 leading-snug">
+              Diritto di ripensamento, revoca donazione ex art. 800 c.c. o cancellazione integrale degli inserimenti registrati.
+            </p>
+
+            <button
+              onClick={() => {
+                setMotivoCancellazione('Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione ex art. 800 c.c.)');
+                setAmbitoCancellazioneTutti(annoAttivo ? 'anno' : 'tutti');
+                setModalCancellazioneTuttiAperta(true);
+              }}
+              className="w-full text-left px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-bold transition flex items-center justify-between gap-2 cursor-pointer shadow-xs border border-rose-500/50"
+              title="Apre la procedura per cancellare tutti gli inserimenti per risentimento dei donatori"
+            >
+              <div className="flex items-center gap-2">
+                <Trash2 className="w-3.5 h-3.5 text-white shrink-0" />
+                <span className="truncate">Cancella Tutti Inserimenti</span>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-rose-200 shrink-0" />
+            </button>
+          </div>
+
         </aside>
 
         {/* CONTENUTO PRINCIPALE DELLA SEZIONE SELEZIONATA */}
@@ -842,9 +1004,80 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
                 <option value="donatore_asc">Donatore (A-Z)</option>
               </select>
 
+              {/* Pulsante Cancella Tutti gli Inserimenti per Risentimento */}
+              {donazioni.length > 0 && (
+                <button
+                  onClick={() => {
+                    setMotivoCancellazione('Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione ex art. 800 c.c.)');
+                    setAmbitoCancellazioneTutti(annoAttivo ? 'anno' : 'tutti');
+                    setModalCancellazioneTuttiAperta(true);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-bold border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:border-rose-300 transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                  title="Consente di cancellare tutti gli inserimenti registrati per risentimento del donante"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Cancella Inserimenti (Risentimento)</span>
+                </button>
+              )}
+
             </div>
 
           </div>
+
+          {/* Feedback Messaggio Notifica */}
+          {feedbackMessaggio && (
+            <div className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 shadow-2xs animate-in fade-in ${
+              feedbackMessaggio.tipo === 'success' 
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+                : 'bg-blue-50 border-blue-200 text-blue-900'
+            }`}>
+              <div className="flex items-center gap-2 font-semibold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{feedbackMessaggio.testo}</span>
+              </div>
+              <button 
+                onClick={() => setFeedbackMessaggio(null)} 
+                className="text-slate-500 hover:text-slate-800 p-1 font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Barra Azioni Multiple per Inserimenti Selezionati */}
+          {selezionatiIds.length > 0 && (
+            <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-2.5 text-xs font-bold text-rose-950">
+                <div className="w-7 h-7 rounded-lg bg-rose-600 text-white flex items-center justify-center font-mono font-black text-xs">
+                  {selezionatiIds.length}
+                </div>
+                <span>
+                  {selezionatiIds.length === 1 ? '1 donazione selezionata' : `${selezionatiIds.length} donazioni selezionate`} per cancellazione (Risentimento del donante)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setMotivoCancellazione('Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione ex art. 800 c.c.)');
+                    setTipoAzioneCancellazione('definitiva');
+                    setModalCancellazioneSelezionatiAperta(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Cancella Selezionati per Risentimento</span>
+                </button>
+
+                <button
+                  onClick={() => setSelezionatiIds([])}
+                  className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition cursor-pointer"
+                >
+                  Deseleziona
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Tabella Donazioni */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
@@ -857,7 +1090,7 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
               </div>
 
               <span className="text-[11px] text-slate-500 font-medium">
-                Totale Parziale Filtrato: <strong className="text-slate-900 font-bold font-mono">€ {donazioniFiltrate.reduce((a, b) => a + (b.importo || 0), 0).toFixed(2)}</strong>
+                Totale Parziale Filtrato: <strong className="text-slate-900 font-bold font-mono">€ {donazioniFiltrate.filter(d => d.stato !== 'annullata_ripensamento').reduce((a, b) => a + (b.importo || 0), 0).toFixed(2)}</strong>
               </span>
             </div>
 
@@ -883,6 +1116,15 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      <th className="py-3 px-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={donazioniFiltrate.length > 0 && donazioniFiltrate.every(d => selezionatiIds.includes(d.id))}
+                          onChange={handleToggleSelezionaTutti}
+                          className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          title="Seleziona / Deseleziona tutti gli inserimenti visualizzati"
+                        />
+                      </th>
                       <th className="py-3 px-4">N° Quietanza / Data</th>
                       <th className="py-3 px-4">Donatore & Dati Fiscali</th>
                       <th className="py-3 px-4">Tipologia</th>
@@ -895,13 +1137,32 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {donazioniFiltrate.map((donazione) => (
-                      <tr key={donazione.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr 
+                        key={donazione.id} 
+                        className={`hover:bg-slate-50/70 transition-colors ${
+                          selezionatiIds.includes(donazione.id) ? 'bg-rose-50/50' : ''
+                        } ${donazione.stato === 'annullata_ripensamento' ? 'opacity-70 bg-amber-50/30' : ''}`}
+                      >
+                        {/* Checkbox selezione riga */}
+                        <td className="py-3 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selezionatiIds.includes(donazione.id)}
+                            onChange={() => handleToggleSelezione(donazione.id)}
+                            className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                        </td>
                         
                         {/* Ricevuta & Data */}
                         <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
                             <FileCheck className="w-3.5 h-3.5 text-emerald-700" />
                             <span className="font-mono text-emerald-950 font-black">{donazione.ricevutaNumero}</span>
+                            {donazione.stato === 'annullata_ripensamento' && (
+                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                                Stornata (Risentimento)
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
                             <Calendar className="w-3 h-3 text-slate-400" />
@@ -960,7 +1221,9 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
 
                         {/* Importo */}
                         <td className="py-3 px-4 whitespace-nowrap text-right">
-                          <span className="font-black text-slate-900 text-sm font-mono">
+                          <span className={`font-black text-sm font-mono ${
+                            donazione.stato === 'annullata_ripensamento' ? 'line-through text-slate-400' : 'text-slate-900'
+                          }`}>
                             € {donazione.importo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </td>
@@ -1018,11 +1281,15 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
                               <Edit className="w-4 h-4" />
                             </button>
 
-                            {/* Elimina */}
+                            {/* Elimina / Cancella per Risentimento Donante */}
                             <button
-                              onClick={() => setIdDaEliminare(donazione.id)}
+                              onClick={() => {
+                                setDonazioneDaCancellare(donazione);
+                                setMotivoCancellazione('Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione ex art. 800 c.c.)');
+                                setTipoAzioneCancellazione('definitiva');
+                              }}
                               className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                              title="Elimina Donazione"
+                              title="Cancella Inserimento per Risentimento / Ripensamento del Donante"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1442,36 +1709,329 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
         />
       )}
 
-      {/* 7. Modale Conferma Eliminazione */}
-      {idDaEliminare && (
+      {/* 7. Modale Cancellazione Singola per Risentimento / Ripensamento del Donante */}
+      {(donazioneDaCancellare || (idDaEliminare && donazioni.find(d => d.id === idDaEliminare))) && (() => {
+        const item = donazioneDaCancellare || donazioni.find(d => d.id === idDaEliminare)!;
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+            <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 border border-slate-200 space-y-4">
+              
+              <div className="flex items-center gap-3 text-rose-600 pb-3 border-b border-slate-100">
+                <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h4 className="font-black text-slate-900 text-sm">
+                    Cancellazione Inserimento per Risentimento del Donante
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Revoca donazione, diritto di ripensamento o richiesta formale di cancellazione dati
+                  </p>
+                </div>
+              </div>
+
+              {/* Dettagli della donazione */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Soggetto Donatore:</span>
+                  <strong className="text-slate-900">{item.donatore}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">N° Quietanza / Data:</span>
+                  <span className="font-mono font-bold text-slate-800">{item.ricevutaNumero} ({item.data})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Importo Donato:</span>
+                  <strong className="text-rose-700 font-mono font-black text-sm">€ {item.importo.toFixed(2)}</strong>
+                </div>
+                {item.codiceFiscalePartitaIva && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Codice Fiscale / P.IVA:</span>
+                    <span className="font-mono text-slate-700">{item.codiceFiscalePartitaIva}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Scelta modalità cancellazione */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Modalità di Cancellazione:
+                </label>
+                <div className="space-y-2">
+                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
+                    tipoAzioneCancellazione === 'definitiva' ? 'bg-rose-50/70 border-rose-300' : 'bg-white border-slate-200'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="tipoCancellazione"
+                      checked={tipoAzioneCancellazione === 'definitiva'}
+                      onChange={() => setTipoAzioneCancellazione('definitiva')}
+                      className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                    />
+                    <div>
+                      <div className="font-bold text-xs text-slate-900">
+                        Cancellazione Definitiva dell'Inserimento (Consigliato)
+                      </div>
+                      <div className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                        Elimina completamente il record dal registro 1.4, annullando la registrazione e ricalcolando il saldo di cassa.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
+                    tipoAzioneCancellazione === 'storno' ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="tipoCancellazione"
+                      checked={tipoAzioneCancellazione === 'storno'}
+                      onChange={() => setTipoAzioneCancellazione('storno')}
+                      className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                    />
+                    <div>
+                      <div className="font-bold text-xs text-slate-900">
+                        Storno Contabile con Ricevuta Annullata
+                      </div>
+                      <div className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                        Mantiene la quietanza visibile ma contrassegnata come "Stornata per Risentimento del Donante", escludendola dai totali economici e dall'AdE.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Causale di Risentimento */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Causale Formale di Risentimento / Revoca:
+                </label>
+                <select
+                  value={motivoCancellazione}
+                  onChange={(e) => setMotivoCancellazione(e.target.value)}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 font-medium outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
+                >
+                  <option value="Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione ex art. 800 c.c.)">
+                    Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione)
+                  </option>
+                  <option value="Richiesta formale di storno e rimborso somme da parte del donante">
+                    Richiesta formale di storno e rimborso somme da parte del donante
+                  </option>
+                  <option value="Opposizione donatore e revoca consenso trattamento / cancellazione dati personali">
+                    Opposizione donatore e revoca consenso trattamento / cancellazione dati personali
+                  </option>
+                  <option value="Contestazione destinazione fondi / mancata adesione alla finalità">
+                    Contestazione destinazione fondi / mancata adesione alla finalità
+                  </option>
+                  <option value="Errore materiale di registrazione o duplicato">
+                    Errore materiale di registrazione o duplicato
+                  </option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setDonazioneDaCancellare(null);
+                    setIdDaEliminare(null);
+                  }}
+                  className="px-3.5 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition cursor-pointer"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleConfermaCancellazioneSingola}
+                  className="px-4 py-2 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>
+                    {tipoAzioneCancellazione === 'definitiva' ? 'Conferma Cancellazione Inserimento' : 'Conferma Storno Inserimento'}
+                  </span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 8. Modale Cancellazione Inserimenti Selezionati per Risentimento */}
+      {modalCancellazioneSelezionatiAperta && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 border border-slate-200 space-y-4">
-            <div className="flex items-center gap-3 text-rose-600">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 space-y-4">
+            
+            <div className="flex items-center gap-3 text-rose-600 pb-3 border-b border-slate-100">
               <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-                <Trash2 className="w-5 h-5" />
+                <Trash2 className="w-5 h-5 text-rose-600" />
               </div>
               <div>
-                <h4 className="font-bold text-slate-900 text-sm">Elimina Donazione</h4>
-                <p className="text-xs text-slate-500">Confermi l'eliminazione?</p>
+                <h4 className="font-black text-slate-900 text-sm">
+                  Cancellazione {selezionatiIds.length} Inserimenti Selezionati
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Revoca per risentimento / ripensamento dei soggetti donatori
+                </p>
               </div>
             </div>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Questa azione cancellerà permanentemente la quietanza fiscale dal registro 1.4 e ricalcolerà i totali di cassa.
-            </p>
-            <div className="flex items-center justify-end gap-2 pt-2">
+
+            <div className="p-3.5 bg-rose-50/60 rounded-xl border border-rose-200 text-xs space-y-2 text-rose-950">
+              <div className="flex justify-between font-bold">
+                <span>Donazioni selezionate:</span>
+                <span>{selezionatiIds.length} registrazioni</span>
+              </div>
+              <div className="flex justify-between font-bold">
+                <span>Totale importo da revocare:</span>
+                <span className="font-mono">
+                  € {donazioni.filter(d => selezionatiIds.includes(d.id)).reduce((a, b) => a + (b.importo || 0), 0).toFixed(2)}
+                </span>
+              </div>
+              <p className="text-[11px] text-rose-800 leading-relaxed pt-1 border-t border-rose-200">
+                Confermando, gli inserimenti selezionati verranno rimossi dal registro a causa del risentimento del donante e il rendiconto di cassa verrà tempestivamente ricalcolato.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 block">
+                Motivazione Ufficiale:
+              </label>
+              <input
+                type="text"
+                value={motivoCancellazione}
+                onChange={(e) => setMotivoCancellazione(e.target.value)}
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 font-medium outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
               <button
-                onClick={() => setIdDaEliminare(null)}
-                className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition cursor-pointer"
+                onClick={() => setModalCancellazioneSelezionatiAperta(false)}
+                className="px-3.5 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition cursor-pointer"
               >
                 Annulla
               </button>
               <button
-                onClick={() => handleEliminaDonazione(idDaEliminare)}
-                className="px-3.5 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold transition cursor-pointer"
+                onClick={handleConfermaCancellazioneSelezionati}
+                className="px-4 py-2 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
               >
-                Elimina definitivamente
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Cancella {selezionatiIds.length} Inserimenti</span>
               </button>
             </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 9. Modale Cancellazione di TUTTI gli Inserimenti (Risentimento Donanti) */}
+      {modalCancellazioneTuttiAperta && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 border border-slate-200 space-y-4">
+            
+            <div className="flex items-center gap-3 text-rose-600 pb-3 border-b border-slate-100">
+              <div className="w-11 h-11 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 text-rose-600" />
+              </div>
+              <div>
+                <h4 className="font-black text-slate-900 text-sm">
+                  Cancellazione Massiva Inserimenti Donazioni (Punto 1.4)
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Revoca e cancellazione di tutti gli inserimenti per risentimento / ripensamento donante
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Questa procedura consente di cancellare gli inserimenti delle donazioni registrate a seguito del <strong>risentimento del donante</strong>, ripensamento o revoca formale del contributo (Art. 800 c.c. / opposizione).
+            </p>
+
+            {/* Selezione Ambito Cancellazione */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 block">
+                Seleziona quali inserimenti cancellare:
+              </label>
+              
+              <div className="space-y-2">
+                {annoAttivo && (
+                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
+                    ambitoCancellazioneTutti === 'anno' ? 'bg-rose-50/70 border-rose-300' : 'bg-white border-slate-200'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="ambitoCancellazione"
+                      checked={ambitoCancellazioneTutti === 'anno'}
+                      onChange={() => setAmbitoCancellazioneTutti('anno')}
+                      className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-slate-900">
+                        Cancella tutte le donazioni dell'Esercizio {annoAttivo}
+                      </span>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        Rimuove {donazioni.filter(d => d.anno === annoAttivo).length} registrazioni (Totale: € {donazioni.filter(d => d.anno === annoAttivo).reduce((a, b) => a + (b.importo || 0), 0).toFixed(2)})
+                      </div>
+                    </div>
+                  </label>
+                )}
+
+                <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
+                  ambitoCancellazioneTutti === 'tutti' ? 'bg-rose-50/70 border-rose-300' : 'bg-white border-slate-200'
+                }`}>
+                  <input
+                    type="radio"
+                    name="ambitoCancellazione"
+                    checked={ambitoCancellazioneTutti === 'tutti'}
+                    onChange={() => setAmbitoCancellazioneTutti('tutti')}
+                    className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-900">
+                      Cancella TUTTI gli inserimenti dell'archivio (Tutti gli anni)
+                    </span>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      Rimuove tutti i {donazioni.length} inserimenti registrati (Totale storico: € {donazioni.reduce((a, b) => a + (b.importo || 0), 0).toFixed(2)})
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Motivo di Risentimento */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 block">
+                Motivazione Formale di Risentimento / Revoca:
+              </label>
+              <input
+                type="text"
+                value={motivoCancellazione}
+                onChange={(e) => setMotivoCancellazione(e.target.value)}
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 font-medium outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span>
+                Attenzione: la cancellazione è immediata e azzererà la cassa e le metriche delle donazioni eliminate. Se desideri salvare una copia di sicurezza prima di cancellare, puoi scaricare il file CSV.
+              </span>
+            </div>
+
+            {/* Azioni Modale */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setModalCancellazioneTuttiAperta(false)}
+                className="px-3.5 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition cursor-pointer"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleConfermaCancellazioneTutti}
+                className="px-4 py-2 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Conferma Cancellazione di Tutti gli Inserimenti</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}
