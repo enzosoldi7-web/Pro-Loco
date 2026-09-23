@@ -1989,6 +1989,97 @@ export function esportaDonazioniCSV(donazioni: DonazioneTerzi[], anno?: number):
   document.body.removeChild(link);
 }
 
+export function esportaAdE730CSV(donazioni: DonazioneTerzi[], anno: number, config: ProLocoInfo): void {
+  // Specifiche tracciato comunicazione erogazioni liberali DM MEF 3/2/2021 per Modello 730 Precompilato
+  const intestazioni = [
+    'Codice Fiscale Ente Ricevente',
+    'Denominazione Ente (Pro Loco)',
+    'Anno Fiscale di Riferimento',
+    'Codice Fiscale Donatore (Persona Fisica)',
+    'Cognome e Nome / Denominazione Donatore',
+    'Data Erogazione (AAAA-MM-GG)',
+    'Importo Erogazione Liberale (€)',
+    'Mezzo di Pagamento Tracciabile (1=Bonifico, 2=POS/Carta, 3=Altro tracciabile)',
+    'Opposizione all\'utilizzo dei dati per 730 Precompilato (0=No, 1=Si)',
+    'Riferimento Ricevuta / Protocollo',
+    'Tipologia Detrazione (30% IRPEF ex Art. 83 CTS)'
+  ];
+
+  // Solo donazioni dell'anno con metodo tracciabile da privati cittadini con CF
+  const idonei = donazioni.filter(d => 
+    d.anno === anno && 
+    d.tipoDonatore === 'privato' && 
+    d.metodo !== 'Contanti' &&
+    d.detraibileFiscale !== false &&
+    d.codiceFiscalePartitaIva &&
+    d.codiceFiscalePartitaIva.trim().length === 16
+  );
+
+  const righe = idonei.map(d => {
+    const codMetodo = d.metodo === 'Bonifico Bancario' ? '1' : d.metodo === 'POS / Carta' ? '2' : '3';
+    const opposizione = d.opposizione730 ? '1' : '0';
+    return [
+      `"${config.codiceFiscale}"`,
+      `"${config.nome.replace(/"/g, '""')}"`,
+      `"${anno}"`,
+      `"${d.codiceFiscalePartitaIva?.trim().toUpperCase()}"`,
+      `"${d.donatore.replace(/"/g, '""')}"`,
+      `"${d.data}"`,
+      `"${d.importo.toFixed(2)}"`,
+      `"${codMetodo}"`,
+      `"${opposizione}"`,
+      `"${d.ricevutaNumero}"`,
+      `"Art. 83 c.1 D.Lgs. 117/2017"`
+    ].join(';');
+  });
+
+  const csvContent = '\uFEFF' + [intestazioni.join(';'), ...righe].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `Prospetto_AdE_730_Precompilato_Erogazioni_${config.codiceFiscale}_${anno}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+export function esportaTrasparenzaL124CSV(donazioni: DonazioneTerzi[], anno: number, config: ProLocoInfo): void {
+  // Prospetto Obblighi di Trasparenza e Pubblicità ex Legge 124/2017 (> 10.000 €)
+  const intestazioni = [
+    'Soggetto Ricevente (Denominazione)',
+    'Codice Fiscale Ricevente',
+    'Soggetto Erogatore (Denominazione / Ragione Sociale)',
+    'Codice Fiscale / P.IVA Erogatore',
+    'Somma Incassata (€)',
+    'Data di Incasso (AAAA-MM-GG)',
+    'Causale Fiscale / Tipologia Contributo o Liberalità',
+    'Elemento Giustificativo / Delibera C.D.'
+  ];
+
+  const donazioniAnno = donazioni.filter(d => d.anno === anno);
+  const righe = donazioniAnno.map(d => [
+    `"${config.nome.replace(/"/g, '""')}"`,
+    `"${config.codiceFiscale}"`,
+    `"${d.donatore.replace(/"/g, '""')}"`,
+    `"${d.codiceFiscalePartitaIva || 'N/D'}"`,
+    `"${d.importo.toFixed(2)}"`,
+    `"${d.data}"`,
+    `"${(d.causale || 'Erogazione liberale').replace(/"/g, '""')}"`,
+    `"${(d.deliberaConsiglio || `Ricevuta n. ${d.ricevutaNumero}`).replace(/"/g, '""')}"`
+  ].join(';'));
+
+  const csvContent = '\uFEFF' + [intestazioni.join(';'), ...righe].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `Prospetto_Trasparenza_L124_Erogazioni_${anno}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 export function esportaBilancioCompletoCSV(
   soci: Socio[], 
   eventi: ProLocoEvento[], 
@@ -2185,15 +2276,21 @@ export function esportaBackupJSON(
   soci: Socio[], 
   config: ProLocoInfo, 
   eventi?: ProLocoEvento[],
-  donazioni?: DonazioneTerzi[]
+  donazioni?: DonazioneTerzi[],
+  campagne?: CampagnaRaccoltaFondi[],
+  sitoConfig?: SitoWebConfig,
+  archivioGiornalini?: EdizioneGiornalino[]
 ): void {
   const data = {
-    versione: '2.1',
+    versione: '3.0',
     dataEsportazione: new Date().toISOString(),
     configurazione: config,
     soci: soci,
     eventi: eventi || loadEventi(),
-    donazioni: donazioni || loadDonazioni()
+    donazioni: donazioni || loadDonazioni(),
+    campagne: campagne || loadCampagneFondi(),
+    sitoConfig: sitoConfig || loadSitoWebConfig(),
+    archivioGiornalini: archivioGiornalini || loadArchivioGiornalini()
   };
   const jsonString = JSON.stringify(data, null, 2);
   const blob = new Blob([jsonString], { type: 'application/json' });
@@ -2210,6 +2307,7 @@ export function azzeraDatabase(): void {
   saveSoci([]);
   saveEventi([]);
   saveDonazioni([]);
+  saveCampagneFondi([]);
 }
 
 export function esportaCodiceSitoHTML(

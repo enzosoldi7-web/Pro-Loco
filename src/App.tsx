@@ -9,7 +9,8 @@ import {
   SottoTabGestionale,
   GiornalinoConfig,
   EdizioneGiornalino,
-  DonazioneTerzi
+  DonazioneTerzi,
+  CampagnaRaccoltaFondi
 } from './types';
 import { 
   loadSoci, 
@@ -21,9 +22,12 @@ import {
   loadEventi,
   saveEventi,
   INITIAL_EVENTI,
+  INITIAL_DONAZIONI,
+  INITIAL_CAMPAGNE_FONDI,
   ripristinaEventiSimulati,
   loadDonazioni,
   saveDonazioni,
+  saveCampagneFondi,
   loadSitoWebConfig,
   saveSitoWebConfig,
   loadGiornalinoConfig,
@@ -186,12 +190,15 @@ export default function App() {
     saveDonazioni(nuoveDonazioni);
   };
 
-  // Ripristino dati di prova realistici (Soci, Eventi, Donazioni)
+  // Ripristino dati di prova realistici (Soci, Eventi, Donazioni, Campagne)
   const handleRipristinaDemo = () => {
     setSoci(INITIAL_SOCI);
     saveSoci(INITIAL_SOCI);
     setEventi(INITIAL_EVENTI);
     saveEventi(INITIAL_EVENTI);
+    setDonazioni(INITIAL_DONAZIONI);
+    saveDonazioni(INITIAL_DONAZIONI);
+    saveCampagneFondi(INITIAL_CAMPAGNE_FONDI);
     setConfig(DEFAULT_PRO_LOCO);
     saveProLocoConfig(DEFAULT_PRO_LOCO);
   };
@@ -202,7 +209,7 @@ export default function App() {
     setEventi(ripristinati);
   };
 
-  // Azzeramento completo dell'intero database (Soci, Eventi, Quote, Donazioni)
+  // Azzeramento completo dell'intero database (Soci, Eventi, Quote, Donazioni, Campagne)
   const handleAzzeraDatabase = () => {
     setSoci([]);
     saveSoci([]);
@@ -210,6 +217,7 @@ export default function App() {
     saveEventi([]);
     setDonazioni([]);
     saveDonazioni([]);
+    saveCampagneFondi([]);
     setSocioModale(null);
     setSocioTessera(null);
     setSocioQuote(null);
@@ -220,7 +228,15 @@ export default function App() {
   };
 
   // Importazione backup JSON
-  const handleImportaBackup = (dati: { soci: Socio[]; config: ProLocoInfo; eventi?: ProLocoEvento[]; donazioni?: DonazioneTerzi[] }) => {
+  const handleImportaBackup = (dati: { 
+    soci: Socio[]; 
+    config: ProLocoInfo; 
+    eventi?: ProLocoEvento[]; 
+    donazioni?: DonazioneTerzi[];
+    campagne?: CampagnaRaccoltaFondi[];
+    sitoConfig?: SitoWebConfig;
+    archivioGiornalini?: EdizioneGiornalino[];
+  }) => {
     setSoci(dati.soci);
     saveSoci(dati.soci);
     if (dati.eventi && Array.isArray(dati.eventi)) {
@@ -230,6 +246,17 @@ export default function App() {
     if (dati.donazioni && Array.isArray(dati.donazioni)) {
       setDonazioni(dati.donazioni);
       saveDonazioni(dati.donazioni);
+    }
+    if (dati.campagne && Array.isArray(dati.campagne)) {
+      saveCampagneFondi(dati.campagne);
+    }
+    if (dati.sitoConfig) {
+      setSitoConfig(dati.sitoConfig);
+      saveSitoWebConfig(dati.sitoConfig);
+    }
+    if (dati.archivioGiornalini && Array.isArray(dati.archivioGiornalini)) {
+      setArchivioGiornalini(dati.archivioGiornalini);
+      saveArchivioGiornalini(dati.archivioGiornalini);
     }
     if (dati.config) {
       setConfig(dati.config);
@@ -314,6 +341,7 @@ export default function App() {
           config={config}
           soci={soci}
           eventi={eventi}
+          donazioni={donazioni}
           sitoConfig={sitoConfig}
           giornalinoConfig={giornalinoConfig}
           archivioGiornalini={archivioGiornalini}
@@ -625,6 +653,20 @@ export default function App() {
             eventi={eventi}
             config={config}
             annoSelezionato={annoSelezionato}
+            donazioni={donazioni}
+            onSalvaDonazione={(donazione) => {
+              const esiste = donazioni.some(d => d.id === donazione.id);
+              const nuove = esiste 
+                ? donazioni.map(d => d.id === donazione.id ? donazione : d) 
+                : [donazione, ...donazioni];
+              setDonazioni(nuove);
+              saveDonazioni(nuove);
+            }}
+            onEliminaDonazione={(id) => {
+              const nuove = donazioni.filter(d => d.id !== id);
+              setDonazioni(nuove);
+              saveDonazioni(nuove);
+            }}
             onCambiaAnno={setAnnoSelezionato}
             onApriStampaBilancio={() => setMostraStampaBilancio(true)}
             onVaiASocio={(socioId) => {

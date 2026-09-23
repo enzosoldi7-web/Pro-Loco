@@ -514,10 +514,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                     <div>
                       <span className="text-xs font-bold text-slate-800 group-hover/sub:text-emerald-900 block">
-                        1.4 Donazioni Conto Terzi
+                        1.4 Donazioni, Rendiconto & Adempimenti
                       </span>
                       <span className="text-[10.5px] text-slate-500">
-                        Art. 83 CTS • Ricevute fiscali
+                        Art. 83 CTS • 730 Precompilato • Mod. C/D RUNTS • Certificati
                       </span>
                     </div>
                   </div>

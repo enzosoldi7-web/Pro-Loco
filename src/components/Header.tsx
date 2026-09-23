@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProLocoInfo, Socio, ProLocoEvento, SitoWebConfig, DonazioneTerzi } from '../types';
+import { ProLocoInfo, Socio, ProLocoEvento, SitoWebConfig, DonazioneTerzi, CampagnaRaccoltaFondi, EdizioneGiornalino } from '../types';
 import { 
   Building2, 
   Calendar, 
@@ -46,7 +46,7 @@ interface HeaderProps {
   onNuovoEvento?: () => void;
   onApriImpostazioni: () => void;
   onApriApkModal: () => void;
-  onImportaBackup: (dati: { soci: Socio[]; config: ProLocoInfo; eventi?: ProLocoEvento[] }) => void;
+  onImportaBackup: (dati: { soci: Socio[]; config: ProLocoInfo; eventi?: ProLocoEvento[]; donazioni?: DonazioneTerzi[]; campagne?: CampagnaRaccoltaFondi[]; sitoConfig?: SitoWebConfig; archivioGiornalini?: EdizioneGiornalino[] }) => void;
   onRipristinaDemo: () => void;
   onApriStampaBilancio?: () => void;
   onApriStampaLibroSoci?: () => void;
@@ -107,7 +107,11 @@ export const Header: React.FC<HeaderProps> = ({
           onImportaBackup({
             soci: parsed.soci,
             config: parsed.configurazione || config,
-            eventi: parsed.eventi && Array.isArray(parsed.eventi) ? parsed.eventi : undefined
+            eventi: parsed.eventi && Array.isArray(parsed.eventi) ? parsed.eventi : undefined,
+            donazioni: parsed.donazioni && Array.isArray(parsed.donazioni) ? parsed.donazioni : undefined,
+            campagne: parsed.campagne && Array.isArray(parsed.campagne) ? parsed.campagne : undefined,
+            sitoConfig: parsed.sitoConfig || undefined,
+            archivioGiornalini: parsed.archivioGiornalini || undefined
           });
           setMostraMenuBackup(false);
         } else {
@@ -215,7 +219,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                   <button
                     onClick={() => {
-                      esportaBackupJSON(soci, config, eventi);
+                      esportaBackupJSON(soci, config, eventi, donazioni);
                       setMostraMenuBackup(false);
                     }}
                     className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 cursor-pointer"
@@ -468,7 +472,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <HeartHandshake className="w-4 h-4 text-emerald-600" />
-            <span>1.4 Donazioni Conto Terzi</span>
+            <span>1.4 Donazioni & Erogazioni Liberali</span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
               tabAttivo === 'conto_terzi' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
             }`}>

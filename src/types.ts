@@ -49,6 +49,12 @@ export interface CampagnaRaccoltaFondi {
   dataInizio: string;
   dataFine?: string;
   responsabileProgetto?: string;
+  luogoSvolgimento?: string; // Piazza, centro storico, gazebo
+  oneriSostenuti?: number; // Costi e spese organizzative documentate per la raccolta (€)
+  deliberaConsiglio?: string; // Es. "Delibera C.D. n. 4 del 12/03/2026"
+  relazioneIllustrativa?: string; // Relazione del Presidente ex Art. 87 D.Lgs. 117/2017
+  dataApprovazioneRendiconto?: string;
+  approvatoAssemblea?: boolean;
 }
 
 export interface DonazioneTerzi {
@@ -70,11 +76,19 @@ export interface DonazioneTerzi {
   estremiTracciabilita?: string; // Es. "CRO/TRN 19283741920 - Intesa Sanpaolo"
   ricevutaNumero: string; // Es. "DON-2026/001"
   destinazione?: string; // Es. "Cultura & Ambiente", "Feste & Sagre", "Solidarietà", "Generale"
+  destinazioneVincolata?: boolean; // Se la somma è vincolata e intoccabile per un progetto deliberato
+  spesaEffettuataProgetto?: number; // Quota già impiegata/liquidata per il progetto vincolato (€)
+  dettaglioImpiego?: string; // Note sull'impiego effettivo dei fondi
+  oneriCorrelati?: number; // Commissioni bancarie/POS o spese vive gestione donazione (€)
   campagnaId?: string;
   eventoCollegatoId?: string;
   eventoCollegatoTitolo?: string;
   deliberaConsiglio?: string; // Es. "Delibera C.D. verbale n. 3 del 15/02/2026"
   detraibileFiscale?: boolean; // Attestazione erogazione liberale Terzo Settore (Art. 83 D.Lgs. 117/2017)
+  opposizione730?: boolean; // Donatore ha esercitato il diritto di opposizione alla trasmissione all'Agenzia delle Entrate (DM MEF 3/2/2021)
+  trasmessaAdE?: boolean; // Dati trasmessi con successo all'Agenzia delle Entrate
+  dataTrasmissioneAdE?: string;
+  protocolloInvioAdE?: string;
   note?: string;
   inviataQuietanza?: boolean;
   dataInviataQuietanza?: string;

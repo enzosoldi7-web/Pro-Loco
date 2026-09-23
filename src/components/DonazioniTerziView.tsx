@@ -28,7 +28,9 @@ import {
   ExternalLink,
   Users,
   MapPin,
-  Check
+  Check,
+  BarChart3,
+  Scale
 } from 'lucide-react';
 import { 
   esportaDonazioniCSV, 
@@ -41,6 +43,10 @@ import { DonazioneRicevutaModal } from './DonazioneRicevutaModal';
 import { DonazioneCertificatoAnnualeModal } from './DonazioneCertificatoAnnualeModal';
 import { DonazioneRegistroVidimabileModal } from './DonazioneRegistroVidimabileModal';
 import { CampagnaFondiModal } from './CampagnaFondiModal';
+import { DonazioneContoEconomico } from './DonazioneContoEconomico';
+import { DonazioneStatoPatrimoniale } from './DonazioneStatoPatrimoniale';
+import { DonazioneAdempimentiModal } from './DonazioneAdempimentiModal';
+import { DonazioneCertificatoVincoloModal } from './DonazioneCertificatoVincoloModal';
 
 interface DonazioniTerziViewProps {
   donazioni: DonazioneTerzi[];
@@ -50,7 +56,7 @@ interface DonazioniTerziViewProps {
   onAggiornaDonazioni: (nuovaLista: DonazioneTerzi[]) => void;
 }
 
-type SottoScheda = 'elenco' | 'campagne' | 'certificati_annuali' | 'registro_libro';
+type SottoScheda = 'elenco' | 'campagne' | 'conto_economico' | 'stato_patrimoniale' | 'adempimenti' | 'certificati_annuali' | 'registro_libro';
 
 export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
   donazioni,
@@ -82,6 +88,9 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
 
   const [modalCampagnaAperta, setModalCampagnaAperta] = useState<boolean>(false);
   const [campagnaInModifica, setCampagnaInModifica] = useState<CampagnaRaccoltaFondi | null>(null);
+
+  const [modalCertificatoVincoloAperta, setModalCertificatoVincoloAperta] = useState<boolean>(false);
+  const [donazionePerCertificatoVincolo, setDonazionePerCertificatoVincolo] = useState<DonazioneTerzi | null>(null);
 
   const [idDaEliminare, setIdDaEliminare] = useState<string | null>(null);
 
@@ -258,6 +267,18 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
     setCampagnaInModifica(null);
   };
 
+  const handleAggiornaSingolaDonazione = (donazioneAggiornata: DonazioneTerzi) => {
+    const nuovaLista = donazioni.map(d => d.id === donazioneAggiornata.id ? donazioneAggiornata : d);
+    onAggiornaDonazioni(nuovaLista);
+    saveDonazioni(nuovaLista);
+  };
+
+  const handleAggiornaCampagna = (campagnaAggiornata: CampagnaRaccoltaFondi) => {
+    const nuove = campagne.map(c => c.id === campagnaAggiornata.id ? campagnaAggiornata : c);
+    setCampagne(nuove);
+    saveCampagneFondi(nuove);
+  };
+
   const getBadgeTipoDonatore = (tipo: TipoDonatore) => {
     switch (tipo) {
       case 'azienda':
@@ -328,34 +349,76 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
             {/* Pulsante Libro Vidimabile */}
             <button
               onClick={() => setModalRegistroVidimabileAperta(true)}
-              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
               title="Visualizza e stampa il Libro Registro Vidimabile ufficiale per RUNTS e Revisori"
             >
               <BookOpen className="w-4 h-4 text-amber-300" />
-              <span className="hidden sm:inline">Libro Registro</span>
+              <span className="hidden xl:inline">Libro Registro</span>
             </button>
 
-            {/* Certificato 730 */}
+            {/* Certificato Vincolo & Proposta */}
             <button
               onClick={() => {
-                setDonatoreSelezionatoCertificato(undefined);
-                setModalCertificatoAnnualeAperta(true);
+                setDonazionePerCertificatoVincolo(donazioni[0] || null);
+                setModalCertificatoVincoloAperta(true);
               }}
-              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Genera l'Attestazione Fiscale Annuale per il 730 o Modello Redditi del donatore"
+              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Attestato Ufficiale di Destinazione Vincolata dei Fondi e Scheda Proposta Bonifico"
             >
-              <FileCheck className="w-4 h-4 text-teal-300" />
-              <span className="hidden sm:inline">Attestazione 730</span>
+              <Award className="w-4 h-4 text-amber-400" />
+              <span className="hidden sm:inline">Certificato Vincolo</span>
+            </button>
+
+            {/* Conto Economico */}
+            <button
+              onClick={() => setSottoScheda('conto_economico')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                sottoScheda === 'conto_economico'
+                  ? 'bg-emerald-600 text-white border-emerald-400'
+                  : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+              }`}
+              title="Conto Economico e Rendiconto Sezione C per cassa Modello D RUNTS"
+            >
+              <BarChart3 className="w-4 h-4 text-emerald-300" />
+              <span className="hidden sm:inline">Conto Economico</span>
+            </button>
+
+            {/* Stato Patrimoniale */}
+            <button
+              onClick={() => setSottoScheda('stato_patrimoniale')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                sottoScheda === 'stato_patrimoniale'
+                  ? 'bg-indigo-600 text-white border-indigo-400'
+                  : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+              }`}
+              title="Stato Patrimoniale Modello C RUNTS per Donazioni e Fondi Vincolati"
+            >
+              <Landmark className="w-4 h-4 text-indigo-300" />
+              <span className="hidden sm:inline">Stato Patrimoniale</span>
+            </button>
+
+            {/* Adempimenti RUNTS & Fiscale */}
+            <button
+              onClick={() => setSottoScheda('adempimenti')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                sottoScheda === 'adempimenti'
+                  ? 'bg-teal-600 text-white border-teal-400'
+                  : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+              }`}
+              title="Centro Adempimenti di Legge (730 Precompilato, Art. 87 CTS, Trasparenza L.124/2017)"
+            >
+              <Scale className="w-4 h-4 text-teal-300" />
+              <span className="hidden sm:inline">Adempimenti</span>
             </button>
 
             {/* Esporta CSV */}
             <button
               onClick={() => esportaDonazioniCSV(donazioni, annoAttivo || undefined)}
-              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
               title="Scarica il Registro Donazioni completo in formato CSV / Excel"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
-              <span>Esporta CSV</span>
+              <span className="hidden sm:inline">CSV</span>
             </button>
 
             {/* Registra Donazione */}
@@ -485,7 +548,43 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
             }`}
           >
             <Target className="w-4 h-4" />
-            <span>Campagne & Progetti Vincolati ({campagne.length})</span>
+            <span>Campagne & Vincoli ({campagne.length})</span>
+          </button>
+
+          <button
+            onClick={() => setSottoScheda('conto_economico')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              sottoScheda === 'conto_economico'
+                ? 'bg-emerald-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Conto Economico Sez. C (Mod. D)</span>
+          </button>
+
+          <button
+            onClick={() => setSottoScheda('stato_patrimoniale')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              sottoScheda === 'stato_patrimoniale'
+                ? 'bg-emerald-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Landmark className="w-4 h-4" />
+            <span>Stato Patrimoniale & Vincoli (Mod. C)</span>
+          </button>
+
+          <button
+            onClick={() => setSottoScheda('adempimenti')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              sottoScheda === 'adempimenti'
+                ? 'bg-emerald-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Scale className="w-4 h-4" />
+            <span>Centro Adempimenti (730, Art. 87, L. 124)</span>
           </button>
 
           <button
@@ -759,7 +858,20 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
                               title="Genera Quietanza Fiscale, Diploma di Benemerenza o Lettera del Presidente"
                             >
                               <Award className="w-3.5 h-3.5 text-amber-600" />
-                              <span>Certificato / Ricevuta</span>
+                              <span>Quietanza / Diploma</span>
+                            </button>
+
+                            {/* Certificato Vincolo Fondi */}
+                            <button
+                              onClick={() => {
+                                setDonazionePerCertificatoVincolo(donazione);
+                                setModalCertificatoVincoloAperta(true);
+                              }}
+                              className="p-1 text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-lg transition text-xs font-bold flex items-center gap-1 cursor-pointer border border-amber-200"
+                              title="Attestato Ufficiale di Destinazione Vincolata e Scheda Proposta Erogazione"
+                            >
+                              <Landmark className="w-3.5 h-3.5 text-amber-700" />
+                              <span className="hidden xl:inline">Vincolo</span>
                             </button>
 
                             {/* Modifica */}
@@ -906,6 +1018,45 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* VISTA: CONTO ECONOMICO SEZIONE C (MODELLO D RUNTS)       */}
+      {/* ======================================================== */}
+      {sottoScheda === 'conto_economico' && (
+        <DonazioneContoEconomico
+          donazioni={donazioni}
+          campagne={campagne}
+          config={config}
+          annoSelezionato={annoAttivo || annoSelezionato}
+        />
+      )}
+
+      {/* ======================================================== */}
+      {/* VISTA: STATO PATRIMONIALE & RISERVE (MODELLO C RUNTS)    */}
+      {/* ======================================================== */}
+      {sottoScheda === 'stato_patrimoniale' && (
+        <DonazioneStatoPatrimoniale
+          donazioni={donazioni}
+          campagne={campagne}
+          config={config}
+          annoSelezionato={annoAttivo || annoSelezionato}
+        />
+      )}
+
+      {/* ======================================================== */}
+      {/* VISTA: CENTRO ADEMPIMENTI RUNTS & FISCALE (730, ART. 87) */}
+      {/* ======================================================== */}
+      {sottoScheda === 'adempimenti' && (
+        <DonazioneAdempimentiModal
+          donazioni={donazioni}
+          campagne={campagne}
+          config={config}
+          annoSelezionato={annoAttivo || annoSelezionato}
+          onClose={() => setSottoScheda('elenco')}
+          onAggiornaDonazione={handleAggiornaSingolaDonazione}
+          onAggiornaCampagna={handleAggiornaCampagna}
+        />
       )}
 
       {/* ======================================================== */}
@@ -1142,7 +1293,21 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
         />
       )}
 
-      {/* 6. Modale Conferma Eliminazione */}
+      {/* 6. Modale Certificato di Destinazione Vincolata Fondi & Scheda Proposta */}
+      {modalCertificatoVincoloAperta && (
+        <DonazioneCertificatoVincoloModal
+          donazione={donazionePerCertificatoVincolo}
+          donazioni={donazioni}
+          campagne={campagne}
+          config={config}
+          onClose={() => {
+            setModalCertificatoVincoloAperta(false);
+            setDonazionePerCertificatoVincolo(null);
+          }}
+        />
+      )}
+
+      {/* 7. Modale Conferma Eliminazione */}
       {idDaEliminare && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 border border-slate-200 space-y-4">

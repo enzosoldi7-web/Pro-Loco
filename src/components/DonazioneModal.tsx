@@ -69,6 +69,10 @@ export const DonazioneModal: React.FC<DonazioneModalProps> = ({
   const [importo, setImporto] = useState<string>(donazione ? donazione.importo.toString() : '');
   const [causale, setCausale] = useState<string>(donazione?.causale || 'Erogazione liberale per sostegno attività istituzionali');
   const [destinazione, setDestinazione] = useState<string>(donazione?.destinazione || 'Attività Statutarie Generali');
+  const [destinazioneVincolata, setDestinazioneVincolata] = useState<boolean>(donazione?.destinazioneVincolata || Boolean(donazione?.campagnaId));
+  const [spesaEffettuataProgetto, setSpesaEffettuataProgetto] = useState<string>(donazione?.spesaEffettuataProgetto ? donazione.spesaEffettuataProgetto.toString() : '');
+  const [oneriCorrelati, setOneriCorrelati] = useState<string>(donazione?.oneriCorrelati ? donazione.oneriCorrelati.toString() : '');
+  const [opposizione730, setOpposizione730] = useState<boolean>(donazione?.opposizione730 || false);
   const [metodo, setMetodo] = useState<string>(donazione?.metodo || 'Bonifico Bancario');
   const [estremiTracciabilita, setEstremiTracciabilita] = useState<string>(donazione?.estremiTracciabilita || '');
   const [deliberaConsiglio, setDeliberaConsiglio] = useState<string>(donazione?.deliberaConsiglio || '');
@@ -131,6 +135,10 @@ export const DonazioneModal: React.FC<DonazioneModalProps> = ({
       importo: Math.round(impNum * 100) / 100,
       causale: causale.trim(),
       destinazione: destinazione.trim() || undefined,
+      destinazioneVincolata,
+      spesaEffettuataProgetto: spesaEffettuataProgetto ? parseFloat(spesaEffettuataProgetto) : 0,
+      oneriCorrelati: oneriCorrelati ? parseFloat(oneriCorrelati) : 0,
+      opposizione730,
       metodo: metodo as any,
       estremiTracciabilita: estremiTracciabilita.trim() || undefined,
       deliberaConsiglio: deliberaConsiglio.trim() || undefined,
@@ -451,23 +459,96 @@ export const DonazioneModal: React.FC<DonazioneModalProps> = ({
             />
           </div>
 
-          {/* Detraibilità Fiscale Art. 83 CTS */}
-          <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 flex items-start gap-2.5">
-            <input
-              type="checkbox"
-              id="chk-detraibile"
-              checked={detraibileFiscale}
-              onChange={(e) => setDetraibileFiscale(e.target.checked)}
-              className="mt-0.5 w-4 h-4 rounded text-emerald-700 focus:ring-emerald-500 border-slate-300 cursor-pointer"
-            />
-            <label htmlFor="chk-detraibile" className="text-xs text-slate-700 cursor-pointer select-none">
-              <span className="font-bold text-slate-900 block">
-                Erogazione liberale detraibile/deducibile (Art. 83 D.Lgs. 117/2017)
+          {/* Riquadro Contabile Avanzato: Vincolo Patrimoniale & Spese Progetto */}
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={destinazioneVincolata}
+                  onChange={(e) => setDestinazioneVincolata(e.target.checked)}
+                  className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer w-4 h-4"
+                />
+                <span>Fondo Vincolato per Scopo Statutario Deliberato (DM 39/2020)</span>
+              </label>
+              <span className="text-[10px] text-amber-800 bg-amber-100 font-bold px-2 py-0.5 rounded-full">
+                {destinazioneVincolata ? 'Somma Intoccabile' : 'Fondo Ordinario'}
               </span>
-              <span className="text-[11px] text-slate-600 block mt-0.5">
-                Spuntare se il pagamento è avvenuto con metodo tracciabile. Consente al donatore la detrazione IRPEF del 30% (fino a 30.000 € annui) o la deduzione IRES del 10% del reddito dichiarato.
-              </span>
-            </label>
+            </div>
+
+            {destinazioneVincolata && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Quota Già Spesa/Impiegata per il Progetto (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={spesaEffettuataProgetto}
+                    onChange={(e) => setSpesaEffettuataProgetto(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white font-mono"
+                  />
+                  <span className="text-[10px] text-slate-500">Giustificata da fatture o quietanze</span>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Commissioni Bancarie / Oneri Correlati (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={oneriCorrelati}
+                    onChange={(e) => setOneriCorrelati(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white font-mono"
+                  />
+                  <span className="text-[10px] text-slate-500">Oneri di gestione Sezione C</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Detraibilità Fiscale Art. 83 CTS e Opposizione 730 */}
+          <div className="space-y-2">
+            <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 flex items-start gap-2.5">
+              <input
+                type="checkbox"
+                id="chk-detraibile"
+                checked={detraibileFiscale}
+                onChange={(e) => setDetraibileFiscale(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded text-emerald-700 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+              />
+              <label htmlFor="chk-detraibile" className="text-xs text-slate-700 cursor-pointer select-none">
+                <span className="font-bold text-slate-900 block">
+                  Erogazione liberale detraibile/deducibile (Art. 83 D.Lgs. 117/2017)
+                </span>
+                <span className="text-[11px] text-slate-600 block mt-0.5">
+                  Spuntare se il pagamento è avvenuto con metodo tracciabile. Consente al donatore la detrazione IRPEF del 30% (fino a 30.000 € annui) o la deduzione IRES del 10% del reddito dichiarato.
+                </span>
+              </label>
+            </div>
+
+            {detraibileFiscale && tipoDonatore === 'privato' && (
+              <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200 flex items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  id="chk-opposizione"
+                  checked={opposizione730}
+                  onChange={(e) => setOpposizione730(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded text-amber-700 focus:ring-amber-500 border-slate-300 cursor-pointer"
+                />
+                <label htmlFor="chk-opposizione" className="text-xs text-slate-700 cursor-pointer select-none">
+                  <span className="font-bold text-amber-950 block">
+                    Il Donatore ha esercitato il Diritto di Opposizione al 730 Precompilato
+                  </span>
+                  <span className="text-[11px] text-amber-800 block mt-0.5">
+                    Decreto MEF 3/2/2021: i dati NON saranno inviati all'Agenzia delle Entrate nel flusso annuale telematico.
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
 
           {/* Note Amministrative */}
