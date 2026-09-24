@@ -26,7 +26,9 @@ import {
   LayoutDashboard,
   Newspaper,
   Database,
-  HeartHandshake
+  HeartHandshake,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { esportaLibroSociCSV, esportaBackupJSON, esportaBilancioCompletoCSV } from '../storage';
 
@@ -36,9 +38,9 @@ interface HeaderProps {
   eventi: ProLocoEvento[];
   donazioni?: DonazioneTerzi[];
   sitoConfig?: SitoWebConfig;
-  tabAttivo: 'soci' | 'eventi' | 'bilancio' | 'conto_terzi' | 'portale';
+  tabAttivo: 'soci' | 'eventi' | 'bilancio' | 'conto_terzi' | 'portale' | 'cestino';
   annoSelezionato: number;
-  onCambiaTab: (tab: 'soci' | 'eventi' | 'bilancio' | 'conto_terzi' | 'portale') => void;
+  onCambiaTab: (tab: 'soci' | 'eventi' | 'bilancio' | 'conto_terzi' | 'portale' | 'cestino') => void;
   onCambiaAnno: (anno: number) => void;
   onTornaDashboard?: () => void;
   onVaiGiornalino?: () => void;
@@ -52,6 +54,8 @@ interface HeaderProps {
   onApriStampaLibroSoci?: () => void;
   onApriStampaProgrammaEventi?: () => void;
   onAzzeraDatabase?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -75,7 +79,9 @@ export const Header: React.FC<HeaderProps> = ({
   onApriStampaBilancio,
   onApriStampaLibroSoci,
   onApriStampaProgrammaEventi,
-  onAzzeraDatabase
+  onAzzeraDatabase,
+  isFullscreen,
+  onToggleFullscreen
 }) => {
   const [mostraMenuBackup, setMostraMenuBackup] = useState(false);
   const [mostraConfermaAzzera, setMostraConfermaAzzera] = useState(false);
@@ -126,28 +132,28 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs no-print">
+    <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.03)] no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Riga Superiore: Logo, Info Ente e Azioni Generali */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between pt-3 pb-2.5 gap-3">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between pt-3.5 pb-3 gap-3">
           
           {/* Logo e Titolo Pro Loco */}
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-800 text-white flex items-center justify-center shadow-md shrink-0">
-              <Building2 className="w-6 h-6" />
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white flex items-center justify-center shadow-xs ring-1 ring-emerald-500/20 shrink-0">
+              <Building2 className="w-5 h-5 text-emerald-50" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
+                <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
                   {config.nome}
                 </h1>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/70">
                   <Award className="w-3 h-3 text-emerald-600" />
                   {config.codiceUnpli ? 'UNPLI' : 'APS Pro Loco'}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 flex items-center gap-2">
+              <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
                 <span>C.F. {config.codiceFiscale}</span>
                 <span>•</span>
                 <span>{config.comune} ({config.provincia})</span>
@@ -165,8 +171,8 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             
             {/* Selettore Anno con indicazione anno PC e conferma cambio */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
-              <Calendar className="w-3.5 h-3.5 text-slate-500 ml-1.5 mr-1" />
+            <div className="flex items-center bg-slate-50/90 p-1 rounded-xl border border-slate-200/80 shadow-2xs">
+              <Calendar className="w-3.5 h-3.5 text-slate-400 ml-1.5 mr-1" />
               <select
                 id="select-anno-sociale"
                 value={annoSelezionato}
@@ -177,7 +183,7 @@ export const Header: React.FC<HeaderProps> = ({
                   }
                 }}
                 aria-label="Seleziona anno sociale"
-                className="bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded px-2 py-1 shadow-2xs focus:outline-none cursor-pointer"
+                className="bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg px-2.5 py-1 shadow-2xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
               >
                 {anniDisponibili.map(anno => (
                   <option key={anno} value={anno}>
@@ -190,7 +196,7 @@ export const Header: React.FC<HeaderProps> = ({
                   type="button"
                   onClick={() => setAnnoDaConfermare(annoSistemaPC)}
                   title={`Torna all'anno attuale del sistema PC (${annoSistemaPC})`}
-                  className="hidden md:inline-flex items-center ml-1 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 rounded transition-colors cursor-pointer"
+                  className="hidden md:inline-flex items-center ml-1 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/60 rounded-md transition-colors cursor-pointer"
                 >
                   PC: {annoSistemaPC}
                 </button>
@@ -203,7 +209,7 @@ export const Header: React.FC<HeaderProps> = ({
                 id="btn-menu-dati"
                 onClick={() => setMostraMenuBackup(!mostraMenuBackup)}
                 title="Gestione Database & Backup (Soci, Eventi e Ripristino Dati Esempio)"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-900 transition-all duration-150 shadow-2xs cursor-pointer"
               >
                 <Database className="w-3.5 h-3.5 text-emerald-700" />
                 <span>Database</span>
@@ -334,18 +340,45 @@ export const Header: React.FC<HeaderProps> = ({
               id="btn-apri-apk-modal"
               onClick={onApriApkModal}
               title="Installa App su Android o Scarica file APK"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors shadow-2xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50/80 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all duration-150 shadow-2xs cursor-pointer"
             >
-              <Smartphone className="w-3.5 h-3.5 text-slate-700" />
+              <Smartphone className="w-3.5 h-3.5 text-slate-600" />
               <span>App Android</span>
             </button>
+
+            {/* Pulsante Schermo Intero */}
+            {onToggleFullscreen && (
+              <button
+                id="btn-schermo-intero-header"
+                type="button"
+                onClick={onToggleFullscreen}
+                title={isFullscreen ? "Riduci Schermo (F11 / Esc)" : "Modalità Schermo Intero (F11)"}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all duration-150 shadow-2xs cursor-pointer ${
+                  isFullscreen
+                    ? 'bg-emerald-800 text-emerald-100 border-emerald-700 hover:bg-emerald-700'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {isFullscreen ? (
+                  <>
+                    <Minimize2 className="w-3.5 h-3.5 text-emerald-300" />
+                    <span className="hidden sm:inline">Riduci</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="w-3.5 h-3.5 text-emerald-700" />
+                    <span className="hidden sm:inline">Schermo Intero</span>
+                  </>
+                )}
+              </button>
+            )}
 
             {/* Impostazioni Pro Loco */}
             <button
               id="btn-impostazioni-proloco"
               onClick={onApriImpostazioni}
               title="Configurazione Associazione e Quote"
-              className="p-1.5 text-slate-600 hover:text-slate-900 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+              className="p-1.5 text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all duration-150 shadow-2xs cursor-pointer"
             >
               <Settings className="w-4 h-4" />
             </button>
@@ -355,7 +388,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 id="btn-stampa-soci-header"
                 onClick={onApriStampaLibroSoci}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 rounded-lg shadow-sm transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 rounded-xl shadow-xs transition-colors cursor-pointer"
                 title="Stampa Ufficiale Libro dei Soci A4"
               >
                 <Printer className="w-4 h-4" />
@@ -367,7 +400,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 id="btn-stampa-eventi-header"
                 onClick={onApriStampaProgrammaEventi}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 active:bg-teal-900 rounded-lg shadow-sm transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 active:bg-teal-900 rounded-xl shadow-xs transition-colors cursor-pointer"
                 title="Stampa Calendario & Programma Eventi A4"
               >
                 <Printer className="w-4 h-4" />
@@ -379,7 +412,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 id="btn-stampa-bilancio-header"
                 onClick={onApriStampaBilancio}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 rounded-lg shadow-sm transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 rounded-xl shadow-xs transition-colors cursor-pointer"
                 title="Stampa Rendiconto A4 Ufficiale per Assemblea dei Soci"
               >
                 <Printer className="w-4 h-4" />
@@ -392,7 +425,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Riga Inferiore: Schede di Navigazione Primarie dell'Associazione */}
-        <div className="flex items-center gap-2 pt-1 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1.5 pt-1.5 overflow-x-auto no-scrollbar">
           
           {/* Tasto Ritorno alla Dashboard Principale */}
           {onTornaDashboard && (
@@ -400,7 +433,7 @@ export const Header: React.FC<HeaderProps> = ({
               id="tab-nav-torna-dashboard"
               onClick={onTornaDashboard}
               title="Torna alla Dashboard Generale con i tre moduli"
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-black text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors cursor-pointer shrink-0 mr-1"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200 rounded-xl transition-all duration-150 cursor-pointer shrink-0 mr-1 shadow-2xs"
             >
               <LayoutDashboard className="w-4 h-4 text-emerald-700" />
               <span>← Dashboard</span>
@@ -410,16 +443,16 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="tab-nav-soci"
             onClick={() => onCambiaTab('soci')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors cursor-pointer shrink-0 ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold border-b-2 transition-all duration-150 cursor-pointer shrink-0 ${
               tabAttivo === 'soci'
-                ? 'border-emerald-700 text-emerald-800 bg-emerald-50/50 rounded-t-lg'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                ? 'border-emerald-600 text-emerald-900 bg-emerald-50/70 rounded-t-xl font-bold'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50/60 rounded-t-xl'
             }`}
           >
             <Users className="w-4 h-4" />
             <span>1.1 Albo & Libro Soci</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-              tabAttivo === 'soci' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${
+              tabAttivo === 'soci' ? 'bg-emerald-700 text-white' : 'bg-slate-200/80 text-slate-700'
             }`}>
               {soci.length}
             </span>
@@ -428,16 +461,16 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="tab-nav-eventi"
             onClick={() => onCambiaTab('eventi')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors cursor-pointer shrink-0 ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold border-b-2 transition-all duration-150 cursor-pointer shrink-0 ${
               tabAttivo === 'eventi'
-                ? 'border-emerald-700 text-emerald-800 bg-emerald-50/50 rounded-t-lg'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                ? 'border-emerald-600 text-emerald-900 bg-emerald-50/70 rounded-t-xl font-bold'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50/60 rounded-t-xl'
             }`}
           >
             <PartyPopper className="w-4 h-4" />
             <span>1.2 Calendario & Gestione Eventi</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-              tabAttivo === 'eventi' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${
+              tabAttivo === 'eventi' ? 'bg-emerald-700 text-white' : 'bg-slate-200/80 text-slate-700'
             }`}>
               {eventi.length}
             </span>
@@ -446,15 +479,15 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="tab-nav-bilancio"
             onClick={() => onCambiaTab('bilancio')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors cursor-pointer shrink-0 ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold border-b-2 transition-all duration-150 cursor-pointer shrink-0 ${
               tabAttivo === 'bilancio'
-                ? 'border-emerald-700 text-emerald-800 bg-emerald-50/50 rounded-t-lg'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                ? 'border-emerald-600 text-emerald-900 bg-emerald-50/70 rounded-t-xl font-bold'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50/60 rounded-t-xl'
             }`}
           >
             <Landmark className="w-4 h-4" />
             <span>1.3 Bilancio Generale</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
               tabAttivo === 'bilancio' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
             }`}>
               Quote + Eventi
@@ -465,18 +498,37 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="tab-nav-conto-terzi"
             onClick={() => onCambiaTab('conto_terzi')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors cursor-pointer shrink-0 ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold border-b-2 transition-all duration-150 cursor-pointer shrink-0 ${
               tabAttivo === 'conto_terzi'
-                ? 'border-emerald-700 text-emerald-800 bg-emerald-50/50 rounded-t-lg'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                ? 'border-emerald-600 text-emerald-900 bg-emerald-50/70 rounded-t-xl font-bold'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50/60 rounded-t-xl'
             }`}
           >
             <HeartHandshake className="w-4 h-4 text-emerald-600" />
             <span>1.4 Donazioni & Erogazioni Liberali</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
               tabAttivo === 'conto_terzi' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
             }`}>
               Art. 83 CTS
+            </span>
+          </button>
+
+          {/* 1.5 CESTINO & AUDIT LOG STORICO (PUNTO 1.4) */}
+          <button
+            id="tab-nav-cestino"
+            onClick={() => onCambiaTab('cestino')}
+            className={`inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold border-b-2 transition-all duration-150 cursor-pointer shrink-0 ${
+              tabAttivo === 'cestino'
+                ? 'border-rose-600 text-rose-950 bg-rose-50/80 rounded-t-xl font-bold'
+                : 'border-transparent text-slate-600 hover:text-rose-900 hover:bg-rose-50/40 rounded-t-xl'
+            }`}
+          >
+            <Trash2 className="w-4 h-4 text-rose-600" />
+            <span>1.5 Cestino & Audit Log</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+              tabAttivo === 'cestino' ? 'bg-rose-700 text-white' : 'bg-rose-100 text-rose-800'
+            }`}>
+              Punto 1.4
             </span>
           </button>
         </div>

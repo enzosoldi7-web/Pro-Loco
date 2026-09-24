@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProLocoInfo, Socio, ProLocoEvento, CategoriaEvento, SitoWebConfig } from '../types';
+import { ProLocoInfo, Socio, ProLocoEvento, CategoriaEvento, SitoWebConfig, IscrizioneEvento } from '../types';
 import { 
   Building2, 
   Calendar, 
@@ -32,7 +32,8 @@ import {
   Unlock,
   KeyRound,
   AlertCircle,
-  X
+  X,
+  UserCheck
 } from 'lucide-react';
 
 import { esportaCodiceSitoHTML } from '../storage';
@@ -47,6 +48,7 @@ interface PublicWebsitePortalProps {
   onApriEditor?: () => void;
   onSbloccaAdmin?: (pin: string) => boolean;
   onNuovoSocioIscritto: (nuovoSocio: Socio) => void;
+  onAggiornaEvento?: (evento: ProLocoEvento) => void;
 }
 
 export const PublicWebsitePortal: React.FC<PublicWebsitePortalProps> = ({
@@ -58,7 +60,8 @@ export const PublicWebsitePortal: React.FC<PublicWebsitePortalProps> = ({
   onTornaAlGestionale,
   onApriEditor,
   onSbloccaAdmin,
-  onNuovoSocioIscritto
+  onNuovoSocioIscritto,
+  onAggiornaEvento
 }) => {
   const [sezioneAttiva, setSezioneAttiva] = useState<'home' | 'eventi' | 'tesseramento' | 'territorio' | 'contatti'>('home');
   const [ricercaEvento, setRicercaEvento] = useState('');
@@ -68,6 +71,17 @@ export const PublicWebsitePortal: React.FC<PublicWebsitePortalProps> = ({
   const [mostraPinModal, setMostraPinModal] = useState(false);
   const [pinInserito, setPinInserito] = useState('');
   const [pinErrore, setPinErrore] = useState(false);
+
+  // Stato per l'iscrizione a un evento da parte di un socio
+  const [eventoIscrizionePubblica, setEventoIscrizionePubblica] = useState<ProLocoEvento | null>(null);
+  const [iscrizioneSocioId, setIscrizioneSocioId] = useState<string>('');
+  const [iscrizioneNome, setIscrizioneNome] = useState<string>('');
+  const [iscrizioneCognome, setIscrizioneCognome] = useState<string>('');
+  const [iscrizioneTessera, setIscrizioneTessera] = useState<string>('');
+  const [iscrizioneEmail, setIscrizioneEmail] = useState<string>('');
+  const [iscrizioneTelefono, setIscrizioneTelefono] = useState<string>('');
+  const [iscrizioneNote, setIscrizioneNote] = useState<string>('');
+  const [iscrizioneSuccesso, setIscrizioneSuccesso] = useState<boolean>(false);
 
   const handleVerificaPin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -553,6 +567,25 @@ export const PublicWebsitePortal: React.FC<PublicWebsitePortalProps> = ({
                             <span>Dettagli evento</span>
                             <ArrowRight className="w-3 h-3" />
                           </button>
+
+                          {ev.iscrizioniAperte !== false && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEventoIscrizionePubblica(ev);
+                                setIscrizioneSuccesso(false);
+                                setIscrizioneSocioId('');
+                                setIscrizioneNome('');
+                                setIscrizioneCognome('');
+                                setIscrizioneTessera('');
+                                setIscrizioneNote('');
+                              }}
+                              className="px-2.5 py-1 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1"
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                              <span>Iscriviti</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -692,6 +725,38 @@ export const PublicWebsitePortal: React.FC<PublicWebsitePortalProps> = ({
                         <p className="text-xs text-slate-600 leading-relaxed">
                           {ev.descrizione || 'Informazioni e programma dettagliato a cura della Pro Loco.'}
                         </p>
+
+                        {/* Sezione Adesione e Iscrizione Evento */}
+                        <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200/80 flex items-center justify-between text-xs">
+                          <div>
+                            <span className="font-bold text-emerald-950 block text-[11px] flex items-center gap-1">
+                              <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
+                              {ev.iscrizioniAperte !== false ? 'Iscrizioni Aperte per i Soci' : 'Iscrizioni Chiuse'}
+                            </span>
+                            <span className="text-[10.5px] text-emerald-700 block mt-0.5">
+                              {ev.quotaIscrizioneSocio ? `Quota: ${ev.quotaIscrizioneSocio} €` : 'Partecipazione Gratuita'}
+                              {ev.postiMassimi ? ` • Posti rimasti: ${Math.max(0, ev.postiMassimi - (ev.iscrizioni?.length || 0))}` : ''}
+                            </span>
+                          </div>
+
+                          {ev.iscrizioniAperte !== false && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEventoIscrizionePubblica(ev);
+                                setIscrizioneSuccesso(false);
+                                setIscrizioneSocioId('');
+                                setIscrizioneNome('');
+                                setIscrizioneCognome('');
+                                setIscrizioneTessera('');
+                                setIscrizioneNote('');
+                              }}
+                              className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                            >
+                              Iscriviti
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
@@ -1390,6 +1455,216 @@ export const PublicWebsitePortal: React.FC<PublicWebsitePortalProps> = ({
               </div>
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* Modale Iscrizione Evento per il Pubblico / Soci */}
+      {eventoIscrizionePubblica && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto animate-in fade-in zoom-in-95">
+            {/* Header Modale */}
+            <div className="bg-slate-900 text-white p-5 flex items-start justify-between">
+              <div className="space-y-1">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500 text-slate-950">
+                  {eventoIscrizionePubblica.categoria}
+                </span>
+                <h3 className="text-lg font-bold text-white leading-snug">
+                  Iscrizione Partecipante all'Evento
+                </h3>
+                <p className="text-xs text-slate-300">
+                  {eventoIscrizionePubblica.titolo} • {eventoIscrizionePubblica.dataInizio}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEventoIscrizionePubblica(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {iscrizioneSuccesso ? (
+              <div className="p-6 text-center space-y-4">
+                <div className="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto shadow-xs">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-slate-900">Iscrizione Registrata con Successo!</h4>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    La tua adesione per l'evento <strong>{eventoIscrizionePubblica.titolo}</strong> è stata acquisita e inserita nel registro presenze della Pro Loco.
+                  </p>
+                </div>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 text-left space-y-1">
+                  <div><strong>Data Evento:</strong> {eventoIscrizionePubblica.dataInizio} {eventoIscrizionePubblica.oraInizio ? `alle ${eventoIscrizionePubblica.oraInizio}` : ''}</div>
+                  <div><strong>Luogo:</strong> {eventoIscrizionePubblica.luogo}</div>
+                  <div><strong>Quota dovuta:</strong> {eventoIscrizionePubblica.quotaIscrizioneSocio ? `${eventoIscrizionePubblica.quotaIscrizioneSocio} €` : 'Gratuito per i Soci'}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEventoIscrizionePubblica(null)}
+                  className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Chiudi e Torna al Portale
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  let socioTarget = soci.find(s => s.id === iscrizioneSocioId);
+                  if (!socioTarget && iscrizioneTessera.trim()) {
+                    socioTarget = soci.find(s => s.numeroTessera.toLowerCase() === iscrizioneTessera.trim().toLowerCase());
+                  }
+
+                  const socioIdFinale = socioTarget ? socioTarget.id : (iscrizioneSocioId || `socio-online-${Date.now()}`);
+                  
+                  const nuovaIscrizione: IscrizioneEvento = {
+                    id: `iscr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    socioId: socioIdFinale,
+                    dataIscrizione: new Date().toISOString().split('T')[0],
+                    statoPresenza: 'da_verificare',
+                    ruolo: 'partecipante',
+                    quotaVersata: eventoIscrizionePubblica.quotaIscrizioneSocio || 0,
+                    note: iscrizioneNote ? `${iscrizioneNote} (Online da portale web)` : 'Online da portale web'
+                  };
+
+                  const eventoAggiornato: ProLocoEvento = {
+                    ...eventoIscrizionePubblica,
+                    iscrizioni: [...(eventoIscrizionePubblica.iscrizioni || []), nuovaIscrizione]
+                  };
+
+                  if (onAggiornaEvento) {
+                    onAggiornaEvento(eventoAggiornato);
+                  }
+
+                  setIscrizioneSuccesso(true);
+                }}
+                className="p-5 space-y-4"
+              >
+                {/* Selezione se è un socio registrato o nuovo socio/ospite */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Sei già nell'anagrafica soci della Pro Loco?
+                  </label>
+                  <select
+                    value={iscrizioneSocioId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setIscrizioneSocioId(id);
+                      const s = soci.find(item => item.id === id);
+                      if (s) {
+                        setIscrizioneNome(s.nome);
+                        setIscrizioneCognome(s.cognome);
+                        setIscrizioneTessera(s.numeroTessera);
+                        setIscrizioneEmail(s.email || '');
+                        setIscrizioneTelefono(s.telefono || '');
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-600 outline-none"
+                  >
+                    <option value="">-- Seleziona il tuo nominativo dall'elenco soci --</option>
+                    {soci.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.cognome} {s.nome} (Tessera: {s.numeroTessera})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="relative flex py-1 items-center">
+                  <div className="flex-grow border-t border-slate-200"></div>
+                  <span className="flex-shrink mx-3 text-[11px] text-slate-400 font-bold uppercase">oppure compila i tuoi dati</span>
+                  <div className="flex-grow border-t border-slate-200"></div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-600">Cognome *</label>
+                    <input
+                      type="text"
+                      required
+                      value={iscrizioneCognome}
+                      onChange={(e) => setIscrizioneCognome(e.target.value)}
+                      placeholder="es. Rossi"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-emerald-600 outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-600">Nome *</label>
+                    <input
+                      type="text"
+                      required
+                      value={iscrizioneNome}
+                      onChange={(e) => setIscrizioneNome(e.target.value)}
+                      placeholder="es. Mario"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-emerald-600 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-600">N° Tessera Socio</label>
+                    <input
+                      type="text"
+                      value={iscrizioneTessera}
+                      onChange={(e) => setIscrizioneTessera(e.target.value)}
+                      placeholder="es. 2026-042 (se posseduta)"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-emerald-600 outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-600">Telefono / Cellulare</label>
+                    <input
+                      type="tel"
+                      value={iscrizioneTelefono}
+                      onChange={(e) => setIscrizioneTelefono(e.target.value)}
+                      placeholder="es. 333 1234567"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-emerald-600 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-bold text-slate-600">Note speciali (intolleranze, accompagnatori...)</label>
+                  <textarea
+                    rows={2}
+                    value={iscrizioneNote}
+                    onChange={(e) => setIscrizioneNote(e.target.value)}
+                    placeholder="Eventuali segnalazioni per gli organizzatori..."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-emerald-600 outline-none resize-none"
+                  />
+                </div>
+
+                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
+                  <span>Quota Iscrizione Prevista:</span>
+                  <span className="font-bold font-mono text-sm">
+                    {eventoIscrizionePubblica.quotaIscrizioneSocio ? `${eventoIscrizionePubblica.quotaIscrizioneSocio} €` : 'Gratuito'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setEventoIscrizionePubblica(null)}
+                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Conferma Iscrizione</span>
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

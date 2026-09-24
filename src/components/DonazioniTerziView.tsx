@@ -42,7 +42,9 @@ import {
   esportaDonazioniCSV, 
   saveDonazioni, 
   loadCampagneFondi, 
-  saveCampagneFondi 
+  saveCampagneFondi,
+  aggiungiAlCestino,
+  rimuoviDalCestino
 } from '../storage';
 import { DonazioneModal } from './DonazioneModal';
 import { DonazioneRicevutaModal } from './DonazioneRicevutaModal';
@@ -60,6 +62,7 @@ interface DonazioniTerziViewProps {
   annoSelezionato: number;
   onCambiaAnno?: (anno: number) => void;
   onAggiornaDonazioni: (nuovaLista: DonazioneTerzi[]) => void;
+  onApriCestino?: () => void;
 }
 
 type SottoScheda = 'elenco' | 'campagne' | 'conto_economico' | 'stato_patrimoniale' | 'adempimenti' | 'certificati_annuali' | 'registro_libro';
@@ -69,7 +72,8 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
   config,
   annoSelezionato,
   onCambiaAnno,
-  onAggiornaDonazioni
+  onAggiornaDonazioni,
+  onApriCestino
 }) => {
   const [sottoScheda, setSottoScheda] = useState<SottoScheda>('elenco');
   const [filtroAnno, setFiltroAnno] = useState<number | 'tutti'>(annoSelezionato);
@@ -77,6 +81,7 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
   const [filtroTipo, setFiltroTipo] = useState<'tutti' | TipoDonatore>('tutti');
   const [filtroSoloDetraibili, setFiltroSoloDetraibili] = useState<boolean>(false);
   const [filtroCampagna, setFiltroCampagna] = useState<string>('tutte');
+  const [filtroStato, setFiltroStato] = useState<'attive' | 'tutte' | 'annullate'>('attive');
   const [ordinamento, setOrdinamento] = useState<'data_desc' | 'data_asc' | 'importo_desc' | 'donatore_asc'>('data_desc');
 
   // Campagne di raccolta fondi
@@ -133,9 +138,15 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
     return `DON-${annoRif}/${String(progressivo).padStart(3, '0')}`;
   }, [donazioni, annoAttivo, annoSelezionato]);
 
-  // Donazioni filtrate
+  // Conteggi stato donazioni
+  const conteggioDonazioniAttive = useMemo(() => donazioni.filter(d => d.stato !== 'annullata_ripensamento').length, [donazioni]);
+  const conteggioDonazioniStornate = useMemo(() => donazioni.filter(d => d.stato === 'annullata_ripensamento').length, [donazioni]);
+
+  // Donazioni filtrate (esclusione o inclusione in base al filtroStato)
   const donazioniFiltrate = useMemo(() => {
     return donazioni.filter(d => {
+      if (filtroStato === 'attive' && d.stato === 'annullata_ripensamento') return false;
+      if (filtroStato === 'annullate' && d.stato !== 'annullata_ripensamento') return false;
       if (annoAttivo && d.anno !== annoAttivo) return false;
       if (filtroTipo !== 'tutti' && d.tipoDonatore !== filtroTipo) return false;
       if (filtroSoloDetraibili && !d.detraibileFiscale) return false;
@@ -149,7 +160,8 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
         const matchRicevuta = d.ricevutaNumero.toLowerCase().includes(query);
         const matchDestinazione = (d.destinazione || '').toLowerCase().includes(query);
         const matchTracciabilita = (d.estremiTracciabilita || '').toLowerCase().includes(query);
-        if (!matchDonatore && !matchCF && !matchCausale && !matchRicevuta && !matchDestinazione && !matchTracciabilita) {
+        const matchMotivo = (d.motivoAnnullamento || '').toLowerCase().includes(query);
+        if (!matchDonatore && !matchCF && !matchCausale && !matchRicevuta && !matchDestinazione && !matchTracciabilita && !matchMotivo) {
           return false;
         }
       }
@@ -162,7 +174,7 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
       if (ordinamento === 'donatore_asc') return a.donatore.localeCompare(b.donatore);
       return 0;
     });
-  }, [donazioni, annoAttivo, filtroTipo, filtroSoloDetraibili, filtroCampagna, ricerca, ordinamento]);
+  }, [donazioni, annoAttivo, filtroTipo, filtroSoloDetraibili, filtroCampagna, ricerca, ordinamento, filtroStato]);
 
   // Metriche Finanziarie Avanzate (escludendo donazioni stornate per risentimento)
   const metriche = useMemo(() => {
@@ -287,88 +299,148 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
     mostraFeedback(`Quietanza ${donazioneAggiornata.ricevutaNumero} registrata con successo.`);
   };
 
-  // Cancellazione singola per risentimento donante
+  // Cancellazione singola per ripensamento donante (Punto 1.4: Soft Delete + Cestino di Sistema)
   const handleConfermaCancellazioneSingola = () => {
     const target = donazioneDaCancellare || (idDaEliminare ? donazioni.find(d => d.id === idDaEliminare) : null);
     if (!target) return;
-    const { id, donatore, ricevutaNumero } = target;
+    const { id, donatore, ricevutaNumero, importo } = target;
+    const dataOggi = new Date().toISOString().split('T')[0];
+    const oraAttuale = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const operatore = `${config.nomePresidente || 'Presidente'} / Tesoreria`;
 
-    let nuovaLista: DonazioneTerzi[];
-    if (tipoAzioneCancellazione === 'storno') {
-      nuovaLista = donazioni.map(d => {
-        if (d.id === id) {
-          return {
-            ...d,
-            stato: 'annullata_ripensamento',
-            motivoAnnullamento: motivoCancellazione,
-            dataAnnullamento: new Date().toISOString().split('T')[0]
-          };
-        }
-        return d;
-      });
-      mostraFeedback(`Quietanza ${ricevutaNumero} (${donatore}) stornata per risentimento del donante.`);
-    } else {
-      nuovaLista = donazioni.filter(d => d.id !== id);
-      mostraFeedback(`Inserimento donazione ${ricevutaNumero} (${donatore}) cancellato definitivamente per risentimento del donante.`);
-    }
+    // 1. Applica soft delete allo stato della donazione (annullata_ripensamento)
+    const donazioneAggiornata: DonazioneTerzi = {
+      ...target,
+      stato: 'annullata_ripensamento',
+      motivoAnnullamento: motivoCancellazione,
+      dataAnnullamento: dataOggi,
+      annullatoDa: operatore
+    };
+
+    const nuovaLista = donazioni.map(d => d.id === id ? donazioneAggiornata : d);
+
+    // 2. Archivia nel Cestino di Sistema per l'audit trail probatorio
+    aggiungiAlCestino({
+      id: `cestino-don-${id}`,
+      entitaId: id,
+      tipoEntita: 'donazione',
+      titolo: `Quietanza ${ricevutaNumero} - ${donatore}`,
+      sottotitolo: `${target.codiceFiscalePartitaIva ? 'C.F./P.IVA: ' + target.codiceFiscalePartitaIva + ' • ' : ''}Esercizio ${target.anno} • ${target.metodo}`,
+      importo: importo,
+      dataEliminazione: dataOggi,
+      oraEliminazione: oraAttuale,
+      motivo: motivoCancellazione,
+      eliminatoDa: operatore,
+      datiOriginali: donazioneAggiornata
+    });
 
     onAggiornaDonazioni(nuovaLista);
     saveDonazioni(nuovaLista);
     setSelezionatiIds(prev => prev.filter(x => x !== id));
     setDonazioneDaCancellare(null);
     setIdDaEliminare(null);
+    mostraFeedback(`Donazione ${ricevutaNumero} (${donatore}) revocata con soft delete (Punto 1.4). Importo escluso da ogni bilancio e traccia archiviata nel Cestino.`);
   };
 
-  // Cancellazione massiva selezionati per risentimento
+  // Cancellazione massiva selezionati per ripensamento donante (Punto 1.4 Soft Delete + Cestino)
   const handleConfermaCancellazioneSelezionati = () => {
     if (selezionatiIds.length === 0) return;
     const count = selezionatiIds.length;
+    const dataOggi = new Date().toISOString().split('T')[0];
+    const oraAttuale = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const operatore = `${config.nomePresidente || 'Presidente'} / Tesoreria`;
 
-    let nuovaLista: DonazioneTerzi[];
-    if (tipoAzioneCancellazione === 'storno') {
-      nuovaLista = donazioni.map(d => {
-        if (selezionatiIds.includes(d.id)) {
-          return {
-            ...d,
-            stato: 'annullata_ripensamento',
-            motivoAnnullamento: motivoCancellazione,
-            dataAnnullamento: new Date().toISOString().split('T')[0]
-          };
-        }
-        return d;
-      });
-      mostraFeedback(`${count} donazioni stornate per risentimento/ripensamento dei donanti.`);
-    } else {
-      nuovaLista = donazioni.filter(d => !selezionatiIds.includes(d.id));
-      mostraFeedback(`${count} inserimenti donazioni cancellati per risentimento dei donanti.`);
-    }
+    const nuovaLista = donazioni.map(d => {
+      if (selezionatiIds.includes(d.id)) {
+        const aggiornata: DonazioneTerzi = {
+          ...d,
+          stato: 'annullata_ripensamento',
+          motivoAnnullamento: motivoCancellazione,
+          dataAnnullamento: dataOggi,
+          annullatoDa: operatore
+        };
+        aggiungiAlCestino({
+          id: `cestino-don-${d.id}`,
+          entitaId: d.id,
+          tipoEntita: 'donazione',
+          titolo: `Quietanza ${d.ricevutaNumero} - ${d.donatore}`,
+          sottotitolo: `${d.codiceFiscalePartitaIva ? 'C.F./P.IVA: ' + d.codiceFiscalePartitaIva + ' • ' : ''}Esercizio ${d.anno}`,
+          importo: d.importo,
+          dataEliminazione: dataOggi,
+          oraEliminazione: oraAttuale,
+          motivo: motivoCancellazione,
+          eliminatoDa: operatore,
+          datiOriginali: aggiornata
+        });
+        return aggiornata;
+      }
+      return d;
+    });
 
     onAggiornaDonazioni(nuovaLista);
     saveDonazioni(nuovaLista);
     setSelezionatiIds([]);
     setModalCancellazioneSelezionatiAperta(false);
+    mostraFeedback(`${count} donazioni revocate con soft delete (Punto 1.4) e archiviate nel Cestino.`);
   };
 
-  // Cancellazione di TUTTI gli inserimenti per risentimento
+  // Cancellazione di TUTTI gli inserimenti per risentimento (Punto 1.4 Soft Delete + Cestino)
   const handleConfermaCancellazioneTutti = () => {
-    let nuovaLista: DonazioneTerzi[];
-    let messaggio = '';
+    const dataOggi = new Date().toISOString().split('T')[0];
+    const oraAttuale = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const operatore = `${config.nomePresidente || 'Presidente'} / Tesoreria`;
 
-    if (ambitoCancellazioneTutti === 'anno' && annoAttivo) {
-      const cancellate = donazioni.filter(d => d.anno === annoAttivo).length;
-      nuovaLista = donazioni.filter(d => d.anno !== annoAttivo);
-      messaggio = `Cancellati tutti i ${cancellate} inserimenti dell'Esercizio ${annoAttivo} per risentimento dei donanti.`;
-    } else {
-      const totaleCancellate = donazioni.length;
-      nuovaLista = [];
-      messaggio = `Cancellati tutti i ${totaleCancellate} inserimenti dell'intero registro donazioni per risentimento dei donanti.`;
-    }
+    let donazioniModificate = 0;
+    const nuovaLista = donazioni.map(d => {
+      const matchAmbito = ambitoCancellazioneTutti === 'anno' ? (d.anno === (annoAttivo || annoSelezionato)) : true;
+      if (matchAmbito && d.stato !== 'annullata_ripensamento') {
+        donazioniModificate++;
+        const aggiornata: DonazioneTerzi = {
+          ...d,
+          stato: 'annullata_ripensamento',
+          motivoAnnullamento: motivoCancellazione,
+          dataAnnullamento: dataOggi,
+          annullatoDa: operatore
+        };
+        aggiungiAlCestino({
+          id: `cestino-don-${d.id}`,
+          entitaId: d.id,
+          tipoEntita: 'donazione',
+          titolo: `Quietanza ${d.ricevutaNumero} - ${d.donatore}`,
+          sottotitolo: `${d.codiceFiscalePartitaIva ? 'C.F./P.IVA: ' + d.codiceFiscalePartitaIva + ' • ' : ''}Esercizio ${d.anno}`,
+          importo: d.importo,
+          dataEliminazione: dataOggi,
+          oraEliminazione: oraAttuale,
+          motivo: motivoCancellazione,
+          eliminatoDa: operatore,
+          datiOriginali: aggiornata
+        });
+        return aggiornata;
+      }
+      return d;
+    });
 
     onAggiornaDonazioni(nuovaLista);
     saveDonazioni(nuovaLista);
-    setSelezionatiIds([]);
     setModalCancellazioneTuttiAperta(false);
-    mostraFeedback(messaggio);
+    mostraFeedback(`${donazioniModificate} donazioni revocate con soft delete per ripensamento donante e archiviate nel Cestino.`);
+  };
+
+  // Ripristino donazione dallo stato di annullamento
+  const handleRipristinaDonazione = (donazioneId: string) => {
+    const target = donazioni.find(d => d.id === donazioneId);
+    if (!target) return;
+    const nuovaLista = donazioni.map(d => {
+      if (d.id === donazioneId) {
+        const { stato, motivoAnnullamento, dataAnnullamento, annullatoDa, ...resto } = d;
+        return { ...resto, stato: 'attiva' as const };
+      }
+      return d;
+    });
+    rimuoviDalCestino(`cestino-don-${donazioneId}`);
+    onAggiornaDonazioni(nuovaLista);
+    saveDonazioni(nuovaLista);
+    mostraFeedback(`Quietanza ${target.ricevutaNumero} (${target.donatore}) ripristinata con successo allo stato attivo.`);
   };
 
   // Elimina donazione retrocompatibile
@@ -510,17 +582,17 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Card 1: Totale Raccolto */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs">
+        <div className="bg-white/95 rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-[0_2px_10px_-3px_rgba(15,23,42,0.03)] hover:shadow-md transition-all duration-200">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Totale Raccolto {annoAttivo ? `(${annoAttivo})` : ''}
             </span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center justify-center">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 font-mono">
+            <span className="text-2xl font-black text-slate-900 tabular-nums">
               € {metriche.totale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
@@ -530,37 +602,37 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
         </div>
 
         {/* Card 2: Detraibile Art. 83 CTS */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs">
+        <div className="bg-white/95 rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-[0_2px_10px_-3px_rgba(15,23,42,0.03)] hover:shadow-md transition-all duration-200">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Tracciato Art. 83 CTS
             </span>
-            <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-700 border border-teal-200/60 flex items-center justify-center">
               <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-teal-800 font-mono">
+            <span className="text-2xl font-black text-teal-800 tabular-nums">
               € {metriche.totaleDetraibili.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
-          <span className="text-[11px] text-teal-700 block mt-1 font-semibold">
+          <span className="text-[11px] text-teal-700 block mt-1 font-medium">
             {((metriche.totaleDetraibili / (metriche.totale || 1)) * 100).toFixed(0)}% del totale con tracciabilità fiscale
           </span>
         </div>
 
         {/* Card 3: Campagne e Progetti Vincolati */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs">
+        <div className="bg-white/95 rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-[0_2px_10px_-3px_rgba(15,23,42,0.03)] hover:shadow-md transition-all duration-200">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Progetti Vincolati
             </span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center justify-center">
               <Target className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-amber-900 font-mono">
+            <span className="text-2xl font-black text-amber-900 tabular-nums">
               € {metriche.totaleCampagne.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
@@ -570,12 +642,12 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
         </div>
 
         {/* Card 4: Donatori Unici e Tipologie */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs">
+        <div className="bg-white/95 rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-[0_2px_10px_-3px_rgba(15,23,42,0.03)] hover:shadow-md transition-all duration-200">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Rete Sostenitori
             </span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200/60 flex items-center justify-center">
               <Users className="w-4 h-4" />
             </div>
           </div>
@@ -599,7 +671,7 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
         {/* COLONNA TASTI DI SCELTA: DISPOSTI RIGOROSAMENTE UNO SOTTO L'ALTRO */}
         <aside className="w-full lg:w-72 xl:w-80 shrink-0 space-y-4">
           
-          <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs space-y-3">
+          <div className="bg-white/95 rounded-2xl border border-slate-200/80 p-3.5 shadow-[0_2px_10px_-3px_rgba(15,23,42,0.03)] space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 px-1">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
                 Tasti di Scelta Sezioni
@@ -836,6 +908,46 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
                 </span>
               </button>
 
+              {/* 8. Cestino di Sistema & Audit Log Revoche (Punto 1.4) */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (onApriCestino) {
+                    onApriCestino();
+                  } else {
+                    setFiltroStato('annullate');
+                    setSottoScheda('elenco');
+                  }
+                }}
+                className={`w-full text-left p-3 rounded-xl text-xs font-bold transition flex items-center justify-between gap-2.5 cursor-pointer border ${
+                  filtroStato === 'annullate' && sottoScheda === 'elenco'
+                    ? 'bg-rose-900 text-white border-rose-950 shadow-xs'
+                    : 'bg-rose-50/70 text-rose-900 border-rose-200 hover:bg-rose-100 hover:border-rose-300'
+                }`}
+                title="Registro Storico e Cestino Revoche Donazioni per Ripensamento Donante (Punto 1.4)"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`p-2 rounded-lg shrink-0 ${
+                    filtroStato === 'annullate' && sottoScheda === 'elenco' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    <Trash2 className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-black">Cestino Revoche (1.4)</div>
+                    <div className={`text-[10px] font-normal truncate ${
+                      filtroStato === 'annullate' && sottoScheda === 'elenco' ? 'text-rose-100' : 'text-rose-700'
+                    }`}>
+                      Audit ripensamento donante
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-[10.5px] font-black px-2 py-0.5 rounded-full shrink-0 font-mono ${
+                  filtroStato === 'annullate' && sottoScheda === 'elenco' ? 'bg-white text-rose-950' : 'bg-rose-200 text-rose-900'
+                }`}>
+                  {conteggioDonazioniStornate}
+                </span>
+              </button>
+
             </div>
           </div>
 
@@ -887,15 +999,15 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
             </div>
           </div>
 
-          {/* Box Gestione Risentimento & Diritto di Recesso Donanti */}
+          {/* Box Gestione Risentimento & Diritto di Recesso Donanti (Punto 1.4) */}
           <div className="bg-rose-950/85 rounded-2xl p-3.5 text-white border border-rose-800/70 shadow-xs space-y-2">
             <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-rose-300 px-1">
               <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-              <span>Revoca & Risentimento Donante</span>
+              <span>Punto 1.4: Revoca & Ripensamento</span>
             </div>
             
             <p className="text-[11px] text-rose-200/80 px-1 leading-snug">
-              Diritto di ripensamento, revoca donazione ex art. 800 c.c. o cancellazione integrale degli inserimenti registrati.
+              Diritto di ripensamento ex art. 800 c.c. I dati vengono archiviati con soft delete nel Cestino ed esclusi da ogni bilancio.
             </p>
 
             <button
@@ -905,11 +1017,11 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
                 setModalCancellazioneTuttiAperta(true);
               }}
               className="w-full text-left px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-bold transition flex items-center justify-between gap-2 cursor-pointer shadow-xs border border-rose-500/50"
-              title="Apre la procedura per cancellare tutti gli inserimenti per risentimento dei donatori"
+              title="Apre la procedura di revoca per ripensamento donante con archiviazione nel Cestino"
             >
               <div className="flex items-center gap-2">
                 <Trash2 className="w-3.5 h-3.5 text-white shrink-0" />
-                <span className="truncate">Cancella Tutti Inserimenti</span>
+                <span className="truncate">Revoca per Ripensamento (1.4)</span>
               </div>
               <ChevronRight className="w-3.5 h-3.5 text-rose-200 shrink-0" />
             </button>
@@ -1090,9 +1202,96 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
               </div>
 
               <span className="text-[11px] text-slate-500 font-medium">
-                Totale Parziale Filtrato: <strong className="text-slate-900 font-bold font-mono">€ {donazioniFiltrate.filter(d => d.stato !== 'annullata_ripensamento').reduce((a, b) => a + (b.importo || 0), 0).toFixed(2)}</strong>
+                Totale Parziale Attivo: <strong className="text-slate-900 font-bold font-mono">€ {donazioniFiltrate.filter(d => d.stato !== 'annullata_ripensamento').reduce((a, b) => a + (b.importo || 0), 0).toFixed(2)}</strong>
               </span>
             </div>
+
+            {/* Selettore Filtro Stato Donazione: Attive vs Revocate/Cestino vs Tutte */}
+            <div className="px-5 py-2.5 bg-slate-50/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+              <div className="flex items-center gap-1.5 overflow-x-auto">
+                <span className="text-[11px] font-bold text-slate-400 uppercase mr-1">Filtro Stato:</span>
+                
+                <button
+                  type="button"
+                  onClick={() => setFiltroStato('attive')}
+                  className={`px-3 py-1 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                    filtroStato === 'attive'
+                      ? 'bg-emerald-800 text-white border-emerald-900 shadow-2xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Donazioni Attive</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    filtroStato === 'attive' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                  }`}>
+                    {conteggioDonazioniAttive}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFiltroStato('annullate')}
+                  className={`px-3 py-1 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                    filtroStato === 'annullate'
+                      ? 'bg-rose-800 text-white border-rose-900 shadow-2xs'
+                      : 'bg-rose-50/70 text-rose-900 border-rose-200 hover:bg-rose-100'
+                  }`}
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Revocate per Ripensamento (1.4)</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    filtroStato === 'annullate' ? 'bg-white/20 text-white' : 'bg-rose-200 text-rose-900'
+                  }`}>
+                    {conteggioDonazioniStornate}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFiltroStato('tutte')}
+                  className={`px-3 py-1 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                    filtroStato === 'tutte'
+                      ? 'bg-slate-800 text-white border-slate-800 shadow-2xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>Tutte le Quietanze</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    filtroStato === 'tutte' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                  }`}>
+                    {donazioni.length}
+                  </span>
+                </button>
+              </div>
+
+              {onApriCestino && (
+                <button
+                  type="button"
+                  onClick={onApriCestino}
+                  className="px-3 py-1 rounded-xl font-bold bg-white text-rose-800 border border-rose-200 hover:bg-rose-50 transition flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0"
+                  title="Apri il Cestino di Sistema per l'Audit Trail completo"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Apri Cestino di Sistema (Audit Trail)</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-rose-400" />
+                </button>
+              )}
+            </div>
+
+            {filtroStato === 'annullate' && (
+              <div className="mx-4 my-3 p-3 bg-rose-50/80 border border-rose-200 rounded-xl text-xs text-rose-950 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <span className="font-extrabold text-rose-900 block">
+                    Registrazioni Stornate per Ripensamento Donante (Punto 1.4):
+                  </span>
+                  <p className="text-[11.5px] text-rose-800 leading-relaxed font-normal">
+                    I record sottostanti sono stati stornati tramite <strong>soft delete</strong>. Rimangono memorizzati per traccia storica probatoria ex art. 800 c.c. e sono <strong>completamente esclusi da ogni calcolo di bilancio</strong>. Puoi ripristinare qualsiasi donazione cliccando sul pulsante «Ripristina».
+                  </p>
+                </div>
+              </div>
+            )}
 
             {donazioniFiltrate.length === 0 ? (
               <div className="p-12 text-center space-y-3">
@@ -1281,18 +1480,31 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
                               <Edit className="w-4 h-4" />
                             </button>
 
-                            {/* Elimina / Cancella per Risentimento Donante */}
-                            <button
-                              onClick={() => {
-                                setDonazioneDaCancellare(donazione);
-                                setMotivoCancellazione('Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione ex art. 800 c.c.)');
-                                setTipoAzioneCancellazione('definitiva');
-                              }}
-                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                              title="Cancella Inserimento per Risentimento / Ripensamento del Donante"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {/* Azioni Eliminazione vs Ripristino */}
+                            {donazione.stato === 'annullata_ripensamento' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleRipristinaDonazione(donazione.id)}
+                                className="px-2.5 py-1 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition text-xs font-bold flex items-center gap-1 cursor-pointer"
+                                title="Ripristina la donazione allo stato attivo (rientra nei calcoli di bilancio)"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Ripristina</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDonazioneDaCancellare(donazione);
+                                  setMotivoCancellazione('Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione ex art. 800 c.c.)');
+                                  setTipoAzioneCancellazione('storno');
+                                }}
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                title="Revoca per Ripensamento del Donante (Punto 1.4 - Soft Delete & Cestino)"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
 
                           </div>
                         </td>
@@ -1722,10 +1934,10 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
                 </div>
                 <div>
                   <h4 className="font-black text-slate-900 text-sm">
-                    Cancellazione Inserimento per Risentimento del Donante
+                    Punto 1.4: Annullamento per Ripensamento del Donante
                   </h4>
                   <p className="text-xs text-slate-500">
-                    Revoca donazione, diritto di ripensamento o richiesta formale di cancellazione dati
+                    Meccanismo di Soft Delete ex art. 800 c.c. con archiviazione nel Cestino di Sistema
                   </p>
                 </div>
               </div>
@@ -1752,66 +1964,29 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
                 )}
               </div>
 
-              {/* Scelta modalità cancellazione */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 block">
-                  Modalità di Cancellazione:
-                </label>
-                <div className="space-y-2">
-                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
-                    tipoAzioneCancellazione === 'definitiva' ? 'bg-rose-50/70 border-rose-300' : 'bg-white border-slate-200'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="tipoCancellazione"
-                      checked={tipoAzioneCancellazione === 'definitiva'}
-                      onChange={() => setTipoAzioneCancellazione('definitiva')}
-                      className="mt-0.5 text-rose-600 focus:ring-rose-500"
-                    />
-                    <div>
-                      <div className="font-bold text-xs text-slate-900">
-                        Cancellazione Definitiva dell'Inserimento (Consigliato)
-                      </div>
-                      <div className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
-                        Elimina completamente il record dal registro 1.4, annullando la registrazione e ricalcolando il saldo di cassa.
-                      </div>
-                    </div>
-                  </label>
-
-                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
-                    tipoAzioneCancellazione === 'storno' ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="tipoCancellazione"
-                      checked={tipoAzioneCancellazione === 'storno'}
-                      onChange={() => setTipoAzioneCancellazione('storno')}
-                      className="mt-0.5 text-amber-600 focus:ring-amber-500"
-                    />
-                    <div>
-                      <div className="font-bold text-xs text-slate-900">
-                        Storno Contabile con Ricevuta Annullata
-                      </div>
-                      <div className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
-                        Mantiene la quietanza visibile ma contrassegnata come "Stornata per Risentimento del Donante", escludendola dai totali economici e dall'AdE.
-                      </div>
-                    </div>
-                  </label>
-                </div>
+              {/* Spiegazione Soft Delete & Isolamento Matematico */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs space-y-1 text-amber-950">
+                <span className="font-extrabold text-amber-900 block flex items-center gap-1.5">
+                  <Scale className="w-4 h-4 text-amber-700" />
+                  Effetto Contabile & Normativo del Soft Delete:
+                </span>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Il record viene contrassegnato come eliminato per conservare la traccia storica probatoria legale. Verrà inviato al <strong>Cestino di Sistema (Audit Log)</strong> e sarà <strong>completamente escluso da ogni calcolo matematico, statistico o finanziario</strong> dell'applicazione (730 AdE, Rendiconti RUNTS e Bilancio di Cassa).
+                </p>
               </div>
 
               {/* Causale di Risentimento */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 block">
-                  Causale Formale di Risentimento / Revoca:
+                  Causale Formale di Ripensamento / Revoca:
                 </label>
                 <select
                   value={motivoCancellazione}
                   onChange={(e) => setMotivoCancellazione(e.target.value)}
                   className="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 font-medium outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
                 >
-                  <option value="Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione ex art. 800 c.c.)">
-                    Risentimento / Ripensamento del Donante (Revoca per ripensamento donazione)
+                  <option value="Ripensamento del donante (Revoca per ripensamento donazione ex art. 800 c.c.)">
+                    Ripensamento del donante (Revoca per ripensamento donazione ex art. 800 c.c.)
                   </option>
                   <option value="Richiesta formale di storno e rimborso somme da parte del donante">
                     Richiesta formale di storno e rimborso somme da parte del donante
@@ -1830,6 +2005,7 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
+                  type="button"
                   onClick={() => {
                     setDonazioneDaCancellare(null);
                     setIdDaEliminare(null);
@@ -1839,13 +2015,12 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
                   Annulla
                 </button>
                 <button
+                  type="button"
                   onClick={handleConfermaCancellazioneSingola}
                   className="px-4 py-2 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>
-                    {tipoAzioneCancellazione === 'definitiva' ? 'Conferma Cancellazione Inserimento' : 'Conferma Storno Inserimento'}
-                  </span>
+                  <span>Conferma Annullamento (Soft Delete 1.4)</span>
                 </button>
               </div>
 

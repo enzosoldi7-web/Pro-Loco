@@ -95,6 +95,23 @@ export interface DonazioneTerzi {
   stato?: 'attiva' | 'annullata_ripensamento';
   motivoAnnullamento?: string;
   dataAnnullamento?: string;
+  annullatoDa?: string;
+}
+
+export type TipoEntitaCestino = 'donazione' | 'socio' | 'evento';
+
+export interface ElementoCestino {
+  id: string; // ID univoco nel cestino (es. 'cestino-don-...')
+  entitaId: string; // ID dell'entità originaria
+  tipoEntita: TipoEntitaCestino;
+  titolo: string; // Intestazione o nominativo (es. "Quietanza DON-2026/001 - Dott. Roberto Bianchi")
+  sottotitolo?: string; // Dettagli secondari (es. "C.F. BNC... • Esercizio 2026")
+  importo?: number; // Importo originale (€) se applicabile, rigorosamente escluso da tutti i calcoli
+  dataEliminazione: string; // Data di revoca / eliminazione YYYY-MM-DD
+  oraEliminazione?: string; // Ora HH:MM
+  motivo: string; // Motivazione del ripensamento o eliminazione
+  eliminatoDa?: string; // Es. "Ufficio Tesoreria / Presidente"
+  datiOriginali: any; // Record originale serializzato per consentire consultazione o ripristino
 }
 
 export interface QuotaAssociativa {
@@ -312,6 +329,29 @@ export interface ProLocoEvento {
 
   partecipantiStimati?: number;
   noteOrganizzative?: string;
+
+  // Iscrizione soci e tracciamento presenze
+  iscrizioni?: IscrizioneEvento[]; // Elenco soci iscritti e registro presenze
+  postiMassimi?: number; // Limite massimo partecipanti/iscritti
+  quotaIscrizioneSocio?: number; // Eventuale quota iscrizione socio (€)
+  iscrizioniAperte?: boolean; // Se le iscrizioni dei soci sono aperte
+}
+
+export type RuoloPartecipazioneEvento = 'partecipante' | 'volontario' | 'relatore_ospite' | 'staff';
+export type StatoPresenzaEvento = 'da_verificare' | 'presente' | 'assente' | 'giustificato';
+
+export interface IscrizioneEvento {
+  id: string; // ID univoco dell'iscrizione (es. iscr-evt1-socio1)
+  socioId: string; // ID del socio nell'Albo Soci
+  dataIscrizione: string; // YYYY-MM-DD
+  oraIscrizione?: string; // HH:MM
+  ruolo: RuoloPartecipazioneEvento; // 'partecipante' | 'volontario' | 'relatore_ospite' | 'staff'
+  statoPresenza: StatoPresenzaEvento; // 'da_verificare' | 'presente' | 'assente' | 'giustificato'
+  orarioCheckIn?: string; // HH:MM (impostato al check-in dell'amministratore)
+  checkInRegistratoDa?: string; // Nominativo dell'amministratore / operatore che ha registrato il check-in
+  note?: string; // Es. intolleranze, preferenze menu, mansione assegnata
+  numeroAccompagnatori?: number; // Familiari o accompagnatori non soci al seguito
+  quotaVersata?: number; // Eventuale quota o contributo versato (€)
 }
 
 export interface FiltriEventi {
@@ -324,7 +364,7 @@ export interface FiltriEventi {
 }
 
 export type PaginaPrincipale = 'dashboard' | 'gestionale' | 'sitoweb' | 'giornalino' | 'archivio_giornalino';
-export type SottoTabGestionale = 'soci' | 'eventi' | 'bilancio' | 'conto_terzi';
+export type SottoTabGestionale = 'soci' | 'eventi' | 'bilancio' | 'conto_terzi' | 'cestino';
 
 export type CategoriaArticoloGiornalino = 
   | 'editoriale'

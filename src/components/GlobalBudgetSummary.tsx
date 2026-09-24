@@ -72,7 +72,8 @@ import {
   esportaStandEventoCSV,
   loadDonazioni,
   saveDonazioni,
-  esportaDonazioniCSV
+  esportaDonazioniCSV,
+  aggiungiAlCestino
 } from '../storage';
 import { 
   calcolaScadenzaQuota, 
@@ -368,16 +369,49 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
   };
 
   const handleEliminaDonazione = (id: string) => {
-    const aggiornate = listaDonazioni.filter(d => d.id !== id);
+    const target = listaDonazioni.find(d => d.id === id);
+    if (!target) return;
+    const dataOggi = new Date().toISOString().split('T')[0];
+    const oraAttuale = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const operatore = `${config.nomePresidente || 'Presidente'} / Tesoreria`;
+
+    // 1. Soft delete: contrassegna come annullata per ripensamento donante (Punto 1.4)
+    const donazioneStornata: DonazioneTerzi = {
+      ...target,
+      stato: 'annullata_ripensamento',
+      motivoAnnullamento: 'Ripensamento del donante (Revoca per ripensamento donazione ex art. 800 c.c.)',
+      dataAnnullamento: dataOggi,
+      annullatoDa: operatore
+    };
+
+    const aggiornate = listaDonazioni.map(d => d.id === id ? donazioneStornata : d);
     setListaDonazioni(aggiornate);
     saveDonazioni(aggiornate);
-    if (onEliminaDonazione) onEliminaDonazione(id);
+
+    // 2. Archivia nel Cestino di Sistema per l'audit trail storico
+    aggiungiAlCestino({
+      id: `cestino-don-${id}`,
+      entitaId: id,
+      tipoEntita: 'donazione',
+      titolo: `Quietanza ${target.ricevutaNumero} - ${target.donatore}`,
+      sottotitolo: `${target.codiceFiscalePartitaIva ? 'C.F./P.IVA: ' + target.codiceFiscalePartitaIva + ' • ' : ''}Esercizio ${target.anno}`,
+      importo: target.importo,
+      dataEliminazione: dataOggi,
+      oraEliminazione: oraAttuale,
+      motivo: 'Ripensamento del donante (Revoca per ripensamento donazione ex art. 800 c.c.)',
+      eliminatoDa: operatore,
+      datiOriginali: donazioneStornata
+    });
+
+    if (onSalvaDonazione) onSalvaDonazione(donazioneStornata);
     setConfermaEliminaDonazioneId(null);
   };
 
-  // Donazioni filtrate per anno e criteri di ricerca
+  // Donazioni filtrate per anno e criteri di ricerca (esclusione categorica donazioni stornate per ripensamento)
   const donazioniFiltrate = useMemo(() => {
     return listaDonazioni.filter(d => {
+      // Esclusione categorica donazioni annullate per ripensamento donante (Punto 1.4)
+      if (d.stato === 'annullata_ripensamento') return false;
       // Filtro anno sociale
       if (annoAttivo && d.anno !== annoAttivo) return false;
       // Filtro tipologia donatore

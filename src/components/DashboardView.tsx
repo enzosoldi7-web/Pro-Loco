@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { ProLocoInfo, Socio, ProLocoEvento, SitoWebConfig, GiornalinoConfig, PaginaPrincipale, SottoTabGestionale, EdizioneGiornalino, DonazioneTerzi } from '../types';
 import { 
   Building2, 
@@ -38,7 +39,9 @@ import {
   Compass,
   Database,
   Archive,
-  HeartHandshake
+  HeartHandshake,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { esportaLibroSociCSV, esportaBackupJSON, esportaBilancioCompletoCSV, esportaCodiceSitoHTML, loadDonazioni } from '../storage';
 
@@ -67,6 +70,8 @@ interface DashboardViewProps {
   onImportaBackup: (dati: { soci: Socio[]; config: ProLocoInfo; eventi?: ProLocoEvento[]; donazioni?: DonazioneTerzi[] }) => void;
   onRipristinaDemo: () => void;
   onAzzeraDatabase?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -84,7 +89,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onApriApkModal,
   onImportaBackup,
   onRipristinaDemo,
-  onAzzeraDatabase
+  onAzzeraDatabase,
+  isFullscreen,
+  onToggleFullscreen
 }) => {
   const [mostraMenuBackup, setMostraMenuBackup] = useState(false);
   const [mostraConfermaAzzera, setMostraConfermaAzzera] = useState(false);
@@ -105,7 +112,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   });
 
   const donazioniEffettive = donazioni && donazioni.length > 0 ? donazioni : loadDonazioni();
-  const donazioniAnno = donazioniEffettive.filter(d => d.anno === annoSelezionato);
+  const donazioniAnno = donazioniEffettive.filter(d => d.anno === annoSelezionato && d.stato !== 'annullata_ripensamento');
   const totaleDonazioniAnno = donazioniAnno.reduce((acc, d) => acc + (d.importo || 0), 0);
 
   const totaleSpeseEventi = eventiAnno.reduce((acc, e) => acc + (e.costiSostenuti || e.budgetPrevisto || 0), 0);
@@ -144,25 +151,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="min-h-screen bg-[#f6f4ee] text-stone-800 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
       
       {/* 1. INTESTAZIONE PRINCIPALE DELLA DASHBOARD (Come richiesto: Tutta l'intestazione proloco, tasto anno, database & backup, app android, configurazione) */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
+      <header className="bg-[#fdfcf9]/95 backdrop-blur-md border-b border-stone-200/80 sticky top-0 z-30 shadow-[0_2px_12px_-4px_rgba(45,38,30,0.03)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between py-3 gap-3">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between py-3.5 gap-3">
             
             {/* Logo, Denominazione e Riconoscimenti Pro Loco */}
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-800 text-white flex items-center justify-center shadow-md shrink-0">
-                <Building2 className="w-7 h-7" />
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white flex items-center justify-center shadow-xs ring-1 ring-emerald-500/20 shrink-0">
+                <Building2 className="w-6 h-6 text-emerald-50" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+                  <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
                     {config.nome}
                   </h1>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/70">
                     <Award className="w-3.5 h-3.5 text-emerald-600" />
                     {config.codiceUnpli ? 'UNPLI' : 'APS Pro Loco'}
                   </span>
@@ -185,9 +192,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               
               {/* Tasto 1: Anno Sociale */}
-              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
-                <Calendar className="w-4 h-4 text-slate-500 ml-1.5 mr-1" />
-                <span className="text-[11px] font-bold text-slate-500 mr-1 hidden sm:inline">Anno:</span>
+              <div className="flex items-center bg-slate-50/90 p-1 rounded-xl border border-slate-200/80 shadow-2xs">
+                <Calendar className="w-3.5 h-3.5 text-slate-400 ml-1.5 mr-1" />
+                <span className="text-[11px] font-semibold text-slate-500 mr-1 hidden sm:inline">Anno:</span>
                 <select
                   id="select-anno-dashboard"
                   value={annoSelezionato}
@@ -198,7 +205,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     }
                   }}
                   aria-label="Seleziona anno sociale"
-                  className="bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-2.5 py-1 shadow-2xs focus:outline-hidden cursor-pointer"
+                  className="bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg px-2.5 py-1 shadow-2xs focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
                 >
                   <option value={new Date().getFullYear() + 1}>{new Date().getFullYear() + 1} (Successivo)</option>
                   <option value={new Date().getFullYear()}>{new Date().getFullYear()} (Anno Corrente)</option>
@@ -214,7 +221,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   id="btn-database-backup-dashboard"
                   onClick={() => setMostraMenuBackup(!mostraMenuBackup)}
                   title="Gestione Database, Backup e Ripristino"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-all duration-150 shadow-2xs cursor-pointer"
                 >
                   <Database className="w-3.5 h-3.5 text-emerald-700" />
                   <span>Database</span>
@@ -309,9 +316,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 id="btn-app-android-dashboard"
                 onClick={onApriApkModal}
                 title="Scarica APK Android o Installa come App Web PWA"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors shadow-2xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50/80 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all duration-150 shadow-2xs cursor-pointer"
               >
-                <Smartphone className="w-3.5 h-3.5 text-slate-700" />
+                <Smartphone className="w-3.5 h-3.5 text-slate-600" />
                 <span>App Android</span>
               </button>
 
@@ -320,11 +327,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 id="btn-configurazione-dashboard"
                 onClick={onApriImpostazioni}
                 title="Configurazione Ente, Quote e Parametri Istituzionali"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-all duration-150 shadow-2xs cursor-pointer"
               >
                 <Settings className="w-3.5 h-3.5 text-slate-600" />
                 <span>Configurazione</span>
               </button>
+
+              {/* Tasto 5: Schermo Intero */}
+              {onToggleFullscreen && (
+                <button
+                  id="btn-schermo-intero-dashboard"
+                  type="button"
+                  onClick={onToggleFullscreen}
+                  title={isFullscreen ? "Riduci Schermo (F11 / Esc)" : "Modalità a Schermo Intero (F11)"}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all duration-150 shadow-2xs cursor-pointer ${
+                    isFullscreen
+                      ? 'bg-emerald-800 text-emerald-100 border-emerald-700 hover:bg-emerald-700'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {isFullscreen ? (
+                    <>
+                      <Minimize2 className="w-3.5 h-3.5 text-emerald-300" />
+                      <span className="hidden sm:inline">Riduci</span>
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="w-3.5 h-3.5 text-emerald-700" />
+                      <span className="hidden sm:inline">Schermo Intero</span>
+                    </>
+                  )}
+                </button>
+              )}
 
             </div>
 
@@ -337,19 +371,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
         {/* Banner di Benvenuto e Riepilogo Anno Sociale */}
-        <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-md border border-emerald-700/40 relative overflow-hidden">
+        <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-sm border border-emerald-700/40 relative overflow-hidden">
+          <div className="absolute -right-20 -bottom-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             
             <div className="space-y-2 max-w-2xl">
               <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 uppercase tracking-widest">
+                <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 uppercase tracking-wider">
                   Pannello di Controllo Generale
                 </span>
                 <span className="text-xs text-emerald-200 font-medium">
                   Anno Sociale {annoSelezionato}
                 </span>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                 Dashboard Istituzionale • {config.nome}
               </h2>
               <p className="text-sm text-emerald-100/90 leading-relaxed italic">
@@ -364,19 +399,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             {/* Metriche Rapide di Sintesi */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 shrink-0">
-              <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10 text-center">
+              <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/15 text-center">
                 <span className="text-[11px] text-emerald-200 font-medium block">Soci Iscritti {annoSelezionato}</span>
-                <span className="text-2xl font-black text-white">{totaleSociInRegola}</span>
+                <span className="text-2xl font-black text-white tabular-nums">{totaleSociInRegola}</span>
                 <span className="text-[10px] text-emerald-300 block">in regola con la quota</span>
               </div>
-              <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10 text-center">
+              <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/15 text-center">
                 <span className="text-[11px] text-teal-200 font-medium block">Eventi in Calendario</span>
-                <span className="text-2xl font-black text-white">{eventiAnno.length}</span>
+                <span className="text-2xl font-black text-white tabular-nums">{eventiAnno.length}</span>
                 <span className="text-[10px] text-teal-300 block">manifestazioni {annoSelezionato}</span>
               </div>
-              <div className="col-span-2 sm:col-span-1 bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10 text-center">
+              <div className="col-span-2 sm:col-span-1 bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/15 text-center">
                 <span className="text-[11px] text-emerald-200 font-medium block">Saldo Cassa {annoSelezionato}</span>
-                <span className={`text-2xl font-black ${(avanzoEconomico || 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                <span className={`text-2xl font-black tabular-nums ${(avanzoEconomico || 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                   € {(avanzoEconomico || 0).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </span>
                 <span className="text-[10px] text-slate-300 block">entrate totali - uscite</span>
@@ -388,10 +423,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* GUIDA & TITOLO SEZIONE DI NAVIGAZIONE DEI 3 MODULI */}
         <div>
-          <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 inline-block px-2.5 py-1 rounded-full border border-emerald-200">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-800 bg-emerald-50/90 inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-200/70">
             I 3 Moduli della Piattaforma Pro Loco
           </h3>
-          <p className="text-xs text-slate-600 mt-1">
+          <p className="text-xs text-slate-600 mt-1.5">
             Seleziona l'area operativa: Gestionale Amministrativo (Soci, Eventi, Bilancio, Donazioni), Portale Sito Web Pubblico o Studio Editoriale Giornalino.
           </p>
         </div>
@@ -400,20 +435,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* CARD 1: GESTIONALE */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-7 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group hover:border-emerald-500/60 relative">
+          <motion.div 
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.05 }}
+            whileHover={{ y: -4, transition: { duration: 0.18 } }}
+            className="bg-white/95 rounded-3xl border border-stone-200/90 p-6 sm:p-7 shadow-[0_2px_14px_-4px_rgba(45,38,30,0.04)] hover:shadow-lg transition-all duration-200 flex flex-col justify-between group hover:border-emerald-500/60 relative"
+          >
             <div className="space-y-5">
               
               <div className="flex items-start justify-between gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-800 border border-emerald-200/80 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
                   <FolderKanban className="w-7 h-7 text-emerald-700" />
                 </div>
-                <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300/80">
                   1. Amministrazione
                 </span>
               </div>
 
               <div>
-                <h3 className="text-xl font-black text-slate-900 group-hover:text-emerald-800 transition-colors">
+                <h3 className="text-xl font-extrabold text-slate-900 group-hover:text-emerald-800 transition-colors">
                   1. Gestionale Pro Loco
                 </h3>
                 <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
@@ -523,6 +564,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-emerald-800 shrink-0 ml-1" />
                 </button>
+
+                <button
+                  type="button"
+                  id="btn-sub-gestionale-cestino"
+                  onClick={() => onNavigaPagina('gestionale', 'cestino')}
+                  className="w-full text-left p-2.5 rounded-xl bg-rose-50/40 hover:bg-rose-50 border border-rose-200/80 hover:border-rose-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Cestino di Sistema & Audit Log Storico Revoche (1.4 Ripensamento Donante)"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-800 flex items-center justify-center shrink-0 border border-rose-200">
+                      <Trash2 className="w-3.5 h-3.5 text-rose-700" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-rose-950 group-hover/sub:text-rose-900 block flex items-center gap-1.5">
+                        <span>1.5 Cestino & Audit Log</span>
+                        <span className="text-[9.5px] font-black uppercase px-1.5 py-0.2 rounded bg-rose-200/80 text-rose-900">
+                          Punto 1.4
+                        </span>
+                      </span>
+                      <span className="text-[10.5px] text-rose-700/80">
+                        Revoche per ripensamento donante & storico eliminazioni
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-rose-400 group-hover/sub:text-rose-700 shrink-0 ml-1" />
+                </button>
               </div>
 
             </div>
@@ -538,32 +605,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
-          </div>
+          </motion.div>
 
           {/* CARD 2: SITO WEB PUBBLICO */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-7 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group hover:border-teal-500/60 relative">
+          <motion.div 
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.1 }}
+            whileHover={{ y: -4, transition: { duration: 0.18 } }}
+            className="bg-white/95 rounded-3xl border border-stone-200/90 p-6 sm:p-7 shadow-[0_2px_14px_-4px_rgba(45,38,30,0.04)] hover:shadow-lg transition-all duration-200 flex flex-col justify-between group hover:border-teal-500/60 relative"
+          >
             <div className="space-y-5">
               
               <div className="flex items-start justify-between gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-800 border border-teal-200 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+                <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-800 border border-teal-200/80 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
                   <Globe className="w-7 h-7 text-teal-700" />
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <span className={`px-3 py-1 rounded-full text-xs font-black border ${
+                  <span className={`px-3 py-1 rounded-full text-xs font-extrabold border ${
                     sitoConfig.blindatoVisitatori
-                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                      : 'bg-amber-100 text-amber-900 border-amber-300'
+                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300/80'
+                      : 'bg-amber-100 text-amber-900 border-amber-300/80'
                   }`}>
                     {sitoConfig.blindatoVisitatori ? 'Online & Blindato' : 'In Bozza (Editor)'}
                   </span>
-                  <span className="text-[10px] font-bold text-slate-500">
+                  <span className="text-[10px] font-medium text-slate-500">
                     PIN: {sitoConfig.pinSbloccoAdmin ? '••••' : 'Non impostato'}
                   </span>
                 </div>
               </div>
 
               <div>
-                <h3 className="text-xl font-black text-slate-900 group-hover:text-teal-800 transition-colors">
+                <h3 className="text-xl font-extrabold text-slate-900 group-hover:text-teal-800 transition-colors">
                   2. Sito Web Pubblico
                 </h3>
                 <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
@@ -758,28 +831,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span>Anteprima Portale Pubblico Visitatori</span>
               </button>
             </div>
-          </div>
+          </motion.div>
 
           {/* CARD 3: GIORNALINO DELLA PRO LOCO */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-7 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group hover:border-indigo-500/60 relative">
+          <motion.div 
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.15 }}
+            whileHover={{ y: -4, transition: { duration: 0.18 } }}
+            className="bg-white/95 rounded-3xl border border-stone-200/90 p-6 sm:p-7 shadow-[0_2px_14px_-4px_rgba(45,38,30,0.04)] hover:shadow-lg transition-all duration-200 flex flex-col justify-between group hover:border-indigo-500/60 relative"
+          >
             <div className="space-y-5">
               
               <div className="flex items-start justify-between gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-800 border border-indigo-200 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-800 border border-indigo-200/80 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
                   <Newspaper className="w-7 h-7 text-indigo-700" />
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-100 text-indigo-900 border border-indigo-300">
+                  <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-indigo-100 text-indigo-900 border border-indigo-300/80">
                     Edizione #{giornalinoConfig.numeroEdizione || 1} • {giornalinoConfig.anno || annoSelezionato}
                   </span>
-                  <span className="text-[10px] font-bold text-slate-500">
+                  <span className="text-[10px] font-medium text-slate-500">
                     {archivioGiornalini.length} edizioni in archivio
                   </span>
                 </div>
               </div>
 
               <div>
-                <h3 className="text-xl font-black text-slate-900 group-hover:text-indigo-800 transition-colors">
+                <h3 className="text-xl font-extrabold text-slate-900 group-hover:text-indigo-800 transition-colors">
                   3. Giornalino Pro Loco
                 </h3>
                 <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
@@ -977,7 +1056,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span>Archivio Edizioni & Stampa Tipografica</span>
               </button>
             </div>
-          </div>
+          </motion.div>
 
         </div>
 

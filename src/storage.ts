@@ -1,4 +1,4 @@
-import { Socio, ProLocoInfo, QuotaAssociativa, StatoQuota, ProLocoEvento, StandEvento, SitoWebConfig, GiornalinoConfig, ArticoloGiornalino, EdizioneGiornalino, DonazioneTerzi, CampagnaRaccoltaFondi } from './types';
+import { Socio, ProLocoInfo, QuotaAssociativa, StatoQuota, ProLocoEvento, StandEvento, SitoWebConfig, GiornalinoConfig, ArticoloGiornalino, EdizioneGiornalino, DonazioneTerzi, CampagnaRaccoltaFondi, ElementoCestino } from './types';
 
 const STORAGE_KEY_SOCI = 'proloco_gestione_soci_v1';
 const STORAGE_KEY_CONFIG = 'proloco_gestione_config_v1';
@@ -9,6 +9,7 @@ export const STORAGE_KEY_ARCHIVIO_GIORNALINI = 'proloco_archivio_giornalini_v1';
 export const STORAGE_KEY_GIORNALINO_ATTIVO_ID = 'proloco_giornalino_attivo_id_v1';
 export const STORAGE_KEY_DONAZIONI = 'proloco_gestione_donazioni_v1';
 export const STORAGE_KEY_CAMPAGNE_DONAZIONI = 'proloco_campagne_donazioni_v1';
+export const STORAGE_KEY_CESTINO = 'proloco_gestione_cestino_v1';
 
 export const DEFAULT_GIORNALINO_CONFIG: GiornalinoConfig = {
   testata: 'La Voce della Pro Loco',
@@ -926,7 +927,80 @@ export const INITIAL_EVENTI: ProLocoEvento[] = [
     pianoSicurezzaSafety: true,
     aslHaccp: true,
     partecipantiStimati: 1800,
-    noteOrganizzative: 'Gestione Economica Nativa Effettiva: 100% dei costi sostenuti (5.900 €) e degli incassi realizzati dagli stand (9.500 €) confluiscono nel bilancio sociale della Pro Loco con un utile netto di +3.600 €.'
+    noteOrganizzative: 'Gestione Economica Nativa Effettiva: 100% dei costi sostenuti (5.900 €) e degli incassi realizzati dagli stand (9.500 €) confluiscono nel bilancio sociale della Pro Loco con un utile netto di +3.600 €.',
+    iscrizioniAperte: true,
+    postiMassimi: 50,
+    quotaIscrizioneSocio: 10,
+    iscrizioni: [
+      {
+        id: 'iscr-eff-1-s1',
+        socioId: 'socio-1',
+        dataIscrizione: '2026-09-10',
+        oraIscrizione: '10:30',
+        ruolo: 'volontario',
+        statoPresenza: 'presente',
+        orarioCheckIn: '11:45',
+        checkInRegistratoDa: 'Presidenza / Check-in',
+        note: 'Coordinamento generale stand e accoglienza',
+        quotaVersata: 10
+      },
+      {
+        id: 'iscr-eff-1-s2',
+        socioId: 'socio-2',
+        dataIscrizione: '2026-09-11',
+        oraIscrizione: '11:15',
+        ruolo: 'volontario',
+        statoPresenza: 'presente',
+        orarioCheckIn: '11:50',
+        checkInRegistratoDa: 'Segreteria',
+        numeroAccompagnatori: 1,
+        quotaVersata: 20
+      },
+      {
+        id: 'iscr-eff-1-s3',
+        socioId: 'socio-3',
+        dataIscrizione: '2026-09-12',
+        oraIscrizione: '16:00',
+        ruolo: 'partecipante',
+        statoPresenza: 'presente',
+        orarioCheckIn: '12:10',
+        checkInRegistratoDa: 'Ingresso / Check-in',
+        note: 'Menu celiaco richiesto',
+        quotaVersata: 10
+      },
+      {
+        id: 'iscr-eff-1-s5',
+        socioId: 'socio-5',
+        dataIscrizione: '2026-09-15',
+        oraIscrizione: '09:20',
+        ruolo: 'staff',
+        statoPresenza: 'da_verificare',
+        note: 'Assistenza punto cassa e gettoni',
+        quotaVersata: 10
+      },
+      {
+        id: 'iscr-eff-1-s6',
+        socioId: 'socio-6',
+        dataIscrizione: '2026-09-16',
+        oraIscrizione: '14:40',
+        ruolo: 'relatore_ospite',
+        statoPresenza: 'presente',
+        orarioCheckIn: '12:00',
+        checkInRegistratoDa: 'Presidenza',
+        note: 'Socia decana ospite al tavolo d\'onore',
+        quotaVersata: 0
+      },
+      {
+        id: 'iscr-eff-1-s7',
+        socioId: 'socio-7',
+        dataIscrizione: '2026-09-18',
+        oraIscrizione: '18:10',
+        ruolo: 'partecipante',
+        statoPresenza: 'assente',
+        note: 'Impossibilitato per motivi lavorativi',
+        quotaVersata: 10
+      }
+    ]
   },
 
   // 2. EVENTO IBRIDO (Co-organizzazione con Partner / Ripartizione Quote)
@@ -971,7 +1045,42 @@ export const INITIAL_EVENTI: ProLocoEvento[] = [
     pianoSicurezzaSafety: true,
     aslHaccp: true,
     partecipantiStimati: 1800,
-    noteOrganizzative: 'Gestione Economica Ibrida Effettiva (50/50): Spese vive lorde (5.900 €) ed entrate lorde stand (9.500 €) divise al 50%. Quota costi Pro Loco: 2.950 €, Quota incassi Pro Loco: 4.750 €, Utile netto Pro Loco: +1.800 €.'
+    noteOrganizzative: 'Gestione Economica Ibrida Effettiva (50/50): Spese vive lorde (5.900 €) ed entrate lorde stand (9.500 €) divise al 50%. Quota costi Pro Loco: 2.950 €, Quota incassi Pro Loco: 4.750 €, Utile netto Pro Loco: +1.800 €.',
+    iscrizioniAperte: true,
+    postiMassimi: 80,
+    quotaIscrizioneSocio: 0,
+    iscrizioni: [
+      {
+        id: 'iscr-eff-2-s1',
+        socioId: 'socio-1',
+        dataIscrizione: '2026-09-20',
+        oraIscrizione: '10:00',
+        ruolo: 'volontario',
+        statoPresenza: 'presente',
+        orarioCheckIn: '15:45',
+        checkInRegistratoDa: 'Comitato Feste',
+        note: 'Referente palco e accoglienza partner'
+      },
+      {
+        id: 'iscr-eff-2-s4',
+        socioId: 'socio-4',
+        dataIscrizione: '2026-09-21',
+        oraIscrizione: '14:20',
+        ruolo: 'partecipante',
+        statoPresenza: 'presente',
+        orarioCheckIn: '16:15',
+        checkInRegistratoDa: 'Info Point',
+        numeroAccompagnatori: 2
+      },
+      {
+        id: 'iscr-eff-2-s6',
+        socioId: 'socio-6',
+        dataIscrizione: '2026-09-22',
+        oraIscrizione: '11:00',
+        ruolo: 'partecipante',
+        statoPresenza: 'da_verificare'
+      }
+    ]
   },
 
   // 3. EVENTO GESTIONE (Conto Terzi per Committente / Rimborso Spese + Fee)
@@ -1016,7 +1125,43 @@ export const INITIAL_EVENTI: ProLocoEvento[] = [
     pianoSicurezzaSafety: true,
     aslHaccp: true,
     partecipantiStimati: 1800,
-    noteOrganizzative: 'Gestione Economica Conto Terzi Effettiva: Spese anticipate (5.900 €) integralmente rimborsate dal Comune a piè di lista. Compenso di gestione Pro Loco: +2.500 € netti a rischio d\'impresa zero.'
+    noteOrganizzative: 'Gestione Economica Conto Terzi Effettiva: Spese anticipate (5.900 €) integralmente rimborsate dal Comune a piè di lista. Compenso di gestione Pro Loco: +2.500 € netti a rischio d\'impresa zero.',
+    iscrizioniAperte: true,
+    postiMassimi: 120,
+    quotaIscrizioneSocio: 15,
+    iscrizioni: [
+      {
+        id: 'iscr-eff-3-s1',
+        socioId: 'socio-1',
+        dataIscrizione: '2026-09-25',
+        oraIscrizione: '09:00',
+        ruolo: 'staff',
+        statoPresenza: 'presente',
+        orarioCheckIn: '09:40',
+        checkInRegistratoDa: 'Segreteria',
+        quotaVersata: 15
+      },
+      {
+        id: 'iscr-eff-3-s2',
+        socioId: 'socio-2',
+        dataIscrizione: '2026-09-25',
+        oraIscrizione: '10:30',
+        ruolo: 'volontario',
+        statoPresenza: 'presente',
+        orarioCheckIn: '09:50',
+        checkInRegistratoDa: 'Segreteria',
+        quotaVersata: 15
+      },
+      {
+        id: 'iscr-eff-3-s3',
+        socioId: 'socio-3',
+        dataIscrizione: '2026-09-26',
+        oraIscrizione: '15:10',
+        ruolo: 'partecipante',
+        statoPresenza: 'da_verificare',
+        quotaVersata: 15
+      }
+    ]
   }
 ];
 
@@ -1665,7 +1810,13 @@ export function loadEventi(): ProLocoEvento[] {
         speseConsuntivo: speseCons,
         budgetPrevisto: totPrev > 0 ? totPrev : (e.budgetPrevisto || 0),
         costiSostenuti: totCons > 0 ? totCons : (e.costiSostenuti || 0),
-        entratePreviste: e.entratePreviste ?? e.budgetPrevisto
+        entratePreviste: e.entratePreviste ?? e.budgetPrevisto,
+        iscrizioni: Array.isArray(e.iscrizioni) && e.iscrizioni.length > 0 
+          ? e.iscrizioni 
+          : (INITIAL_EVENTI.find(init => init.id === e.id)?.iscrizioni || []),
+        iscrizioniAperte: e.iscrizioniAperte !== undefined ? e.iscrizioniAperte : true,
+        postiMassimi: e.postiMassimi || 60,
+        quotaIscrizioneSocio: e.quotaIscrizioneSocio ?? 0
       };
     });
 
@@ -1879,6 +2030,66 @@ export function esportaStandEventoCSV(evento: ProLocoEvento, stands: StandEvento
   document.body.removeChild(link);
 }
 
+export function esportaPresenzeCSV(evento: ProLocoEvento, soci: Socio[]): void {
+  const sociMap = new Map<string, Socio>();
+  soci.forEach(s => sociMap.set(s.id, s));
+
+  const intestazioni = [
+    'ID Iscrizione',
+    'Evento Titolo',
+    'Data Evento',
+    'Numero Tessera Socio',
+    'Cognome Socio',
+    'Nome Socio',
+    'Codice Fiscale',
+    'Categoria Socio',
+    'Ruolo Partecipazione',
+    'Data Iscrizione',
+    'Ora Iscrizione',
+    'Stato Presenza',
+    'Orario Check-In',
+    'Check-In Registrato Da',
+    'Numero Accompagnatori',
+    'Quota Versata (€)',
+    'Note / Preferenze'
+  ];
+
+  const iscrizioni = evento.iscrizioni || [];
+  const righe = iscrizioni.map(iscr => {
+    const s = sociMap.get(iscr.socioId);
+    return [
+      `"${iscr.id}"`,
+      `"${(evento.titolo || '').replace(/"/g, '""')}"`,
+      `"${evento.dataInizio || ''}"`,
+      `"${s?.numeroTessera || ''}"`,
+      `"${(s?.cognome || '').replace(/"/g, '""')}"`,
+      `"${(s?.nome || '').replace(/"/g, '""')}"`,
+      `"${s?.codiceFiscale || ''}"`,
+      `"${s?.categoria || ''}"`,
+      `"${iscr.ruolo}"`,
+      `"${iscr.dataIscrizione}"`,
+      `"${iscr.oraIscrizione || ''}"`,
+      `"${(iscr.statoPresenza || 'da_verificare').toUpperCase()}"`,
+      `"${iscr.orarioCheckIn || ''}"`,
+      `"${(iscr.checkInRegistratoDa || '').replace(/"/g, '""')}"`,
+      `"${iscr.numeroAccompagnatori || 0}"`,
+      `"${iscr.quotaVersata || 0}"`,
+      `"${(iscr.note || '').replace(/"/g, '""')}"`
+    ].join(';');
+  });
+
+  const csvContent = '\uFEFF' + [intestazioni.join(';'), ...righe].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `Registro_Presenze_${(evento.titolo || 'Evento').replace(/[^a-zA-Z0-9]/g, '_')}_${evento.dataInizio}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export function loadDonazioni(): DonazioneTerzi[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_DONAZIONI);
@@ -1931,6 +2142,100 @@ export function saveCampagneFondi(campagne: CampagnaRaccoltaFondi[]): void {
   } catch (err) {
     console.error('Errore nel salvataggio delle campagne fondi:', err);
   }
+}
+
+// =====================================================================
+// CESTINO DI SISTEMA & REGISTRO AUDIT STORICO (PUNTO 1.4 E GENERALI)
+// =====================================================================
+
+export function loadCestino(): ElementoCestino[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CESTINO);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.error('Errore nel caricamento del cestino di sistema:', err);
+    return [];
+  }
+}
+
+export function saveCestino(elementi: ElementoCestino[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_CESTINO, JSON.stringify(elementi));
+  } catch (err) {
+    console.error('Errore nel salvataggio del cestino di sistema:', err);
+  }
+}
+
+export function aggiungiAlCestino(elemento: ElementoCestino): void {
+  try {
+    const attuali = loadCestino();
+    const filtrati = attuali.filter(e => e.id !== elemento.id);
+    const aggiornati = [elemento, ...filtrati];
+    saveCestino(aggiornati);
+  } catch (err) {
+    console.error('Errore aggiunta elemento al cestino:', err);
+  }
+}
+
+export function rimuoviDalCestino(id: string): void {
+  try {
+    const attuali = loadCestino();
+    const aggiornati = attuali.filter(e => e.id !== id);
+    saveCestino(aggiornati);
+  } catch (err) {
+    console.error('Errore rimozione elemento dal cestino:', err);
+  }
+}
+
+export function svuotaCestino(): void {
+  try {
+    saveCestino([]);
+  } catch (err) {
+    console.error('Errore svuotamento cestino:', err);
+  }
+}
+
+export function esportaCestinoCSV(elementi: ElementoCestino[], config?: ProLocoInfo): void {
+  const intestazioni = [
+    'ID Cestino',
+    'ID Originale Entita',
+    'Tipologia Entita',
+    'Descrizione / Intestazione',
+    'Dettagli Aggiuntivi',
+    'Importo Originale (€)',
+    'Stato Fiscale & Contabile',
+    'Data Eliminazione / Revoca',
+    'Ora Eliminazione',
+    'Motivazione Formale / Ripensamento Donante',
+    'Operatore / Registrato Da'
+  ];
+
+  const righe = elementi.map(item => [
+    `"${item.id}"`,
+    `"${item.entitaId}"`,
+    `"${item.tipoEntita.toUpperCase()}"`,
+    `"${(item.titolo || '').replace(/"/g, '""')}"`,
+    `"${(item.sottotitolo || '').replace(/"/g, '""')}"`,
+    `"${item.importo !== undefined ? item.importo.toFixed(2) : ''}"`,
+    `"ESCLUSO DA OGNI BILANCIO E STATISTICA (AUDIT LOG)"`,
+    `"${item.dataEliminazione}"`,
+    `"${item.oraEliminazione || ''}"`,
+    `"${(item.motivo || '').replace(/"/g, '""')}"`,
+    `"${(item.eliminatoDa || 'Tesoreria / Amministrazione').replace(/"/g, '""')}"`
+  ].join(';'));
+
+  const prefisso = config ? `PRO LOCO ${config.nome.toUpperCase()} - REGISTRO AUDIT STORICO REVOCHE E CESTINO DI SISTEMA\r\nData estrazione: ${new Date().toLocaleDateString('it-IT')}\r\n\r\n` : '';
+  const csvContent = '\uFEFF' + prefisso + [intestazioni.join(';'), ...righe].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `Registro_Audit_Cestino_Revoche_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 export function esportaDonazioniCSV(donazioni: DonazioneTerzi[], anno?: number): void {
@@ -2005,12 +2310,13 @@ export function esportaAdE730CSV(donazioni: DonazioneTerzi[], anno: number, conf
     'Tipologia Detrazione (30% IRPEF ex Art. 83 CTS)'
   ];
 
-  // Solo donazioni dell'anno con metodo tracciabile da privati cittadini con CF
+  // Solo donazioni dell'anno con metodo tracciabile da privati cittadini con CF e NON ANNULLATE
   const idonei = donazioni.filter(d => 
     d.anno === anno && 
     d.tipoDonatore === 'privato' && 
     d.metodo !== 'Contanti' &&
     d.detraibileFiscale !== false &&
+    d.stato !== 'annullata_ripensamento' &&
     d.codiceFiscalePartitaIva &&
     d.codiceFiscalePartitaIva.trim().length === 16
   );
@@ -2057,7 +2363,7 @@ export function esportaTrasparenzaL124CSV(donazioni: DonazioneTerzi[], anno: num
     'Elemento Giustificativo / Delibera C.D.'
   ];
 
-  const donazioniAnno = donazioni.filter(d => d.anno === anno);
+  const donazioniAnno = donazioni.filter(d => d.anno === anno && d.stato !== 'annullata_ripensamento');
   const righe = donazioniAnno.map(d => [
     `"${config.nome.replace(/"/g, '""')}"`,
     `"${config.codiceFiscale}"`,
@@ -2098,8 +2404,8 @@ export function esportaBilancioCompletoCSV(
   
   const totaleQuote = quoteAnno.reduce((sum, q) => sum + (q.importo || 0), 0);
 
-  // Donazioni da terzi
-  const donazioniTotali = donazioni || loadDonazioni();
+  // Donazioni da terzi (escludendo categoricamente donazioni annullate per ripensamento donante)
+  const donazioniTotali = (donazioni || loadDonazioni()).filter(d => d.stato !== 'annullata_ripensamento');
   const donazioniAnno = annoFiltro
     ? donazioniTotali.filter(d => d.anno === annoFiltro)
     : donazioniTotali;
@@ -2279,10 +2585,11 @@ export function esportaBackupJSON(
   donazioni?: DonazioneTerzi[],
   campagne?: CampagnaRaccoltaFondi[],
   sitoConfig?: SitoWebConfig,
-  archivioGiornalini?: EdizioneGiornalino[]
+  archivioGiornalini?: EdizioneGiornalino[],
+  cestino?: ElementoCestino[]
 ): void {
   const data = {
-    versione: '3.0',
+    versione: '3.1',
     dataEsportazione: new Date().toISOString(),
     configurazione: config,
     soci: soci,
@@ -2290,7 +2597,8 @@ export function esportaBackupJSON(
     donazioni: donazioni || loadDonazioni(),
     campagne: campagne || loadCampagneFondi(),
     sitoConfig: sitoConfig || loadSitoWebConfig(),
-    archivioGiornalini: archivioGiornalini || loadArchivioGiornalini()
+    archivioGiornalini: archivioGiornalini || loadArchivioGiornalini(),
+    cestino: cestino || loadCestino()
   };
   const jsonString = JSON.stringify(data, null, 2);
   const blob = new Blob([jsonString], { type: 'application/json' });
@@ -2308,6 +2616,7 @@ export function azzeraDatabase(): void {
   saveEventi([]);
   saveDonazioni([]);
   saveCampagneFondi([]);
+  saveCestino([]);
 }
 
 export function esportaCodiceSitoHTML(

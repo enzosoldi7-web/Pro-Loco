@@ -163,6 +163,11 @@ export const EventModal: React.FC<EventModalProps> = ({
   const [volontariIds, setVolontariIds] = useState<string[]>(evento?.volontariIds || []);
   const [responsabileId, setResponsabileId] = useState<string>(evento?.responsabileId || (soci[0]?.id || ''));
 
+  // Gestione Iscrizioni Soci & Capienza Evento
+  const [iscrizioniAperte, setIscrizioniAperte] = useState<boolean>(evento?.iscrizioniAperte ?? true);
+  const [postiMassimi, setPostiMassimi] = useState<number>(evento?.postiMassimi || 60);
+  const [quotaIscrizioneSocio, setQuotaIscrizioneSocio] = useState<number>(evento?.quotaIscrizioneSocio || 0);
+
   // Stand Numerati con Tipologia e Riferimento Food
   const [standNumerati, setStandNumerati] = useState<StandEvento[]>(() => {
     const list = evento?.standNumerati && evento.standNumerati.length > 0
@@ -428,7 +433,11 @@ export const EventModal: React.FC<EventModalProps> = ({
       pianoSicurezzaSafety,
       aslHaccp,
       partecipantiStimati: Number(partecipantiStimati) || 0,
-      noteOrganizzative: noteOrganizzative.trim()
+      noteOrganizzative: noteOrganizzative.trim(),
+      iscrizioni: evento?.iscrizioni || [],
+      iscrizioniAperte,
+      postiMassimi: Number(postiMassimi) || 0,
+      quotaIscrizioneSocio: Number(quotaIscrizioneSocio) || 0
     };
 
     onSalva(nuovoEvento);
@@ -1393,6 +1402,83 @@ export const EventModal: React.FC<EventModalProps> = ({
                     </label>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+
+          {/* Sezione 4B: Gestione Iscrizioni Soci & Capienza Evento */}
+          <div className="border border-emerald-200 p-3.5 sm:p-4 rounded-xl bg-emerald-50/40 space-y-3.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-emerald-200/80">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-700 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 text-xs sm:text-sm">
+                    Iscrizioni Soci & Tracciamento Presenze
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Abilita le registrazioni per i soci, imposta il limite posti e l'eventuale quota di partecipazione.
+                  </p>
+                </div>
+              </div>
+
+              {evento?.iscrizioni && evento.iscrizioni.length > 0 && (
+                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  {evento.iscrizioni.length} Soci Già Iscritti
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Toggle Iscrizioni Aperte */}
+              <div className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-bold text-slate-800 block">Iscrizioni Aperte</label>
+                  <span className="text-[10px] text-slate-500">
+                    {iscrizioniAperte ? 'Accetta adesioni dai soci' : 'Adesioni chiuse o sospese'}
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={iscrizioniAperte}
+                  onChange={(e) => setIscrizioniAperte(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Capienza Massima Posti */}
+              <div className="bg-white p-3 rounded-lg border border-slate-200">
+                <label className="text-xs font-bold text-slate-800 block mb-1">Capienza Massima (N° Posti)</label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min="0"
+                    max="5000"
+                    value={postiMassimi}
+                    onChange={(e) => setPostiMassimi(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800"
+                    placeholder="0 = Illimitata"
+                  />
+                  <span className="text-[11px] text-slate-500 font-medium">posti</span>
+                </div>
+              </div>
+
+              {/* Quota Iscrizione Socio */}
+              <div className="bg-white p-3 rounded-lg border border-slate-200">
+                <label className="text-xs font-bold text-slate-800 block mb-1">Quota di Partecipazione (€)</label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.50"
+                    value={quotaIscrizioneSocio}
+                    onChange={(e) => setQuotaIscrizioneSocio(Math.max(0, parseFloat(e.target.value) || 0))}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800"
+                    placeholder="0 = Gratuito"
+                  />
+                  <span className="text-[11px] text-slate-500 font-medium">€/socio</span>
+                </div>
               </div>
             </div>
           </div>

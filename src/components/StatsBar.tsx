@@ -74,38 +74,38 @@ export const StatsBar: React.FC<StatsBarProps> = ({
     <div className="space-y-3 no-print mb-6">
       
       {/* 1. LE 4 SCHEDE KPI PRINCIPALI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 md:gap-4">
         
         {/* Scheda Totale Soci */}
-        <div className="bg-white rounded-xl p-4 border border-slate-200/90 shadow-xs flex items-center justify-between">
+        <div className="bg-white/95 rounded-2xl p-4.5 border border-slate-200/80 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.03)] hover:border-slate-300/80 transition-all duration-200 flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
               Totale Soci
             </p>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-900">{totaleSoci}</span>
+              <span className="text-2xl font-extrabold text-slate-900 tracking-tight tabular-nums">{totaleSoci}</span>
               <span className="text-xs text-slate-500 font-medium">iscritti all'albo</span>
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
               {soci.filter(s => s.categoria === 'Volontario Attivo' || s.categoria === 'Membro Direttivo').length} attivi/direttivo
             </p>
           </div>
-          <div className="w-11 h-11 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-slate-100/90 flex items-center justify-center text-slate-600 shrink-0">
             <Users className="w-5 h-5" />
           </div>
         </div>
 
         {/* Scheda In Regola Quota */}
-        <div className="bg-white rounded-xl p-4 border border-emerald-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white/95 rounded-2xl p-4.5 border border-emerald-200/70 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.03)] hover:border-emerald-300 transition-all duration-200 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-1.5">
-              <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">
+              <p className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider">
                 In Regola {annoSelezionato}
               </p>
             </div>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-emerald-700">{inRegola}</span>
-              <span className="text-xs font-bold text-emerald-600">
+              <span className="text-2xl font-extrabold text-emerald-700 tracking-tight tabular-nums">{inRegola}</span>
+              <span className="text-xs font-semibold text-emerald-600 tabular-nums">
                 {percentualeInRegola}%
               </span>
             </div>
@@ -116,48 +116,48 @@ export const StatsBar: React.FC<StatsBarProps> = ({
               />
             </div>
           </div>
-          <div className="w-11 h-11 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100/80">
             <CheckCircle2 className="w-5 h-5" />
           </div>
         </div>
 
         {/* Scheda Da Rinnovare (Evidenziata con badge e pulsante promemoria) */}
-        <div className={`bg-white rounded-xl p-4 border shadow-xs flex flex-col justify-between transition-all ${
+        <div className={`bg-white/95 rounded-2xl p-4.5 border shadow-[0_2px_12px_-4px_rgba(15,23,42,0.03)] flex flex-col justify-between transition-all duration-200 ${
           totaleNonRinnovati > 0 
-            ? 'border-amber-300 ring-1 ring-amber-200/60' 
-            : 'border-slate-200'
+            ? 'border-amber-200/90 ring-1 ring-amber-100/80 hover:border-amber-300' 
+            : 'border-slate-200/80 hover:border-slate-300'
         }`}>
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-semibold text-amber-900 uppercase tracking-wider">
+                <p className="text-[11px] font-semibold text-amber-900 uppercase tracking-wider">
                   Da Rinnovare {annoSelezionato}
                 </p>
                 {totaleNonRinnovati > 0 && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300/60 animate-pulse">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/70 animate-pulse">
                     Attesa
                   </span>
                 )}
               </div>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-amber-600">{totaleNonRinnovati}</span>
-                <span className="text-xs text-amber-700 font-medium">non regolarizzati</span>
+                <span className="text-2xl font-extrabold text-amber-600 tracking-tight tabular-nums">{totaleNonRinnovati}</span>
+                <span className="text-xs text-amber-700/90 font-medium">non regolarizzati</span>
               </div>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200/80">
+            <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-100">
               <Clock className="w-5 h-5" />
             </div>
           </div>
 
-          <div className="mt-2.5 pt-2 border-t border-amber-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-500 font-mono font-bold text-amber-800">
+          <div className="mt-2.5 pt-2 border-t border-amber-100/70 flex items-center justify-between text-[11px]">
+            <span className="text-slate-500 font-mono font-semibold text-amber-800 tabular-nums">
               € {(totaleQuoteDaIncassare || 0).toLocaleString('it-IT')} da incassare
             </span>
 
             {totaleNonRinnovati > 0 && (
               <button
                 onClick={() => setMostraModalPromemoria(true)}
-                className="text-amber-800 hover:text-amber-950 font-bold flex items-center gap-0.5 underline transition-colors cursor-pointer"
+                className="text-amber-800 hover:text-amber-950 font-semibold flex items-center gap-0.5 underline transition-colors cursor-pointer"
                 title="Apri pannello promemoria e notifiche soci"
               >
                 <Bell className="w-3 h-3 text-amber-600" />
@@ -168,15 +168,15 @@ export const StatsBar: React.FC<StatsBarProps> = ({
         </div>
 
         {/* Scheda Incasso Quote Anno */}
-        <div className="bg-white rounded-xl p-4 border border-teal-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white/95 rounded-2xl p-4.5 border border-teal-200/70 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.03)] hover:border-teal-300 transition-all duration-200 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-1">
-              <p className="text-xs font-semibold text-teal-800 uppercase tracking-wider">
+              <p className="text-[11px] font-semibold text-teal-800 uppercase tracking-wider">
                 Incasso Quote {annoSelezionato}
               </p>
             </div>
             <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-2xl font-black text-teal-800">
+              <span className="text-2xl font-extrabold text-teal-800 tracking-tight tabular-nums">
                 {(incassoAnno || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
               </span>
             </div>
@@ -185,7 +185,7 @@ export const StatsBar: React.FC<StatsBarProps> = ({
               <span>{numeroQuoteIncassate} ricevute emesse</span>
             </p>
           </div>
-          <div className="w-11 h-11 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center shrink-0 border border-teal-100">
+          <div className="w-11 h-11 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0 border border-teal-100/80">
             <Euro className="w-5 h-5" />
           </div>
         </div>
@@ -194,10 +194,10 @@ export const StatsBar: React.FC<StatsBarProps> = ({
 
       {/* 2. BANNER INTERATTIVO DI AVVISO SCADENZA E SOLLECITO QUOTE */}
       {totaleNonRinnovati > 0 && (
-        <div className="bg-gradient-to-r from-amber-50 via-amber-50/90 to-amber-100/70 border border-amber-300/80 rounded-xl p-3.5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="bg-gradient-to-r from-amber-50/90 via-amber-50/70 to-orange-50/50 border border-amber-200/80 rounded-2xl p-3.5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           
           <div className="flex items-start sm:items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
               <Bell className="w-4 h-4" />
             </div>
 

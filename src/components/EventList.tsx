@@ -39,12 +39,15 @@ import {
   ArrowRight,
   Info,
   X,
-  SlidersHorizontal
+  SlidersHorizontal,
+  UserCheck
 } from 'lucide-react';
-import { esportaEventiCSV, STAND_SIMULATI_DEFAULT } from '../storage';
+import { esportaEventiCSV, esportaPresenzeCSV, STAND_SIMULATI_DEFAULT } from '../storage';
 import { EventBudgetChart } from './EventBudgetChart';
 import { calcolaEconomiaEvento, getInfoTipoEvento } from '../utils/eventoHelpers';
 import { EventStandsModal } from './EventStandsModal';
+import { EventAttendanceModal } from './EventAttendanceModal';
+import { EventAttendancePrintModal } from './EventAttendancePrintModal';
 
 interface EventListProps {
   eventi: ProLocoEvento[];
@@ -55,6 +58,7 @@ interface EventListProps {
   onModificaEvento: (evento: ProLocoEvento) => void;
   onEliminaEvento: (eventoId: string) => void;
   onStampaEvento: (evento: ProLocoEvento) => void;
+  onAggiornaEvento?: (evento: ProLocoEvento) => void;
   onStampaProgrammaEventi?: () => void;
   onRipristinaSimulazione?: () => void;
 }
@@ -68,6 +72,7 @@ export const EventList: React.FC<EventListProps> = ({
   onModificaEvento,
   onEliminaEvento,
   onStampaEvento,
+  onAggiornaEvento,
   onStampaProgrammaEventi,
   onRipristinaSimulazione,
 }) => {
@@ -85,6 +90,70 @@ export const EventList: React.FC<EventListProps> = ({
   const [standEspansoId, setStandEspansoId] = useState<string | null>(null);
   const [mostraComparazioneModelli, setMostraComparazioneModelli] = useState<boolean>(false);
   const [eventoPerModificaStand, setEventoPerModificaStand] = useState<ProLocoEvento | null>(null);
+  const [eventoPresenze, setEventoPresenze] = useState<ProLocoEvento | null>(null);
+  const [eventoStampaPresenze, setEventoStampaPresenze] = useState<ProLocoEvento | null>(null);
+  const [vistaSezione, setVistaSezione] = useState<'manifestazioni' | 'presenze'>('manifestazioni');
+  const [eventoSelezionatoIdPresenze, setEventoSelezionatoIdPresenze] = useState<string>(eventi[0]?.id || '');
+  const [filtroPresenzeStato, setFiltroPresenzeStato] = useState<'tutti' | 'presente' | 'da_verificare' | 'assente'>('tutti');
+  const [ricercaPresenze, setRicercaPresenze] = useState<string>('');
+
+  const handleAggiornaPresenza = (eventoTarget: ProLocoEvento, iscrizioneId: string, nuovoStato: 'presente' | 'assente' | 'da_verificare') => {
+    const ora = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const operatore = `${config.nomePresidente || 'Amministratore'} / Registro`;
+    const nuoveIscrizioni = (eventoTarget.iscrizioni || []).map(iscr => {
+      if (iscr.id === iscrizioneId) {
+        return {
+          ...iscr,
+          statoPresenza: nuovoStato,
+          orarioCheckIn: nuovoStato === 'presente' ? (iscr.orarioCheckIn || ora) : undefined,
+          checkInRegistratoDa: nuovoStato === 'presente' ? operatore : undefined
+        };
+      }
+      return iscr;
+    });
+    const evAggiornato = { ...eventoTarget, iscrizioni: nuoveIscrizioni };
+    if (onAggiornaEvento) {
+      onAggiornaEvento(evAggiornato);
+    } else {
+      onModificaEvento(evAggiornato);
+    }
+  };
+
+  const handleSegnaTuttiPresenti = (eventoTarget: ProLocoEvento) => {
+    if (!confirm(`Vuoi contrassegnare tutti i ${eventoTarget.iscrizioni?.length || 0} iscritti come "Presente"?`)) return;
+    const ora = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const operatore = `${config.nomePresidente || 'Amministratore'} / Appello Rapido`;
+    const nuoveIscrizioni = (eventoTarget.iscrizioni || []).map(iscr => ({
+      ...iscr,
+      statoPresenza: 'presente' as const,
+      orarioCheckIn: iscr.orarioCheckIn || ora,
+      checkInRegistratoDa: iscr.checkInRegistratoDa || operatore
+    }));
+    const evAggiornato = { ...eventoTarget, iscrizioni: nuoveIscrizioni };
+    if (onAggiornaEvento) onAggiornaEvento(evAggiornato);
+    else onModificaEvento(evAggiornato);
+  };
+
+  const handleAzzeraCheckIn = (eventoTarget: ProLocoEvento) => {
+    if (!confirm('Vuoi azzerare lo stato delle presenze e riportare tutti a "Da Verificare"?')) return;
+    const nuoveIscrizioni = (eventoTarget.iscrizioni || []).map(iscr => ({
+      ...iscr,
+      statoPresenza: 'da_verificare' as const,
+      orarioCheckIn: undefined,
+      checkInRegistratoDa: undefined
+    }));
+    const evAggiornato = { ...eventoTarget, iscrizioni: nuoveIscrizioni };
+    if (onAggiornaEvento) onAggiornaEvento(evAggiornato);
+    else onModificaEvento(evAggiornato);
+  };
+
+  const handleEliminaIscrizione = (eventoTarget: ProLocoEvento, iscrizioneId: string) => {
+    if (!confirm('Confermi la cancellazione dell\'iscrizione di questo socio dall\'evento?')) return;
+    const nuoveIscrizioni = (eventoTarget.iscrizioni || []).filter(i => i.id !== iscrizioneId);
+    const evAggiornato = { ...eventoTarget, iscrizioni: nuoveIscrizioni };
+    if (onAggiornaEvento) onAggiornaEvento(evAggiornato);
+    else onModificaEvento(evAggiornato);
+  };
 
   // Soci mappa per reperire rapidamente i nominativi
   const sociMappa = useMemo(() => {
@@ -265,7 +334,73 @@ export const EventList: React.FC<EventListProps> = ({
   return (
     <div className="space-y-6">
 
-      {/* Banner Gestione Effettiva 3 Modelli Evento: Nativo, Ibrido, Gestione & Stand Numerati */}
+      {/* Selettore Navigazione Principale: 1. Manifestazioni & Bilancio vs 2. Registro Presenze & Appello */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs">
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setVistaSezione('manifestazioni')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              vistaSezione === 'manifestazioni'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Calendar className="w-4 h-4 text-emerald-700" />
+            <span>Calendario & Bilancio Manifestazioni</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setVistaSezione('presenze')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              vistaSezione === 'presenze'
+                ? 'bg-emerald-700 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <UserCheck className="w-4 h-4" />
+            <span>Registro Iscrizioni & Presenze Soci</span>
+            {eventi.reduce((acc, ev) => acc + (ev.iscrizioni?.length || 0), 0) > 0 && (
+              <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-mono font-bold ${
+                vistaSezione === 'presenze' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                {eventi.reduce((acc, ev) => acc + (ev.iscrizioni?.length || 0), 0)} iscritti
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Pulsanti Rapidi */}
+        <div className="flex items-center gap-2">
+          {vistaSezione === 'presenze' ? (
+            <button
+              type="button"
+              onClick={() => {
+                const ev = eventi.find(e => e.id === eventoSelezionatoIdPresenze) || eventi[0];
+                if (ev) setEventoPresenze(ev);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl transition shadow-2xs cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Iscrivi Socio all'Evento</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onNuovoEvento}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl transition shadow-2xs cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Nuovo Evento</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {vistaSezione === 'manifestazioni' ? (
+        <>
+          {/* Banner Gestione Effettiva 3 Modelli Evento: Nativo, Ibrido, Gestione & Stand Numerati */}
       <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 rounded-2xl p-4 sm:p-5 text-white border border-teal-500/40 shadow-sm space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5">
@@ -814,6 +949,33 @@ export const EventList: React.FC<EventListProps> = ({
                     ) : null}
                   </div>
 
+                  {/* Sezione Iscrizioni e Presenze Soci */}
+                  <div className="bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-200/80 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-emerald-700 text-white flex items-center justify-center font-bold text-[10px]">
+                        <UserCheck className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className="font-bold text-emerald-950 block text-[11px] leading-tight">
+                          {evento.iscrizioni?.length || 0} Soci Iscritti
+                          {evento.postiMassimi ? ` (su ${evento.postiMassimi} max)` : ''}
+                        </span>
+                        <span className="text-[10px] text-emerald-700">
+                          {(evento.iscrizioni || []).filter(i => i.statoPresenza === 'presente').length} Presenti convalidati
+                          {evento.quotaIscrizioneSocio ? ` • Quota: €${evento.quotaIscrizioneSocio}` : ' • Gratuito'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setEventoPresenze(evento)}
+                      className="px-2.5 py-1 text-[11px] font-bold text-emerald-800 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                    >
+                      Presenze & Appello
+                    </button>
+                  </div>
+
                   {/* Sezione Stand Numerati con Tipologia, Riferimento Food ed Economia Analitica */}
                   {(() => {
                     const stands: StandEvento[] = evento.standNumerati && evento.standNumerati.length > 0
@@ -1188,15 +1350,26 @@ export const EventList: React.FC<EventListProps> = ({
                   })()}
 
                   {/* Pulsanti Azioni */}
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                    <button
-                      onClick={() => onStampaEvento(evento)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
-                      title="Stampa e scarica Scheda Tecnica e Circolare A4 dell'evento in PDF"
-                    >
-                      <Printer className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>Scheda PDF</span>
-                    </button>
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => onStampaEvento(evento)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
+                        title="Stampa e scarica Scheda Tecnica e Circolare A4 dell'evento in PDF"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Scheda PDF</span>
+                      </button>
+
+                      <button
+                        onClick={() => setEventoPresenze(evento)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors cursor-pointer"
+                        title="Gestisci elenco iscritti e presenze"
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-teal-700" />
+                        <span>Presenze ({evento.iscrizioni?.length || 0})</span>
+                      </button>
+                    </div>
 
                     <div className="flex items-center gap-1">
                       <button
@@ -1227,6 +1400,430 @@ export const EventList: React.FC<EventListProps> = ({
               </div>
             );
           })}
+        </div>
+      )}
+        </>
+      ) : (
+        <div className="space-y-5 animate-in fade-in duration-150">
+          {/* Barra Selezione Evento per Registro Presenze */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Seleziona Evento per Appello e Tracciamento
+                </span>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-emerald-700" />
+                  <span>Controllo Presenze & Check-in Ufficiale</span>
+                </h3>
+              </div>
+
+              {/* Selettore rapido a discesa */}
+              <div className="w-full sm:w-80">
+                <select
+                  value={eventoSelezionatoIdPresenze}
+                  onChange={(e) => setEventoSelezionatoIdPresenze(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:ring-1 focus:ring-emerald-600 outline-none"
+                >
+                  {eventi.map(ev => (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.titolo} ({ev.dataInizio}) — {ev.iscrizioni?.length || 0} iscritti
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Chip degli eventi per selezione rapida a 1 click */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 border-t border-slate-100">
+              {eventi.map(ev => {
+                const attivo = (ev.id === eventoSelezionatoIdPresenze) || (!eventoSelezionatoIdPresenze && ev.id === eventi[0]?.id);
+                const countIscr = ev.iscrizioni?.length || 0;
+                const countPres = (ev.iscrizioni || []).filter(i => i.statoPresenza === 'presente').length;
+                return (
+                  <button
+                    key={ev.id}
+                    type="button"
+                    onClick={() => setEventoSelezionatoIdPresenze(ev.id)}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
+                      attivo
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span className="font-bold">{ev.titolo}</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                      attivo ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-800'
+                    }`}>
+                      {countPres}/{countIscr}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Dettaglio Evento Selezionato & Tabella Registro */}
+          {(() => {
+            const eventoAttivo = eventi.find(e => e.id === eventoSelezionatoIdPresenze) || eventi[0];
+            if (!eventoAttivo) {
+              return (
+                <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-500">
+                  Nessun evento disponibile. Crea il tuo primo evento per attivare il registro presenze.
+                </div>
+              );
+            }
+
+            const iscritti = eventoAttivo.iscrizioni || [];
+            const presenti = iscritti.filter(i => i.statoPresenza === 'presente');
+            const daVerificare = iscritti.filter(i => i.statoPresenza === 'da_verificare');
+            const assenti = iscritti.filter(i => i.statoPresenza === 'assente');
+            const percPresenza = iscritti.length > 0 ? Math.round((presenti.length / iscritti.length) * 100) : 0;
+            const quoteTotali = iscritti.reduce((acc, i) => acc + (i.quotaVersata || 0), 0);
+
+            // Filtro della lista
+            const iscrittiFiltrati = iscritti.filter(iscr => {
+              if (filtroPresenzeStato !== 'tutti' && iscr.statoPresenza !== filtroPresenzeStato) return false;
+              if (ricercaPresenze.trim()) {
+                const s = sociMappa.get(iscr.socioId);
+                const q = ricercaPresenze.toLowerCase().trim();
+                const matchNome = s ? `${s.nome} ${s.cognome}`.toLowerCase().includes(q) : false;
+                const matchTessera = s ? s.numeroTessera.toLowerCase().includes(q) : false;
+                const matchRuolo = iscr.ruolo?.toLowerCase().includes(q);
+                return matchNome || matchTessera || matchRuolo;
+              }
+              return true;
+            });
+
+            return (
+              <div className="space-y-4">
+                {/* Header Dettaglio Evento con KPI */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          {eventoAttivo.categoria}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          eventoAttivo.iscrizioniAperte !== false ? 'bg-emerald-50 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {eventoAttivo.iscrizioniAperte !== false ? 'Adesioni Aperte' : 'Iscrizioni Chiuse'}
+                        </span>
+                      </div>
+                      <h2 className="text-lg sm:text-xl font-black text-slate-900 mt-1">
+                        {eventoAttivo.titolo}
+                      </h2>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                          {eventoAttivo.dataInizio} {eventoAttivo.oraInizio ? `alle ${eventoAttivo.oraInizio}` : ''}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                          {eventoAttivo.luogo}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEventoStampaPresenze(eventoAttivo)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition cursor-pointer"
+                        title="Stampa foglio presenze A4 per raccolta firme cartacea"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Foglio Firme A4</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => esportaPresenzeCSV(eventoAttivo, soci)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition cursor-pointer"
+                        title="Esporta elenco iscritti in file Excel / CSV"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Esporta CSV</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setEventoPresenze(eventoAttivo)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl shadow-xs transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Iscrivi Socio</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4 KPI Box Presenze */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Soci Iscritti</span>
+                      <div className="mt-1 flex items-baseline gap-1.5">
+                        <span className="text-2xl font-black text-slate-900 font-mono">{iscritti.length}</span>
+                        {eventoAttivo.postiMassimi ? (
+                          <span className="text-xs text-slate-400 font-medium">/ {eventoAttivo.postiMassimi} max</span>
+                        ) : null}
+                      </div>
+                      <span className="text-[10px] text-slate-500 block mt-1">Adesioni registrate</span>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-300">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-emerald-950 uppercase tracking-wider">Presenti Convalidati</span>
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-200/80 text-emerald-900 font-mono">
+                          {percPresenza}%
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-baseline gap-1.5">
+                        <span className="text-2xl font-black text-emerald-800 font-mono">{presenti.length}</span>
+                        <span className="text-xs text-emerald-700 font-medium">al check-in</span>
+                      </div>
+                      <div className="w-full bg-emerald-200 rounded-full h-1.5 mt-2 overflow-hidden">
+                        <div className="bg-emerald-700 h-1.5 rounded-full transition-all duration-300" style={{ width: `${percPresenza}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-300">
+                      <span className="text-[11px] font-bold text-amber-950 uppercase tracking-wider block">In Attesa Appello</span>
+                      <div className="mt-1 flex items-baseline gap-1.5">
+                        <span className="text-2xl font-black text-amber-800 font-mono">{daVerificare.length}</span>
+                        <span className="text-xs text-amber-700 font-medium">da verificare</span>
+                      </div>
+                      <span className="text-[10px] text-amber-700 block mt-1">In attesa all'accoglienza</span>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Quote Raccolte</span>
+                      <div className="mt-1 flex items-baseline gap-1.5">
+                        <span className="text-2xl font-black text-slate-900 font-mono">{quoteTotali.toLocaleString('it-IT')} €</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 block mt-1">
+                        {eventoAttivo.quotaIscrizioneSocio ? `Quota di ${eventoAttivo.quotaIscrizioneSocio} € a socio` : 'Partecipazione gratuita'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Barra Strumenti Tabella: Ricerca, Filtri e Azioni Massive */}
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative w-full sm:w-64">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Cerca socio per nome o tessera..."
+                        value={ricercaPresenze}
+                        onChange={(e) => setRicercaPresenze(e.target.value)}
+                        className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-1 focus:ring-emerald-600 outline-none"
+                      />
+                    </div>
+
+                    {/* Filtri pillola stato */}
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setFiltroPresenzeStato('tutti')}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                          filtroPresenzeStato === 'tutti' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Tutti ({iscritti.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFiltroPresenzeStato('presente')}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                          filtroPresenzeStato === 'presente' ? 'bg-emerald-700 text-white shadow-2xs' : 'text-slate-600 hover:text-emerald-700'
+                        }`}
+                      >
+                        Presenti ({presenti.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFiltroPresenzeStato('da_verificare')}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                          filtroPresenzeStato === 'da_verificare' ? 'bg-amber-600 text-white shadow-2xs' : 'text-slate-600 hover:text-amber-700'
+                        }`}
+                      >
+                        Da Verificare ({daVerificare.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFiltroPresenzeStato('assente')}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                          filtroPresenzeStato === 'assente' ? 'bg-rose-600 text-white shadow-2xs' : 'text-slate-600 hover:text-rose-700'
+                        }`}
+                      >
+                        Assenti ({assenti.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Azioni massive appello rapido */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSegnaTuttiPresenti(eventoAttivo)}
+                      className="px-2.5 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition cursor-pointer flex items-center gap-1"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Segna Tutti Presenti</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAzzeraCheckIn(eventoAttivo)}
+                      className="px-2.5 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition cursor-pointer flex items-center gap-1"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Azzera Check-in</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tabella Registro Presenze con Check-in Immediato */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+                  {iscrittiFiltrati.length === 0 ? (
+                    <div className="p-12 text-center text-slate-500">
+                      <UserCheck className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                      <p className="font-bold text-slate-700">Nessun iscritto trovato per i criteri selezionati.</p>
+                      <p className="text-xs text-slate-400 mt-1">Puoi aggiungere nuovi partecipanti tramite il pulsante "Iscrivi Socio".</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                            <th className="py-3 px-4">#</th>
+                            <th className="py-3 px-4">Socio Partecipante</th>
+                            <th className="py-3 px-4">Ruolo & Note</th>
+                            <th className="py-3 px-4">Data Iscrizione</th>
+                            <th className="py-3 px-4">Quota</th>
+                            <th className="py-3 px-4 text-center">Stato & Check-in</th>
+                            <th className="py-3 px-4 text-right">Azioni</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {iscrittiFiltrati.map((iscr, idx) => {
+                            const socio = sociMappa.get(iscr.socioId);
+                            const nomeCompleto = socio ? `${socio.cognome} ${socio.nome}` : 'Socio non identificato';
+                            const tessera = socio?.numeroTessera || 'N/D';
+                            const categoria = socio?.categoria || 'Ordinario';
+
+                            return (
+                              <tr key={iscr.id} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="py-3 px-4 font-mono text-slate-400 font-bold">
+                                  {idx + 1}
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-emerald-700 text-white font-bold flex items-center justify-center text-xs shrink-0">
+                                      {nomeCompleto.charAt(0)}
+                                    </div>
+                                    <div>
+                                      <span className="font-bold text-slate-900 block leading-tight">
+                                        {nomeCompleto}
+                                      </span>
+                                      <span className="text-[10px] text-slate-500 font-mono">
+                                        Tessera: {tessera} • {categoria}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold block w-fit ${
+                                    iscr.ruolo === 'relatore' ? 'bg-amber-100 text-amber-900' :
+                                    iscr.ruolo === 'staff' ? 'bg-blue-100 text-blue-900' :
+                                    iscr.ruolo === 'accompagnatore' ? 'bg-violet-100 text-violet-900' :
+                                    'bg-slate-100 text-slate-700'
+                                  }`}>
+                                    {iscr.ruolo ? iscr.ruolo.charAt(0).toUpperCase() + iscr.ruolo.slice(1) : 'Partecipante'}
+                                  </span>
+                                  {iscr.note && (
+                                    <span className="text-[10px] text-slate-500 italic block mt-0.5 line-clamp-1">
+                                      {iscr.note}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 text-slate-600 font-mono text-[11px]">
+                                  {iscr.dataIscrizione}
+                                </td>
+                                <td className="py-3 px-4 font-mono font-bold text-slate-800">
+                                  {iscr.quotaVersata !== undefined ? `${iscr.quotaVersata} €` : '0 €'}
+                                </td>
+                                <td className="py-3 px-4 text-center">
+                                  <div className="inline-flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAggiornaPresenza(eventoAttivo, iscr.id, 'presente')}
+                                      className={`px-2 py-1 rounded text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                                        iscr.statoPresenza === 'presente'
+                                          ? 'bg-emerald-700 text-white shadow-2xs'
+                                          : 'text-slate-600 hover:text-emerald-700'
+                                      }`}
+                                      title="Registra socio come Presente"
+                                    >
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      <span>Presente</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAggiornaPresenza(eventoAttivo, iscr.id, 'da_verificare')}
+                                      className={`px-1.5 py-1 rounded text-[10.5px] font-bold transition cursor-pointer ${
+                                        iscr.statoPresenza === 'da_verificare'
+                                          ? 'bg-amber-600 text-white shadow-2xs'
+                                          : 'text-slate-600 hover:text-amber-700'
+                                      }`}
+                                      title="Riporta a Da Verificare"
+                                    >
+                                      <span>?</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAggiornaPresenza(eventoAttivo, iscr.id, 'assente')}
+                                      className={`px-2 py-1 rounded text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                                        iscr.statoPresenza === 'assente'
+                                          ? 'bg-rose-600 text-white shadow-2xs'
+                                          : 'text-slate-600 hover:text-rose-700'
+                                      }`}
+                                      title="Segna come Assente"
+                                    >
+                                      <XCircle className="w-3 h-3" />
+                                      <span>Assente</span>
+                                    </button>
+                                  </div>
+                                  {iscr.orarioCheckIn && (
+                                    <span className="block text-[9.5px] text-emerald-700 font-mono font-medium mt-0.5">
+                                      Check-in: {iscr.orarioCheckIn}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEliminaIscrizione(eventoAttivo, iscr.id)}
+                                    className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                    title="Cancella iscrizione socio dall'evento"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1637,6 +2234,35 @@ export const EventList: React.FC<EventListProps> = ({
             setEventoPerModificaStand(null);
           }}
           onClose={() => setEventoPerModificaStand(null)}
+        />
+      )}
+
+      {/* Modale Gestione Iscrizioni & Tracciamento Presenze */}
+      {eventoPresenze && (
+        <EventAttendanceModal
+          evento={eventoPresenze}
+          soci={soci}
+          config={config}
+          onAggiornaEvento={(evAggiornato) => {
+            if (onAggiornaEvento) {
+              onAggiornaEvento(evAggiornato);
+            } else {
+              onModificaEvento(evAggiornato);
+            }
+            setEventoPresenze(evAggiornato);
+          }}
+          onApriStampaPresenze={(ev) => setEventoStampaPresenze(ev)}
+          onClose={() => setEventoPresenze(null)}
+        />
+      )}
+
+      {/* Modale Stampa Foglio Firme Presenze Ufficiale A4 */}
+      {eventoStampaPresenze && (
+        <EventAttendancePrintModal
+          evento={eventoStampaPresenze}
+          config={config}
+          soci={soci}
+          onClose={() => setEventoStampaPresenze(null)}
         />
       )}
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Socio, 
   ProLocoInfo, 
@@ -10,7 +11,8 @@ import {
   GiornalinoConfig,
   EdizioneGiornalino,
   DonazioneTerzi,
-  CampagnaRaccoltaFondi
+  CampagnaRaccoltaFondi,
+  ElementoCestino
 } from './types';
 import { 
   loadSoci, 
@@ -35,7 +37,12 @@ import {
   loadArchivioGiornalini,
   saveArchivioGiornalini,
   loadGiornalinoAttivoId,
-  saveGiornalinoAttivoId
+  saveGiornalinoAttivoId,
+  loadCestino,
+  saveCestino,
+  aggiungiAlCestino,
+  rimuoviDalCestino,
+  svuotaCestino
 } from './storage';
 import { Header } from './components/Header';
 import { StatsBar } from './components/StatsBar';
@@ -56,18 +63,23 @@ import { LibroSociPrintModal } from './components/LibroSociPrintModal';
 import { EventsProgramPrintModal } from './components/EventsProgramPrintModal';
 import { MemberSheetPrintModal } from './components/MemberSheetPrintModal';
 import { DonazioniTerziView } from './components/DonazioniTerziView';
+import { CestinoSistemaView } from './components/CestinoSistemaView';
 import { PublicWebsitePortal } from './components/PublicWebsitePortal';
 import { WebsiteEditor } from './components/WebsiteEditor';
 import { DashboardView } from './components/DashboardView';
 import { GiornalinoEditor } from './components/GiornalinoEditor';
 import { GiornalinoArchiveDashboard } from './components/GiornalinoArchiveDashboard';
+import { FullscreenFloatingControls } from './components/FullscreenFloatingControls';
+import { useFullscreen } from './hooks/useFullscreen';
 import { Award, ShieldCheck, Heart, Sparkles, PartyPopper, Printer } from 'lucide-react';
 
 export default function App() {
+  const { isFullscreen, toggleFullscreen, enterFullscreen } = useFullscreen();
   const [config, setConfig] = useState<ProLocoInfo>(() => loadProLocoConfig());
   const [soci, setSoci] = useState<Socio[]>(() => loadSoci());
   const [eventi, setEventi] = useState<ProLocoEvento[]>(() => loadEventi());
   const [donazioni, setDonazioni] = useState<DonazioneTerzi[]>(() => loadDonazioni());
+  const [cestino, setCestino] = useState<ElementoCestino[]>(() => loadCestino());
   const [paginaAttiva, setPaginaAttiva] = useState<PaginaPrincipale>('gestionale');
   const [tabGestionale, setTabGestionale] = useState<SottoTabGestionale>('soci');
   const [sitoConfig, setSitoConfig] = useState<SitoWebConfig>(() => loadSitoWebConfig());
@@ -130,8 +142,24 @@ export default function App() {
     if (socioQuote?.id === socioAggiornato.id) setSocioQuote(socioAggiornato);
   };
 
-  // Handler eliminazione socio
+  // Handler eliminazione socio (con tracciamento nel Cestino di Sistema)
   const handleEliminaSocio = (socioId: string) => {
+    const target = soci.find(s => s.id === socioId);
+    if (target) {
+      aggiungiAlCestino({
+        id: `cestino-socio-${target.id}`,
+        entitaId: target.id,
+        tipoEntita: 'socio',
+        titolo: `${target.cognome} ${target.nome} (Tessera ${target.numeroTessera})`,
+        sottotitolo: `Codice Fiscale: ${target.codiceFiscale} • Iscrizione: ${target.dataIscrizione}`,
+        dataEliminazione: new Date().toISOString().split('T')[0],
+        oraEliminazione: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+        motivo: 'Rimozione socio dal registro attivo (Albo Soci)',
+        eliminatoDa: `${config.nomePresidente || 'Presidente'} / Segreteria`,
+        datiOriginali: target
+      });
+      setCestino(loadCestino());
+    }
     const nuovaLista = soci.filter(s => s.id !== socioId);
     setSoci(nuovaLista);
     saveSoci(nuovaLista);
@@ -172,10 +200,71 @@ export default function App() {
     setEventoModale(null);
   };
 
+  // Handler eliminazione evento (con tracciamento nel Cestino di Sistema)
   const handleEliminaEvento = (eventoId: string) => {
+    const target = eventi.find(e => e.id === eventoId);
+    if (target) {
+      aggiungiAlCestino({
+        id: `cestino-evento-${target.id}`,
+        entitaId: target.id,
+        tipoEntita: 'evento',
+        titolo: target.titolo,
+        sottotitolo: `${target.luogo} • Data: ${target.dataInizio} • ${target.categoria}`,
+        importo: target.entrateRealizzate || target.budgetPrevisto,
+        dataEliminazione: new Date().toISOString().split('T')[0],
+        oraEliminazione: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+        motivo: 'Cancellazione evento dal calendario istituzionale',
+        eliminatoDa: `${config.nomePresidente || 'Presidente'} / Direttivo`,
+        datiOriginali: target
+      });
+      setCestino(loadCestino());
+    }
     const nuovaLista = eventi.filter(e => e.id !== eventoId);
     setEventi(nuovaLista);
     saveEventi(nuovaLista);
+  };
+
+  // Handler gestione Cestino di Sistema (Audit Trail ex Punto 1.4)
+  const handleRipristinaDaCestino = (item: ElementoCestino) => {
+    if (item.tipoEntita === 'donazione') {
+      const donazioneOriginale = item.datiOriginali as DonazioneTerzi;
+      const idDon = item.entitaId;
+      const nuovaLista = donazioni.map(d => {
+        if (d.id === idDon) {
+          const { stato, motivoAnnullamento, dataAnnullamento, annullatoDa, ...resto } = d;
+          return { ...resto, stato: 'attiva' as const };
+        }
+        return d;
+      });
+      setDonazioni(nuovaLista);
+      saveDonazioni(nuovaLista);
+    } else if (item.tipoEntita === 'socio') {
+      const socioOriginale = item.datiOriginali as Socio;
+      if (socioOriginale && !soci.some(s => s.id === socioOriginale.id)) {
+        const nuovaLista = [socioOriginale, ...soci];
+        setSoci(nuovaLista);
+        saveSoci(nuovaLista);
+      }
+    } else if (item.tipoEntita === 'evento') {
+      const eventoOriginale = item.datiOriginali as ProLocoEvento;
+      if (eventoOriginale && !eventi.some(e => e.id === eventoOriginale.id)) {
+        const nuovaLista = [eventoOriginale, ...eventi];
+        setEventi(nuovaLista);
+        saveEventi(nuovaLista);
+      }
+    }
+    rimuoviDalCestino(item.id);
+    setCestino(loadCestino());
+  };
+
+  const handleEliminaDefinitivoCestino = (id: string) => {
+    rimuoviDalCestino(id);
+    setCestino(loadCestino());
+  };
+
+  const handleSvuotaCestino = () => {
+    svuotaCestino();
+    setCestino([]);
   };
 
   // Handler salvataggio configurazione Pro Loco
@@ -336,7 +425,12 @@ export default function App() {
   // 1. VISTA DASHBOARD GENERALE (Master Hub con 3 moduli: Gestionale, Sito Web, Giornalino)
   if (paginaAttiva === 'dashboard') {
     return (
-      <>
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        transition={{ duration: 0.2 }}
+        className="min-h-screen bg-[#f6f4ee]"
+      >
         <DashboardView
           config={config}
           soci={soci}
@@ -346,6 +440,8 @@ export default function App() {
           giornalinoConfig={giornalinoConfig}
           archivioGiornalini={archivioGiornalini}
           annoSelezionato={annoSelezionato}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
           onNavigaPagina={(pagina, sottoTab, opzioni) => {
             setPaginaAttiva(pagina);
             if (pagina === 'sitoweb') {
@@ -394,7 +490,14 @@ export default function App() {
             onClose={() => setMostraApkModal(false)}
           />
         )}
-      </>
+
+        {/* Controlli Fluttuanti Schermo Intero */}
+        <FullscreenFloatingControls
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+          onEnterFullscreen={enterFullscreen}
+        />
+      </motion.div>
     );
   }
 
@@ -403,83 +506,132 @@ export default function App() {
     // Se il sito non è ancora blindato (o l'admin ha sbloccato l'accesso con PIN / forzato l'editor), entra nell'Editor dedicato
     if (!sitoConfig.blindatoVisitatori || vistaEditorForzata) {
       return (
-        <WebsiteEditor
-          config={config}
-          soci={soci}
-          eventi={eventi}
-          sitoConfig={sitoConfig}
-          tabIniziale={tabEditorSitoAttivo}
-          onSalvaSitoConfig={handleSalvaSitoConfig}
-          onPubblicaEBlinda={handlePubblicaEBlinda}
-          onTornaAlGestionale={() => {
-            setVistaEditorForzata(false);
-            setPaginaAttiva('dashboard');
-          }}
-        />
+        <motion.div 
+          initial={{ opacity: 0 }} 
+          animate={{ opacity: 1 }} 
+          transition={{ duration: 0.2 }}
+          className="min-h-screen bg-[#f6f4ee]"
+        >
+          <WebsiteEditor
+            config={config}
+            soci={soci}
+            eventi={eventi}
+            sitoConfig={sitoConfig}
+            tabIniziale={tabEditorSitoAttivo}
+            onSalvaSitoConfig={handleSalvaSitoConfig}
+            onPubblicaEBlinda={handlePubblicaEBlinda}
+            onTornaAlGestionale={() => {
+              setVistaEditorForzata(false);
+              setPaginaAttiva('dashboard');
+            }}
+          />
+          <FullscreenFloatingControls
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={toggleFullscreen}
+            onEnterFullscreen={enterFullscreen}
+          />
+        </motion.div>
       );
     }
 
     // Modalità blindata per i visitatori: interfaccia pulita senza controlli amministrativi
     return (
-      <PublicWebsitePortal
-        config={config}
-        soci={soci}
-        eventi={eventi}
-        sitoConfig={sitoConfig}
-        isEditorPreview={false}
-        onTornaAlGestionale={() => {
-          setPaginaAttiva('dashboard');
-        }}
-        onApriEditor={() => {
-          setVistaEditorForzata(true);
-        }}
-        onSbloccaAdmin={handleSbloccaAdmin}
-        onNuovoSocioIscritto={(nuovoSocio) => {
-          const nuovaLista = [nuovoSocio, ...soci];
-          setSoci(nuovaLista);
-          saveSoci(nuovaLista);
-        }}
-      />
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        transition={{ duration: 0.2 }}
+        className="min-h-screen bg-[#f6f4ee]"
+      >
+        <PublicWebsitePortal
+          config={config}
+          soci={soci}
+          eventi={eventi}
+          sitoConfig={sitoConfig}
+          isEditorPreview={false}
+          onTornaAlGestionale={() => {
+            setPaginaAttiva('dashboard');
+          }}
+          onApriEditor={() => {
+            setVistaEditorForzata(true);
+          }}
+          onSbloccaAdmin={handleSbloccaAdmin}
+          onNuovoSocioIscritto={(nuovoSocio) => {
+            const nuovaLista = [nuovoSocio, ...soci];
+            setSoci(nuovaLista);
+            saveSoci(nuovaLista);
+          }}
+          onAggiornaEvento={handleSalvaEvento}
+        />
+        <FullscreenFloatingControls
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+          onEnterFullscreen={enterFullscreen}
+        />
+      </motion.div>
     );
   }
 
   // 3. VISTA ARCHIVIO DATI GIORNALINO (Dashboard catalogata per Anno e Data con pulsante di visione)
   if (paginaAttiva === 'archivio_giornalino') {
     return (
-      <GiornalinoArchiveDashboard
-        config={config}
-        archivio={archivioGiornalini}
-        edizioneAttivaId={giornalinoAttivoId}
-        onSelezionaEdizione={(ed, apri) => handleSelezionaEdizioneGiornalino(ed, apri)}
-        onSalvaArchivio={handleSalvaArchivioGiornalini}
-        onTornaDashboard={() => setPaginaAttiva('dashboard')}
-        onApriEditorSuEdizione={(ed, tab = 'studio') => {
-          handleSelezionaEdizioneGiornalino(ed, false);
-          setTabGiornalinoAttivo(tab);
-          setPaginaAttiva('giornalino');
-        }}
-      />
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        transition={{ duration: 0.2 }}
+        className="min-h-screen bg-[#f6f4ee]"
+      >
+        <GiornalinoArchiveDashboard
+          config={config}
+          archivio={archivioGiornalini}
+          edizioneAttivaId={giornalinoAttivoId}
+          onSelezionaEdizione={(ed, apri) => handleSelezionaEdizioneGiornalino(ed, apri)}
+          onSalvaArchivio={handleSalvaArchivioGiornalini}
+          onTornaDashboard={() => setPaginaAttiva('dashboard')}
+          onApriEditorSuEdizione={(ed, tab = 'studio') => {
+            handleSelezionaEdizioneGiornalino(ed, false);
+            setTabGiornalinoAttivo(tab);
+            setPaginaAttiva('giornalino');
+          }}
+        />
+        <FullscreenFloatingControls
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+          onEnterFullscreen={enterFullscreen}
+        />
+      </motion.div>
     );
   }
 
   // 4. VISTA GIORNALINO DELLA PRO LOCO (Periodico & Stampa Ufficiale A4/PDF / Editor Menabò)
   if (paginaAttiva === 'giornalino') {
     return (
-      <GiornalinoEditor
-        config={config}
-        eventi={eventi}
-        giornalinoConfig={giornalinoConfig}
-        tabIniziale={tabGiornalinoAttivo}
-        onSalva={handleSalvaGiornalinoConfig}
-        onTornaDashboard={() => setPaginaAttiva('dashboard')}
-        onVaiAllArchivio={() => setPaginaAttiva('archivio_giornalino')}
-      />
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        transition={{ duration: 0.2 }}
+        className="min-h-screen bg-[#f6f4ee]"
+      >
+        <GiornalinoEditor
+          config={config}
+          eventi={eventi}
+          giornalinoConfig={giornalinoConfig}
+          tabIniziale={tabGiornalinoAttivo}
+          onSalva={handleSalvaGiornalinoConfig}
+          onTornaDashboard={() => setPaginaAttiva('dashboard')}
+          onVaiAllArchivio={() => setPaginaAttiva('archivio_giornalino')}
+        />
+        <FullscreenFloatingControls
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+          onEnterFullscreen={enterFullscreen}
+        />
+      </motion.div>
     );
   }
 
   // 4. VISTA GESTIONALE: Albo & Libro Soci (1.1), Calendario Eventi (1.2), Bilancio Generale (1.3)
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="min-h-screen min-h-[100dvh] bg-[#f6f4ee] text-stone-800 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
       
       {/* Intestazione Principale del Gestionale con Navigazione a Schede e Azioni */}
       <Header
@@ -490,6 +642,8 @@ export default function App() {
         sitoConfig={sitoConfig}
         tabAttivo={tabGestionale}
         annoSelezionato={annoSelezionato}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
         onCambiaTab={(tab) => {
           if (tab === 'portale') {
             setVistaEditorForzata(true);
@@ -514,177 +668,205 @@ export default function App() {
       />
 
       {/* Contenuto Principale Dinamico a seconda del Tab Attivo del Gestionale */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className={`flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 transition-all duration-300 ${
+        isFullscreen ? 'max-w-[1680px]' : 'max-w-7xl'
+      }`}>
         
-        {tabGestionale === 'soci' ? (
-          /* SEZIONE 1: GESTIONE SOCI & TESSERAMENTO */
-          <>
-            {/* Banner Istituzionale e Motto Pro Loco */}
-            <div className="bg-gradient-to-r from-emerald-800 to-teal-900 rounded-2xl p-4 sm:p-5 text-white mb-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-emerald-700/50 no-print">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-700/80 text-emerald-100 border border-emerald-500/30">
-                    Albo Soci Ufficiale
-                  </span>
-                  <span className="text-xs text-emerald-200">
-                    Anno Sociale {annoSelezionato}
-                  </span>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tabGestionale}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {tabGestionale === 'soci' ? (
+              /* SEZIONE 1: GESTIONE SOCI & TESSERAMENTO */
+              <>
+                {/* Banner Istituzionale e Motto Pro Loco */}
+                <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 rounded-2xl p-5 sm:p-6 text-white mb-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-emerald-700/40 relative overflow-hidden no-print">
+                  <div className="absolute -right-16 -bottom-16 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="space-y-1.5 relative z-10">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-700/60 text-emerald-100 border border-emerald-500/30">
+                        Albo Soci Ufficiale
+                      </span>
+                      <span className="text-xs text-emerald-200/90 font-medium">
+                        Anno Sociale {annoSelezionato}
+                      </span>
+                    </div>
+                    <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+                      Gestione Tesseramento & Registro Quote Associative
+                    </h2>
+                    <p className="text-xs text-emerald-100/80 max-w-2xl font-normal italic">
+                      «{config.motto || 'Promozione del patrimonio culturale, tutela delle tradizioni e animazione del territorio.'}»
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0 relative z-10">
+                    <button
+                      id="btn-stampa-libro-soci-banner"
+                      onClick={() => setMostraStampaLibroSoci(true)}
+                      className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold border border-white/20 shadow-2xs transition-all duration-150 flex items-center gap-1.5 cursor-pointer"
+                      title="Stampa Ufficiale Libro dei Soci A4"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-emerald-300" />
+                      <span>Stampa Libro Soci</span>
+                    </button>
+                    <button
+                      onClick={() => setSocioModale('nuovo')}
+                      className="px-4 py-2 rounded-xl bg-white text-emerald-950 hover:bg-emerald-50 text-xs font-bold shadow-xs transition-all duration-150 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
+                      Iscrivi Nuovo Socio
+                    </button>
+                  </div>
                 </div>
-                <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                  Gestione Tesseramento & Registro Quote Associative
-                </h2>
-                <p className="text-xs text-emerald-100/80 max-w-2xl font-normal italic">
-                  «{config.motto || 'Promozione del patrimonio culturale, tutela delle tradizioni e animazione del territorio.'}»
-                </p>
-              </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  id="btn-stampa-libro-soci-banner"
-                  onClick={() => setMostraStampaLibroSoci(true)}
-                  className="px-3 py-2 rounded-xl bg-emerald-700/60 hover:bg-emerald-700 text-emerald-50 text-xs font-bold border border-emerald-500/40 shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                  title="Stampa Ufficiale Libro dei Soci A4"
-                >
-                  <Printer className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>Stampa Libro Soci</span>
-                </button>
-                <button
-                  onClick={() => setSocioModale('nuovo')}
-                  className="px-3.5 py-2 rounded-xl bg-white text-emerald-900 hover:bg-emerald-50 text-xs font-black tracking-wide shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
-                  Iscrivi Nuovo Socio
-                </button>
-              </div>
-            </div>
+                {/* Barra Metriche e Statistiche di Cassa per l'anno sociale */}
+                <StatsBar
+                  soci={soci}
+                  annoSelezionato={annoSelezionato}
+                  config={config}
+                />
 
-            {/* Barra Metriche e Statistiche di Cassa per l'anno sociale */}
-            <StatsBar
-              soci={soci}
-              annoSelezionato={annoSelezionato}
-              config={config}
-            />
+                {/* Elenco Soci con Ricerca, Filtri Avanzati e Tesseramento Digitale */}
+                <MemberList
+                  soci={soci}
+                  annoSelezionato={annoSelezionato}
+                  config={config}
+                  onVisualizzaTessera={(socio) => setSocioTessera(socio)}
+                  onGestisciQuote={(socio) => setSocioQuote(socio)}
+                  onModificaSocio={(socio) => setSocioModale(socio)}
+                  onEliminaSocio={handleEliminaSocio}
+                  onNuovoSocio={() => setSocioModale('nuovo')}
+                  onStampaPrivacy={(socio) => setSocioPrivacy(socio)}
+                  onStampaLibroSoci={() => setMostraStampaLibroSoci(true)}
+                  onVisualizzaRicevuta={(socio, quota) => setRicevutaAttiva({ socio, quota })}
+                  onStampaSchedaSocio={(socio) => setSocioSchedaStampa(socio)}
+                />
+              </>
+            ) : tabGestionale === 'eventi' ? (
+              /* SEZIONE 2: GESTIONE EVENTI CON DATABASE */
+              <>
+                {/* Banner Modulo Eventi */}
+                <div className="bg-gradient-to-r from-teal-900 to-slate-900 rounded-2xl p-4 sm:p-5 text-white mb-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-teal-700/40 no-print">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-teal-800/80 text-teal-100 border border-teal-500/30">
+                        Calendario Iniziative Territoriali
+                      </span>
+                      <span className="text-xs text-teal-200">
+                        Anno di Programmazione {annoSelezionato}
+                      </span>
+                    </div>
+                    <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                      Gestione Sagre, Rassegne, Feste & Manifestazioni
+                    </h2>
+                    <p className="text-xs text-slate-300 max-w-2xl font-normal">
+                      Pianificazione eventi con monitoraggio permessi (Comune, SIAE, ASL, Safety), bilancio economico e assegnazione soci volontari.
+                    </p>
+                  </div>
 
-            {/* Elenco Soci con Ricerca, Filtri Avanzati e Tesseramento Digitale */}
-            <MemberList
-              soci={soci}
-              annoSelezionato={annoSelezionato}
-              config={config}
-              onVisualizzaTessera={(socio) => setSocioTessera(socio)}
-              onGestisciQuote={(socio) => setSocioQuote(socio)}
-              onModificaSocio={(socio) => setSocioModale(socio)}
-              onEliminaSocio={handleEliminaSocio}
-              onNuovoSocio={() => setSocioModale('nuovo')}
-              onStampaPrivacy={(socio) => setSocioPrivacy(socio)}
-              onStampaLibroSoci={() => setMostraStampaLibroSoci(true)}
-              onVisualizzaRicevuta={(socio, quota) => setRicevutaAttiva({ socio, quota })}
-              onStampaSchedaSocio={(socio) => setSocioSchedaStampa(socio)}
-            />
-          </>
-        ) : tabGestionale === 'eventi' ? (
-          /* SEZIONE 2: GESTIONE EVENTI CON DATABASE */
-          <>
-            {/* Banner Modulo Eventi */}
-            <div className="bg-gradient-to-r from-teal-900 to-slate-900 rounded-2xl p-4 sm:p-5 text-white mb-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-teal-700/40 no-print">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-teal-800/80 text-teal-100 border border-teal-500/30">
-                    Calendario Iniziative Territoriali
-                  </span>
-                  <span className="text-xs text-teal-200">
-                    Anno di Programmazione {annoSelezionato}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      id="btn-stampa-calendario-banner"
+                      onClick={() => setMostraStampaProgrammaEventi(true)}
+                      className="px-3 py-2 rounded-xl bg-teal-800/60 hover:bg-teal-800 text-teal-50 text-xs font-bold border border-teal-500/40 shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                      title="Stampa Calendario & Programma Eventi A4"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-teal-200" />
+                      <span>Stampa Calendario A4</span>
+                    </button>
+                    <button
+                      id="btn-programma-evento-banner"
+                      onClick={() => setEventoModale('nuovo')}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black tracking-wide shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <PartyPopper className="w-3.5 h-3.5" />
+                      Pianifica Nuovo Evento
+                    </button>
+                  </div>
                 </div>
-                <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                  Gestione Sagre, Rassegne, Feste & Manifestazioni
-                </h2>
-                <p className="text-xs text-slate-300 max-w-2xl font-normal">
-                  Pianificazione eventi con monitoraggio permessi (Comune, SIAE, ASL, Safety), bilancio economico e assegnazione soci volontari.
-                </p>
-              </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  id="btn-stampa-calendario-banner"
-                  onClick={() => setMostraStampaProgrammaEventi(true)}
-                  className="px-3 py-2 rounded-xl bg-teal-800/60 hover:bg-teal-800 text-teal-50 text-xs font-bold border border-teal-500/40 shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                  title="Stampa Calendario & Programma Eventi A4"
-                >
-                  <Printer className="w-3.5 h-3.5 text-teal-200" />
-                  <span>Stampa Calendario A4</span>
-                </button>
-                <button
-                  id="btn-programma-evento-banner"
-                  onClick={() => setEventoModale('nuovo')}
-                  className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black tracking-wide shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <PartyPopper className="w-3.5 h-3.5" />
-                  Pianifica Nuovo Evento
-                </button>
-              </div>
-            </div>
-
-            {/* Dashboard e Lista Eventi */}
-            <EventList
-              eventi={eventi}
-              soci={soci}
-              config={config}
-              annoSelezionato={annoSelezionato}
-              onNuovoEvento={() => setEventoModale('nuovo')}
-              onModificaEvento={(evento) => setEventoModale(evento)}
-              onEliminaEvento={handleEliminaEvento}
-              onStampaEvento={(evento) => setEventoStampa(evento)}
-              onStampaProgrammaEventi={() => setMostraStampaProgrammaEventi(true)}
-              onRipristinaSimulazione={handleRipristinaEventiSimulati}
-            />
-          </>
-        ) : tabGestionale === 'conto_terzi' ? (
-          /* SEZIONE 1.4: DONAZIONI CONTO TERZI & RACCOLTA FONDI */
-          <DonazioniTerziView
-            donazioni={donazioni}
-            annoSelezionato={annoSelezionato}
-            config={config}
-            onAggiornaDonazioni={handleSalvaDonazioni}
-          />
-        ) : (
-          /* SEZIONE 1.3: BILANCIO GENERALE TERZO SETTORE */
-          <GlobalBudgetSummary
-            soci={soci}
-            eventi={eventi}
-            config={config}
-            annoSelezionato={annoSelezionato}
-            donazioni={donazioni}
-            onSalvaDonazione={(donazione) => {
-              const esiste = donazioni.some(d => d.id === donazione.id);
-              const nuove = esiste 
-                ? donazioni.map(d => d.id === donazione.id ? donazione : d) 
-                : [donazione, ...donazioni];
-              setDonazioni(nuove);
-              saveDonazioni(nuove);
-            }}
-            onEliminaDonazione={(id) => {
-              const nuove = donazioni.filter(d => d.id !== id);
-              setDonazioni(nuove);
-              saveDonazioni(nuove);
-            }}
-            onCambiaAnno={setAnnoSelezionato}
-            onApriStampaBilancio={() => setMostraStampaBilancio(true)}
-            onVaiASocio={(socioId) => {
-              const s = soci.find(item => item.id === socioId);
-              if (s) {
-                setTabGestionale('soci');
-                setSocioTessera(s);
-              }
-            }}
-            onVaiAEvento={(eventoId) => {
-              const e = eventi.find(item => item.id === eventoId);
-              if (e) {
-                setTabGestionale('eventi');
-                setEventoModale(e);
-              }
-            }}
-          />
-        )}
+                {/* Dashboard e Lista Eventi */}
+                <EventList
+                  eventi={eventi}
+                  soci={soci}
+                  config={config}
+                  annoSelezionato={annoSelezionato}
+                  onNuovoEvento={() => setEventoModale('nuovo')}
+                  onModificaEvento={(evento) => setEventoModale(evento)}
+                  onEliminaEvento={handleEliminaEvento}
+                  onStampaEvento={(evento) => setEventoStampa(evento)}
+                  onAggiornaEvento={handleSalvaEvento}
+                  onStampaProgrammaEventi={() => setMostraStampaProgrammaEventi(true)}
+                  onRipristinaSimulazione={handleRipristinaEventiSimulati}
+                />
+              </>
+            ) : tabGestionale === 'conto_terzi' ? (
+              /* SEZIONE 1.4: DONAZIONI CONTO TERZI & RACCOLTA FONDI */
+              <DonazioniTerziView
+                donazioni={donazioni}
+                annoSelezionato={annoSelezionato}
+                config={config}
+                onAggiornaDonazioni={(nuove) => {
+                  handleSalvaDonazioni(nuove);
+                  setCestino(loadCestino());
+                }}
+                onApriCestino={() => setTabGestionale('cestino')}
+              />
+            ) : tabGestionale === 'cestino' ? (
+              /* SEZIONE 1.5: CESTINO DI SISTEMA & AUDIT LOG STORICO (PUNTO 1.4) */
+              <CestinoSistemaView
+                elementi={cestino}
+                config={config}
+                onRipristinaElemento={handleRipristinaDaCestino}
+                onEliminaDefinitivo={handleEliminaDefinitivoCestino}
+                onSvuotaCestino={handleSvuotaCestino}
+                onTornaGestionale={() => setTabGestionale('conto_terzi')}
+              />
+            ) : (
+              /* SEZIONE 1.3: BILANCIO GENERALE TERZO SETTORE */
+              <GlobalBudgetSummary
+                soci={soci}
+                eventi={eventi}
+                config={config}
+                annoSelezionato={annoSelezionato}
+                donazioni={donazioni}
+                onSalvaDonazione={(donazione) => {
+                  const esiste = donazioni.some(d => d.id === donazione.id);
+                  const nuove = esiste 
+                    ? donazioni.map(d => d.id === donazione.id ? donazione : d) 
+                    : [donazione, ...donazioni];
+                  setDonazioni(nuove);
+                  saveDonazioni(nuove);
+                }}
+                onEliminaDonazione={(id) => {
+                  const nuove = donazioni.filter(d => d.id !== id);
+                  setDonazioni(nuove);
+                  saveDonazioni(nuove);
+                }}
+                onCambiaAnno={setAnnoSelezionato}
+                onApriStampaBilancio={() => setMostraStampaBilancio(true)}
+                onVaiASocio={(socioId) => {
+                  const s = soci.find(item => item.id === socioId);
+                  if (s) {
+                    setTabGestionale('soci');
+                    setSocioTessera(s);
+                  }
+                }}
+                onVaiAEvento={(eventoId) => {
+                  const e = eventi.find(item => item.id === eventoId);
+                  if (e) {
+                    setTabGestionale('eventi');
+                    setEventoModale(e);
+                  }
+                }}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
 
       </main>
 
@@ -849,6 +1031,13 @@ export default function App() {
           onClose={() => setSocioSchedaStampa(null)}
         />
       )}
+
+      {/* Controlli Fluttuanti Schermo Intero */}
+      <FullscreenFloatingControls
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+        onEnterFullscreen={enterFullscreen}
+      />
 
     </div>
   );
