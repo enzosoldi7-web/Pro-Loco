@@ -363,7 +363,25 @@ export interface FiltriEventi {
   ordinamento: 'data_asc' | 'data_desc' | 'titolo_asc' | 'budget_desc';
 }
 
-export type PaginaPrincipale = 'dashboard' | 'gestionale' | 'sitoweb' | 'giornalino' | 'archivio_giornalino';
+export type CategoriaComunicazioneSocio = 'assemblea' | 'convenzione' | 'avviso' | 'evento' | 'generale';
+
+export interface ComunicazioneSocio {
+  id: string;
+  titolo: string;
+  oggetto?: string;
+  categoria: CategoriaComunicazioneSocio;
+  dataPubblicazione: string; // YYYY-MM-DD
+  oraPubblicazione?: string; // HH:MM
+  autore: string; // Es. "Presidente Pro Loco", "Consiglio Direttivo", "Segreteria"
+  contenuto: string;
+  inEvidenza?: boolean;
+  destinatari?: 'tutti' | 'ordinari' | 'volontari' | 'direttivo';
+  allegatoNome?: string;
+  linkAzione?: string;
+  testoLinkAzione?: string;
+}
+
+export type PaginaPrincipale = 'dashboard' | 'gestionale' | 'sitoweb' | 'giornalino' | 'archivio_giornalino' | 'portale_soci';
 export type SottoTabGestionale = 'soci' | 'eventi' | 'bilancio' | 'conto_terzi' | 'cestino';
 
 export type CategoriaArticoloGiornalino = 

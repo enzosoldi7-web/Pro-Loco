@@ -69,6 +69,7 @@ import { WebsiteEditor } from './components/WebsiteEditor';
 import { DashboardView } from './components/DashboardView';
 import { GiornalinoEditor } from './components/GiornalinoEditor';
 import { GiornalinoArchiveDashboard } from './components/GiornalinoArchiveDashboard';
+import { MemberPortalView } from './components/MemberPortalView';
 import { FullscreenFloatingControls } from './components/FullscreenFloatingControls';
 import { useFullscreen } from './hooks/useFullscreen';
 import { Award, ShieldCheck, Heart, Sparkles, PartyPopper, Printer } from 'lucide-react';
@@ -561,6 +562,7 @@ export default function App() {
             saveSoci(nuovaLista);
           }}
           onAggiornaEvento={handleSalvaEvento}
+          onApriPortaleSoci={() => setPaginaAttiva('portale_soci')}
         />
         <FullscreenFloatingControls
           isFullscreen={isFullscreen}
@@ -629,6 +631,34 @@ export default function App() {
     );
   }
 
+  // 5. VISTA PORTALE DEI SOCI (Area Riservata Web: Autenticazione, Anagrafica, Tessere, Quote e Bacheca Avvisi)
+  if (paginaAttiva === 'portale_soci') {
+    return (
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        transition={{ duration: 0.2 }}
+        className="min-h-screen bg-[#f6f4ee]"
+      >
+        <MemberPortalView
+          config={config}
+          soci={soci}
+          eventi={eventi}
+          annoSelezionato={annoSelezionato}
+          onAggiornaSocio={handleSalvaSocio}
+          onAggiornaEvento={handleSalvaEvento}
+          onTornaAlSito={() => setPaginaAttiva('sitoweb')}
+          onVaiAlGestionale={() => setPaginaAttiva('gestionale')}
+        />
+        <FullscreenFloatingControls
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+          onEnterFullscreen={enterFullscreen}
+        />
+      </motion.div>
+    );
+  }
+
   // 4. VISTA GESTIONALE: Albo & Libro Soci (1.1), Calendario Eventi (1.2), Bilancio Generale (1.3)
   return (
     <div className="min-h-screen min-h-[100dvh] bg-[#f6f4ee] text-stone-800 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
@@ -665,6 +695,7 @@ export default function App() {
         onApriStampaBilancio={() => setMostraStampaBilancio(true)}
         onApriStampaLibroSoci={() => setMostraStampaLibroSoci(true)}
         onApriStampaProgrammaEventi={() => setMostraStampaProgrammaEventi(true)}
+        onVaiPortaleSoci={() => setPaginaAttiva('portale_soci')}
       />
 
       {/* Contenuto Principale Dinamico a seconda del Tab Attivo del Gestionale */}

@@ -41,7 +41,8 @@ import {
   Archive,
   HeartHandshake,
   Maximize2,
-  Minimize2
+  Minimize2,
+  KeyRound
 } from 'lucide-react';
 import { esportaLibroSociCSV, esportaBackupJSON, esportaBilancioCompletoCSV, esportaCodiceSitoHTML, loadDonazioni } from '../storage';
 
@@ -322,6 +323,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span>App Android</span>
               </button>
 
+              {/* Tasto 3.5: Portale Web del Socio */}
+              <button
+                id="btn-portale-soci-dashboard"
+                onClick={() => onNavigaPagina('portale_soci')}
+                title="Accedi al Portale Riservato del Socio (Tessere, Quote, Ricevute, Avvisi)"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-950 bg-emerald-100/90 hover:bg-emerald-200/90 border border-emerald-300 rounded-xl transition-all duration-150 shadow-2xs cursor-pointer"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-emerald-800" />
+                <span>Area Soci</span>
+              </button>
+
               {/* Tasto 4: Configurazione */}
               <button
                 id="btn-configurazione-dashboard"
@@ -589,6 +601,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-rose-400 group-hover/sub:text-rose-700 shrink-0 ml-1" />
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-sub-gestionale-portale-soci"
+                  onClick={() => onNavigaPagina('portale_soci')}
+                  className="w-full text-left p-2.5 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200 hover:border-emerald-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
+                  title="Portale Web del Socio: Dati anagrafici, stato tesseramento, cronologia quote e avvisi"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                      <KeyRound className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-black text-emerald-950 group-hover/sub:text-emerald-900 block flex items-center gap-1.5">
+                        <span>Portale Web dei Soci</span>
+                        <span className="text-[9.5px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-900">
+                          Area Riservata
+                        </span>
+                      </span>
+                      <span className="text-[10.5px] text-emerald-800/80">
+                        Accesso soci • Tessere • Quote • Ricevute • Bacheca Avvisi
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-emerald-700 shrink-0 ml-1" />
                 </button>
               </div>
 

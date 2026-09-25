@@ -33,7 +33,8 @@ import {
   KeyRound,
   AlertCircle,
   X,
-  UserCheck
+  UserCheck,
+  User
 } from 'lucide-react';
 
 import { esportaCodiceSitoHTML } from '../storage';
@@ -49,6 +50,7 @@ interface PublicWebsitePortalProps {
   onSbloccaAdmin?: (pin: string) => boolean;
   onNuovoSocioIscritto: (nuovoSocio: Socio) => void;
   onAggiornaEvento?: (evento: ProLocoEvento) => void;
+  onApriPortaleSoci?: () => void;
 }
 
 export const PublicWebsitePortal: React.FC<PublicWebsitePortalProps> = ({
@@ -61,7 +63,8 @@ export const PublicWebsitePortal: React.FC<PublicWebsitePortalProps> = ({
   onApriEditor,
   onSbloccaAdmin,
   onNuovoSocioIscritto,
-  onAggiornaEvento
+  onAggiornaEvento,
+  onApriPortaleSoci
 }) => {
   const [sezioneAttiva, setSezioneAttiva] = useState<'home' | 'eventi' | 'tesseramento' | 'territorio' | 'contatti'>('home');
   const [ricercaEvento, setRicercaEvento] = useState('');
@@ -355,8 +358,21 @@ export const PublicWebsitePortal: React.FC<PublicWebsitePortalProps> = ({
               </button>
             </nav>
 
-            {/* Pulsante CTA Tesseramento Rapido */}
+            {/* Pulsante CTA Tesseramento Rapido & Area Soci */}
             <div className="flex items-center gap-2">
+              {onApriPortaleSoci && (
+                <button
+                  type="button"
+                  id="btn-nav-area-soci"
+                  onClick={onApriPortaleSoci}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-stone-100 hover:bg-emerald-50 text-stone-800 hover:text-emerald-900 border border-stone-200 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+                  title="Accedi all'Area Riservata Soci per consultare tessera digitale, stato quote e avvisi"
+                >
+                  <User className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Area Soci</span>
+                </button>
+              )}
+
               <button
                 onClick={() => setSezioneAttiva('tesseramento')}
                 className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
@@ -380,7 +396,7 @@ export const PublicWebsitePortal: React.FC<PublicWebsitePortalProps> = ({
               onClick={() => setSezioneAttiva('eventi')} 
               className={`py-1 px-2 rounded-lg ${sezioneAttiva === 'eventi' ? 'text-emerald-800 font-bold bg-emerald-50' : ''}`}
             >
-              Eventi ({eventi.length})
+              Eventi
             </button>
             <button 
               onClick={() => setSezioneAttiva('tesseramento')} 
@@ -388,6 +404,14 @@ export const PublicWebsitePortal: React.FC<PublicWebsitePortalProps> = ({
             >
               Iscriviti
             </button>
+            {onApriPortaleSoci && (
+              <button 
+                onClick={onApriPortaleSoci}
+                className="py-1 px-2 rounded-lg text-emerald-900 font-bold bg-emerald-50"
+              >
+                Area Soci
+              </button>
+            )}
             <button 
               onClick={() => setSezioneAttiva('territorio')} 
               className={`py-1 px-2 rounded-lg ${sezioneAttiva === 'territorio' ? 'text-emerald-800 font-bold bg-emerald-50' : ''}`}

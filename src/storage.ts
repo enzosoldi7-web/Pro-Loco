@@ -1,4 +1,4 @@
-import { Socio, ProLocoInfo, QuotaAssociativa, StatoQuota, ProLocoEvento, StandEvento, SitoWebConfig, GiornalinoConfig, ArticoloGiornalino, EdizioneGiornalino, DonazioneTerzi, CampagnaRaccoltaFondi, ElementoCestino } from './types';
+import { Socio, ProLocoInfo, QuotaAssociativa, StatoQuota, ProLocoEvento, StandEvento, SitoWebConfig, GiornalinoConfig, ArticoloGiornalino, EdizioneGiornalino, DonazioneTerzi, CampagnaRaccoltaFondi, ElementoCestino, ComunicazioneSocio } from './types';
 
 const STORAGE_KEY_SOCI = 'proloco_gestione_soci_v1';
 const STORAGE_KEY_CONFIG = 'proloco_gestione_config_v1';
@@ -10,6 +10,8 @@ export const STORAGE_KEY_GIORNALINO_ATTIVO_ID = 'proloco_giornalino_attivo_id_v1
 export const STORAGE_KEY_DONAZIONI = 'proloco_gestione_donazioni_v1';
 export const STORAGE_KEY_CAMPAGNE_DONAZIONI = 'proloco_campagne_donazioni_v1';
 export const STORAGE_KEY_CESTINO = 'proloco_gestione_cestino_v1';
+export const STORAGE_KEY_COMUNICAZIONI_SOCI = 'proloco_comunicazioni_soci_v1';
+export const STORAGE_KEY_SESSIONE_SOCIO = 'proloco_sessione_socio_id_v1';
 
 export const DEFAULT_GIORNALINO_CONFIG: GiornalinoConfig = {
   testata: 'La Voce della Pro Loco',
@@ -2864,6 +2866,137 @@ export function esportaCodiceSitoHTML(
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+export const INITIAL_COMUNICAZIONI_SOCI: ComunicazioneSocio[] = [
+  {
+    id: 'com-2026-001',
+    titolo: 'Convocazione Ufficiale Assemblea Ordinaria dei Soci 2026',
+    oggetto: 'Approvazione Rendiconto Cassa CTS 2025 e Programma Iniziative 2026',
+    categoria: 'assemblea',
+    dataPubblicazione: '2026-03-10',
+    oraPubblicazione: '09:30',
+    autore: 'Consiglio Direttivo & Presidente',
+    inEvidenza: true,
+    destinatari: 'tutti',
+    contenuto: `Gentile Socio,
+è convocata per il giorno 28 Aprile 2026 in prima convocazione alle ore 07:00, e in SECONDA CONVOCAZIONE per il giorno:
+MARTEDÌ 28 APRILE 2026 alle ore 21:00
+presso la Sala Convegni della Sede Pro Loco (Piazza del Popolo, 12), l'Assemblea Generale Ordinaria dei Soci.
+
+Ordine del Giorno:
+1. Relazione morale e programmatica del Presidente sull'esercizio sociale 2025;
+2. Esame e approvazione del Rendiconto per Cassa Terzo Settore (Modello D RUNTS) chiuso al 31/12/2025;
+3. Presentazione del Bilancio Preventivo 2026 e del Calendario Sagre ed Eventi;
+4. Aggiornamenti sul tesseramento soci e sulle convenzioni territoriali;
+5. Varie ed eventuali.
+
+Hanno diritto di voto e di intervento tutti i soci in regola con il pagamento della quota associativa per l'anno 2026. È ammessa una delega per socio.`
+  },
+  {
+    id: 'com-2026-002',
+    titolo: 'Nuove Convenzioni & Sconti Riservati ai Tesserati Pro Loco 2026',
+    oggetto: 'Agevolazioni esclusive su commercio locale, musei e teatri',
+    categoria: 'convenzione',
+    dataPubblicazione: '2026-02-15',
+    oraPubblicazione: '11:00',
+    autore: 'Segreteria Pro Loco',
+    inEvidenza: false,
+    destinatari: 'tutti',
+    contenuto: `Siamo lieti di comunicare a tutti i soci che, esibendo la nuova Tessera Socio Digitale o Cartacea 2026, è possibile usufruire di sconti e agevolazioni dedicate presso i seguenti partner convenzionati:
+
+• Ristorante & Osteria "Da Baffo": Sconto 15% sul conto finale (esclusi giorni festivi);
+• Libreria del Borgo Antico: Sconto 10% su tutta la narrativa e saggi storici locali;
+• Farmacia Comunale: Sconto 5% su parafarmaco, cosmetica e integratori;
+• Polo Museale Civico & Rocca: Ingresso gratuito per il socio e ridotto per l'accompagnatore;
+• Bottega Alimentari "Sapori Toscani": Sconto 10% sui prodotti a km 0 e formaggi tipici.
+
+Per consultare l'elenco sempre aggiornato, mostra la tua tessera con QR code alla cassa degli esercenti che espongono l'adesivo "Socio Pro Loco Benvenuto".`
+  },
+  {
+    id: 'com-2026-003',
+    titolo: 'Aperta la Campagna Rinnovi Quota Sociale 2026',
+    oggetto: 'Rinnova la tua adesione e sostieni le tradizioni del nostro borgo',
+    categoria: 'avviso',
+    dataPubblicazione: '2026-01-08',
+    oraPubblicazione: '10:00',
+    autore: 'Ufficio Tesoreria',
+    inEvidenza: false,
+    destinatari: 'tutti',
+    contenuto: `È aperta la campagna ufficiale per il rinnovo delle quote associative.
+Essere soci della Pro Loco significa partecipare attivamente alla tutela del nostro patrimonio culturale, organizzare insieme le sagre storiche e mantenere vivo il senso di solidarietà civica.
+
+Quote deliberate dal Consiglio Direttivo:
+• Socio Ordinario: 15,00 €
+• Socio Sostenitore: 30,00 €
+• Socio Giovane (Under 25): 10,00 €
+
+Modalità di versamento:
+- Presso la nostra sede in orario di apertura;
+- Tramite Bonifico Bancario intestato all'Associazione Pro Loco (IBAN indicato nella sezione tesseramento);
+- Durante gli eventi e i banchetti dedicati. Al momento del pagamento verrà rilasciata quietanza ufficiale numerata con timbro e firma.`
+  },
+  {
+    id: 'com-2026-004',
+    titolo: 'Chiamata Volontari per la Sagra del Borgo Antico',
+    oggetto: 'Organizzazione turni cucina, logistica stand e desk accoglienza',
+    categoria: 'evento',
+    dataPubblicazione: '2026-04-02',
+    oraPubblicazione: '17:30',
+    autore: 'Comitato Eventi & Volontariato',
+    inEvidenza: true,
+    destinatari: 'tutti',
+    contenuto: `In vista dell'imminente Sagra del Borgo Antico (in programma per ottobre 2026), invitiamo tutti i soci disponibili a dare una mano nei vari settori organizzativi:
+- Preparazione materie prime e cucina coperta certificata HACCP;
+- Gestione cassa gettoni e servizio ai tavoli;
+- Accoglienza visitatori e distribuzione materiale informativo;
+- Allestimento e smontaggio strutture.
+
+Chi desidera partecipare può segnalare la propria disponibilità direttamente dalla sezione Eventi del Portale Soci o contattando il referente volontari.`
+  }
+];
+
+export function loadComunicazioniSoci(): ComunicazioneSocio[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_COMUNICAZIONI_SOCI);
+    if (!raw) {
+      saveComunicazioniSoci(INITIAL_COMUNICAZIONI_SOCI);
+      return INITIAL_COMUNICAZIONI_SOCI;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_COMUNICAZIONI_SOCI;
+  } catch (err) {
+    console.error('Errore nel caricamento delle comunicazioni soci:', err);
+    return INITIAL_COMUNICAZIONI_SOCI;
+  }
+}
+
+export function saveComunicazioniSoci(comunicazioni: ComunicazioneSocio[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_COMUNICAZIONI_SOCI, JSON.stringify(comunicazioni));
+  } catch (err) {
+    console.error('Errore nel salvataggio delle comunicazioni soci:', err);
+  }
+}
+
+export function loadSessioneSocioId(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY_SESSIONE_SOCIO);
+  } catch {
+    return null;
+  }
+}
+
+export function saveSessioneSocioId(socioId: string | null): void {
+  try {
+    if (socioId) {
+      localStorage.setItem(STORAGE_KEY_SESSIONE_SOCIO, socioId);
+    } else {
+      localStorage.removeItem(STORAGE_KEY_SESSIONE_SOCIO);
+    }
+  } catch (err) {
+    console.error('Errore nella memorizzazione della sessione socio:', err);
+  }
 }
 
 

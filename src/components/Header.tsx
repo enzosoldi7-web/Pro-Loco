@@ -28,7 +28,8 @@ import {
   Database,
   HeartHandshake,
   Maximize2,
-  Minimize2
+  Minimize2,
+  KeyRound
 } from 'lucide-react';
 import { esportaLibroSociCSV, esportaBackupJSON, esportaBilancioCompletoCSV } from '../storage';
 
@@ -56,6 +57,7 @@ interface HeaderProps {
   onAzzeraDatabase?: () => void;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
+  onVaiPortaleSoci?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -81,7 +83,8 @@ export const Header: React.FC<HeaderProps> = ({
   onApriStampaProgrammaEventi,
   onAzzeraDatabase,
   isFullscreen,
-  onToggleFullscreen
+  onToggleFullscreen,
+  onVaiPortaleSoci
 }) => {
   const [mostraMenuBackup, setMostraMenuBackup] = useState(false);
   const [mostraConfermaAzzera, setMostraConfermaAzzera] = useState(false);
@@ -370,6 +373,20 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="hidden sm:inline">Schermo Intero</span>
                   </>
                 )}
+              </button>
+            )}
+
+            {/* Area Riservata Soci */}
+            {onVaiPortaleSoci && (
+              <button
+                id="btn-portale-soci-header"
+                type="button"
+                onClick={onVaiPortaleSoci}
+                title="Accedi al Portale Web Riservato dei Soci (Tessere, Quote, Ricevute, Avvisi)"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-950 bg-emerald-100 hover:bg-emerald-200/90 border border-emerald-300 rounded-xl transition-all duration-150 shadow-2xs cursor-pointer"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-emerald-800" />
+                <span className="hidden sm:inline">Area Soci</span>
               </button>
             )}
 
