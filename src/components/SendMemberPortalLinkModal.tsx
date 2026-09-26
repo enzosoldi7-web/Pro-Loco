@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Socio, ProLocoInfo } from '../types';
-import { getStatoQuotaSocio, saveSessioneSocioId } from '../storage';
+import {
+  getStatoQuotaSocio,
+  saveSessioneSocioId,
+  saveBloccoPortaleSocio,
+  buildSyncedMemberPortalUrl,
+  syncDatabaseToServer
+} from '../storage';
 import QRCode from 'qrcode';
 import { 
   X, 
@@ -43,15 +49,25 @@ export const SendMemberPortalLinkModal: React.FC<SendMemberPortalLinkModalProps>
 
   if (!socio) return null;
 
-  // Costruzione del Link univoco per l'accesso diretto del socio al Portale Web
-  const baseUrl = window.location.origin + window.location.pathname;
-  const linkPortaleSocio = `${baseUrl}?area_soci=1&tessera=${encodeURIComponent(socio.numeroTessera)}`;
+  // Costruzione del Link univoco e sincronizzato per l'accesso diretto del socio al Portale Web (con blocco navigazione indietro e dati socio sincronizzati)
+  const pinSocio = socio.pin && socio.pin.trim() ? socio.pin.trim() : '1234';
+  const linkPortaleSocio = buildSyncedMemberPortalUrl(socio, config, annoSelezionato, false);
+  const linkQrCompatto = buildSyncedMemberPortalUrl(socio, config, annoSelezionato, true);
 
-  // Testo precompilato cordiale per comunicazioni (WhatsApp, Email, SMS)
-  const messaggioCondivisione = `Gentile ${socio.nome}, ecco il tuo link personale per accedere al Portale Web dei Soci della ${config.nome}:
+  // Sincronizza immediatamente il database col server quando viene preparato il link per il socio
+  useEffect(() => {
+    syncDatabaseToServer();
+  }, [socio, config, annoSelezionato]);
+
+  // Testo precompilato cordiale per comunicazioni (WhatsApp, Email, SMS) con Numero Tessera e PIN di sblocco
+  const messaggioCondivisione = `Gentile ${socio.nome}, ecco il tuo link personale per accedere all'Area Riservata Soci della ${config.nome}:
 ${linkPortaleSocio}
 
-Nel portale potrai consultare in qualsiasi momento:
+CREDENZIALI DI SBLOCCO AREA RISERVATA:
+• Numero Tessera: ${socio.numeroTessera}
+• PIN di Sblocco: ${pinSocio}
+
+Inserisci il tuo PIN abbinato al numero tessera per sbloccare l'area riservata e consultare:
 • La tua Tessera Digitale (N° ${socio.numeroTessera}) con QR Code
 • Lo stato del tesseramento e le scadenze delle quote
 • Lo storico dei pagamenti e le ricevute ufficiali
@@ -76,8 +92,8 @@ Buona navigazione!`;
 
   // Generazione del QR Code per scansione fisica con smartphone
   useEffect(() => {
-    if (!linkPortaleSocio) return;
-    QRCode.toDataURL(linkPortaleSocio, {
+    if (!linkQrCompatto) return;
+    QRCode.toDataURL(linkQrCompatto, {
       width: 260,
       margin: 1,
       color: {
@@ -87,9 +103,10 @@ Buona navigazione!`;
     })
       .then(url => setQrCodeUrl(url))
       .catch(err => console.error('Errore generazione QR Code Portale Socio:', err));
-  }, [linkPortaleSocio]);
+  }, [linkQrCompatto]);
 
   const handleCopiaLink = () => {
+    syncDatabaseToServer();
     navigator.clipboard.writeText(linkPortaleSocio).then(() => {
       setCopiato(true);
       setTimeout(() => setCopiato(false), 2500);
@@ -97,7 +114,17 @@ Buona navigazione!`;
   };
 
   const handleTestAccesso = () => {
-    saveSessioneSocioId(socio.id);
+    // Sincronizza e richiede lo sblocco tramite combinazione Numero Tessera (nel link) + PIN
+    syncDatabaseToServer();
+    saveSessioneSocioId(null);
+    saveBloccoPortaleSocio(true);
+    try {
+      const urlRelativo = linkPortaleSocio.replace(window.location.origin, '');
+      window.history.replaceState({ portaleSocioBlindato: true }, '', urlRelativo);
+      window.history.pushState({ portaleSocioBlindato: true }, '', urlRelativo);
+    } catch {
+      // ignore history errors
+    }
     if (onApriPortaleComeSocio) {
       onApriPortaleComeSocio(socio);
     }
@@ -164,6 +191,9 @@ Buona navigazione!`;
                   </h3>
                   <span className="font-mono font-bold text-xs bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-md border border-emerald-200">
                     Tessera N° {socio.numeroTessera}
+                  </span>
+                  <span className="font-mono font-extrabold text-xs bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300">
+                    PIN Sblocco: {pinSocio}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-600 mt-1">

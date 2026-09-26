@@ -1374,6 +1374,7 @@ export function loadProLocoConfig(): ProLocoInfo {
 export function saveProLocoConfig(config: ProLocoInfo): void {
   try {
     localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
+    syncDatabaseToServer({ config });
   } catch (err) {
     console.error('Errore nel salvataggio della configurazione:', err);
   }
@@ -1397,6 +1398,7 @@ export function loadSitoWebConfig(): SitoWebConfig {
 export function saveSitoWebConfig(config: SitoWebConfig): void {
   try {
     localStorage.setItem(STORAGE_KEY_SITO_WEB, JSON.stringify(config));
+    syncDatabaseToServer({ sitoConfig: config });
   } catch (err) {
     console.error('Errore nel salvataggio della configurazione del sito web:', err);
   }
@@ -1600,12 +1602,12 @@ Confermatissima la Sagra del Piatto Tipico nella seconda settimana di agosto, in
 export function loadArchivioGiornalini(): EdizioneGiornalino[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_ARCHIVIO_GIORNALINI);
-    if (!raw) {
+    if (raw === null) {
       saveArchivioGiornalini(INITIAL_ARCHIVIO_GIORNALINI);
       return INITIAL_ARCHIVIO_GIORNALINI;
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
+    if (!Array.isArray(parsed)) {
       saveArchivioGiornalini(INITIAL_ARCHIVIO_GIORNALINI);
       return INITIAL_ARCHIVIO_GIORNALINI;
     }
@@ -1619,6 +1621,7 @@ export function loadArchivioGiornalini(): EdizioneGiornalino[] {
 export function saveArchivioGiornalini(edizioni: EdizioneGiornalino[]): void {
   try {
     localStorage.setItem(STORAGE_KEY_ARCHIVIO_GIORNALINI, JSON.stringify(edizioni));
+    syncDatabaseToServer({ archivioGiornalini: edizioni });
   } catch (err) {
     console.error('Errore nel salvataggio archivio giornalini:', err);
   }
@@ -1627,7 +1630,7 @@ export function saveArchivioGiornalini(edizioni: EdizioneGiornalino[]): void {
 export function loadGiornalinoAttivoId(): string {
   try {
     const id = localStorage.getItem(STORAGE_KEY_GIORNALINO_ATTIVO_ID);
-    if (id) return id;
+    if (id !== null) return id;
     return INITIAL_ARCHIVIO_GIORNALINI[0].id;
   } catch {
     return INITIAL_ARCHIVIO_GIORNALINI[0].id;
@@ -1637,6 +1640,7 @@ export function loadGiornalinoAttivoId(): string {
 export function saveGiornalinoAttivoId(id: string): void {
   try {
     localStorage.setItem(STORAGE_KEY_GIORNALINO_ATTIVO_ID, id);
+    syncDatabaseToServer({ giornalinoAttivoId: id });
   } catch (err) {
     console.error('Errore salvataggio ID giornalino attivo:', err);
   }
@@ -1651,8 +1655,8 @@ export function loadGiornalinoConfig(): GiornalinoConfig {
     const raw = localStorage.getItem(STORAGE_KEY_GIORNALINO);
     let sorgente = trovatoInArchivio || (raw ? JSON.parse(raw) : DEFAULT_GIORNALINO_CONFIG);
 
-    const rawArticoli = (sorgente.articoli && sorgente.articoli.length > 0) 
-      ? sorgente.articoli 
+    const rawArticoli = Array.isArray(sorgente.articoli)
+      ? sorgente.articoli
       : DEFAULT_GIORNALINO_CONFIG.articoli;
     
     const articoliNormalizzati = rawArticoli.map((art: ArticoloGiornalino, idx: number) => ({
@@ -1664,7 +1668,7 @@ export function loadGiornalinoConfig(): GiornalinoConfig {
       capolettera: art.capolettera !== undefined ? art.capolettera : (idx < 2)
     }));
 
-    const sponsorList = Array.isArray(sorgente.sponsor) && sorgente.sponsor.length > 0
+    const sponsorList = Array.isArray(sorgente.sponsor)
       ? sorgente.sponsor
       : DEFAULT_GIORNALINO_CONFIG.sponsor;
 
@@ -1693,7 +1697,7 @@ export function saveGiornalinoConfig(config: GiornalinoConfig): void {
 
     // Sincronizza anche nell'archivio storico delle edizioni
     const archivio = loadArchivioGiornalini();
-    const configId = config.id || loadGiornalinoAttivoId();
+    const configId = config.id || loadGiornalinoAttivoId() || 'ed-corrente';
     const idx = archivio.findIndex(ed => ed.id === configId);
     
     // Ricava l'anno dalla data di pubblicazione o numero edizione
@@ -1718,6 +1722,7 @@ export function saveGiornalinoConfig(config: GiornalinoConfig): void {
     }
     saveArchivioGiornalini(nuovoArchivio);
     saveGiornalinoAttivoId(configId);
+    syncDatabaseToServer({ giornalinoConfig: config, archivioGiornalini: nuovoArchivio });
   } catch (err) {
     console.error('Errore nel salvataggio del giornalino:', err);
   }
@@ -1770,16 +1775,17 @@ export function esportaRegistroGiornaliniCSV(edizioni: EdizioneGiornalino[]): vo
 
 
 export function loadSoci(): Socio[] {
+  const defaultConPin = INITIAL_SOCI.map(s => ({ ...s, pin: s.pin || '1234' }));
   try {
     const raw = localStorage.getItem(STORAGE_KEY_SOCI);
     if (raw === null) {
-      saveSoci(INITIAL_SOCI);
-      return INITIAL_SOCI;
+      saveSoci(defaultConPin);
+      return defaultConPin;
     }
     const parsed: Socio[] = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      saveSoci(INITIAL_SOCI);
-      return INITIAL_SOCI;
+      saveSoci(defaultConPin);
+      return defaultConPin;
     }
     if (parsed.length === 0) {
       return [];
@@ -1792,22 +1798,24 @@ export function loadSoci(): Socio[] {
     });
 
     const arricchiti = parsed.map(socio => {
-      if (!socio.foto && fotoMappa[socio.id]) {
-        return { ...socio, foto: fotoMappa[socio.id] };
-      }
-      return socio;
+      return {
+        ...socio,
+        foto: socio.foto || fotoMappa[socio.id],
+        pin: socio.pin && socio.pin.trim() ? socio.pin.trim() : '1234'
+      };
     });
 
     return arricchiti;
   } catch (err) {
     console.error('Errore nel caricamento dei soci:', err);
-    return INITIAL_SOCI;
+    return defaultConPin;
   }
 }
 
 export function saveSoci(soci: Socio[]): void {
   try {
     localStorage.setItem(STORAGE_KEY_SOCI, JSON.stringify(soci));
+    syncDatabaseToServer({ soci });
   } catch (err) {
     console.error('Errore nel salvataggio dei soci:', err);
   }
@@ -2051,6 +2059,7 @@ export function ripristinaEventiSimulati(): ProLocoEvento[] {
 export function saveEventi(eventi: ProLocoEvento[]): void {
   try {
     localStorage.setItem(STORAGE_KEY_EVENTI, JSON.stringify(eventi));
+    syncDatabaseToServer({ eventi });
   } catch (err) {
     console.error('Errore nel salvataggio degli eventi:', err);
   }
@@ -2396,6 +2405,7 @@ export function loadDonazioni(): DonazioneTerzi[] {
 export function saveDonazioni(donazioni: DonazioneTerzi[]): void {
   try {
     localStorage.setItem(STORAGE_KEY_DONAZIONI, JSON.stringify(donazioni));
+    syncDatabaseToServer({ donazioni });
   } catch (err) {
     console.error('Errore nel salvataggio delle donazioni:', err);
   }
@@ -2423,6 +2433,7 @@ export function loadCampagneFondi(): CampagnaRaccoltaFondi[] {
 export function saveCampagneFondi(campagne: CampagnaRaccoltaFondi[]): void {
   try {
     localStorage.setItem(STORAGE_KEY_CAMPAGNE_DONAZIONI, JSON.stringify(campagne));
+    syncDatabaseToServer({ campagne });
   } catch (err) {
     console.error('Errore nel salvataggio delle campagne fondi:', err);
   }
@@ -2447,6 +2458,7 @@ export function loadCestino(): ElementoCestino[] {
 export function saveCestino(elementi: ElementoCestino[]): void {
   try {
     localStorage.setItem(STORAGE_KEY_CESTINO, JSON.stringify(elementi));
+    syncDatabaseToServer({ cestino: elementi });
   } catch (err) {
     console.error('Errore nel salvataggio del cestino di sistema:', err);
   }
@@ -2902,13 +2914,49 @@ export function esportaBackupJSON(
   document.body.removeChild(link);
 }
 
+export function getEmptySitoWebConfig(): SitoWebConfig {
+  return {
+    ...DEFAULT_SITO_WEB_CONFIG,
+    avvisoImportante: '',
+    mostraAvviso: false,
+    schedeTerritorio: [],
+    pubblicato: false,
+    dataPubblicazione: undefined,
+    blindatoVisitatori: false
+  };
+}
+
+export function getEmptyGiornalinoConfig(): GiornalinoConfig {
+  return {
+    ...DEFAULT_GIORNALINO_CONFIG,
+    id: 'ed-vuota',
+    articoli: [],
+    sponsor: []
+  };
+}
+
 export function azzeraDatabase(): void {
-  saveSoci([]);
-  saveEventi([]);
-  saveDonazioni([]);
-  saveCampagneFondi([]);
-  saveCestino([]);
-  saveComunicazioniSoci(INITIAL_COMUNICAZIONI_SOCI);
+  const emptySito = getEmptySitoWebConfig();
+  const emptyGiornalino = getEmptyGiornalinoConfig();
+  try {
+    localStorage.setItem(STORAGE_KEY_SOCI, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEY_EVENTI, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEY_DONAZIONI, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEY_CAMPAGNE_DONAZIONI, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEY_CESTINO, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEY_COMUNICAZIONI_SOCI, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEY_ARCHIVIO_GIORNALINI, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEY_GIORNALINO_ATTIVO_ID, '');
+    localStorage.setItem(STORAGE_KEY_GIORNALINO, JSON.stringify(emptyGiornalino));
+    localStorage.setItem(STORAGE_KEY_SITO_WEB, JSON.stringify(emptySito));
+    localStorage.removeItem(STORAGE_KEY_SESSIONE_SOCIO);
+  } catch (err) {
+    console.error('Errore azzeramento localStorage:', err);
+  }
+  resetDatabaseOnServer({
+    sitoConfig: emptySito,
+    giornalinoConfig: emptyGiornalino
+  });
 }
 
 export function esportaCodiceSitoHTML(
@@ -3249,12 +3297,12 @@ Chi desidera partecipare può segnalare la propria disponibilità direttamente d
 export function loadComunicazioniSoci(): ComunicazioneSocio[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_COMUNICAZIONI_SOCI);
-    if (!raw) {
+    if (raw === null) {
       saveComunicazioniSoci(INITIAL_COMUNICAZIONI_SOCI);
       return INITIAL_COMUNICAZIONI_SOCI;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_COMUNICAZIONI_SOCI;
+    return Array.isArray(parsed) ? parsed : INITIAL_COMUNICAZIONI_SOCI;
   } catch (err) {
     console.error('Errore nel caricamento delle comunicazioni soci:', err);
     return INITIAL_COMUNICAZIONI_SOCI;
@@ -3264,6 +3312,7 @@ export function loadComunicazioniSoci(): ComunicazioneSocio[] {
 export function saveComunicazioniSoci(comunicazioni: ComunicazioneSocio[]): void {
   try {
     localStorage.setItem(STORAGE_KEY_COMUNICAZIONI_SOCI, JSON.stringify(comunicazioni));
+    syncDatabaseToServer({ comunicazioni });
   } catch (err) {
     console.error('Errore nel salvataggio delle comunicazioni soci:', err);
   }
@@ -3288,6 +3337,362 @@ export function saveSessioneSocioId(socioId: string | null): void {
     console.error('Errore nella memorizzazione della sessione socio:', err);
   }
 }
+
+const STORAGE_KEY_BLOCCO_PORTALE_SOCIO = 'proloco_blocco_portale_socio_v1';
+
+export function loadBloccoPortaleSocio(): boolean {
+  try {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const hasUrlPortalParams =
+        Boolean(params.get('area_soci')) ||
+        Boolean(params.get('portale_soci')) ||
+        params.get('portale') === 'soci' ||
+        Boolean(params.get('tessera')) ||
+        Boolean(params.get('cf')) ||
+        Boolean(params.get('blocco_socio'));
+      if (hasUrlPortalParams) {
+        sessionStorage.setItem(STORAGE_KEY_BLOCCO_PORTALE_SOCIO, '1');
+        return true;
+      }
+      return sessionStorage.getItem(STORAGE_KEY_BLOCCO_PORTALE_SOCIO) === '1';
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export function saveBloccoPortaleSocio(bloccato: boolean): void {
+  try {
+    if (bloccato) {
+      sessionStorage.setItem(STORAGE_KEY_BLOCCO_PORTALE_SOCIO, '1');
+    } else {
+      sessionStorage.removeItem(STORAGE_KEY_BLOCCO_PORTALE_SOCIO);
+    }
+  } catch (err) {
+    console.error('Errore nel salvataggio del blocco portale socio:', err);
+  }
+}
+
+// =====================================================================
+// SINCRONIZZAZIONE DATABASE SERVER (/api/db) + PAYLOAD LINK PORTALE SOCI
+// =====================================================================
+
+function toBase64Url(str: string): string {
+  try {
+    const bytes = new TextEncoder().encode(str);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function fromBase64Url(b64url: string): string {
+  try {
+    let b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4 !== 0) {
+      b64 += '=';
+    }
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return '';
+  }
+}
+
+export interface PortalSyncPayload {
+  socio: Socio;
+  anno?: number;
+  config?: Partial<ProLocoInfo>;
+  ts?: number;
+}
+
+/**
+ * Costruisce il link completo e sincronizzato per il Portale Web dei Soci,
+ * includendo il record aggiornato del socio (con PIN, numero tessera, quote e anagrafica)
+ * così che i dati coincidano al 100% tra Database, Link inviato e Sito Pubblicato.
+ */
+export function buildSyncedMemberPortalUrl(
+  socio: Socio,
+  config: ProLocoInfo,
+  annoSelezionato: number,
+  perQrCompatto: boolean = false
+): string {
+  if (typeof window === 'undefined') return '';
+  const baseUrl = window.location.origin + window.location.pathname;
+  const pinEffettivo = socio.pin && socio.pin.trim() ? socio.pin.trim() : '1234';
+
+  // Escludiamo solo foto base64 pesanti dal parametro URL per mantenere il link snello
+  const fotoLeggera =
+    socio.foto && !socio.foto.startsWith('data:') && socio.foto.length < 220
+      ? socio.foto
+      : undefined;
+
+  const socioPerLink: Socio = {
+    ...socio,
+    pin: pinEffettivo,
+    foto: perQrCompatto ? undefined : fotoLeggera,
+    quote: (socio.quote || []).slice(0, perQrCompatto ? 3 : 20)
+  };
+
+  const payload: PortalSyncPayload = {
+    socio: socioPerLink,
+    anno: annoSelezionato,
+    config: perQrCompatto
+      ? {
+          nome: config.nome,
+          comune: config.comune,
+          provincia: config.provincia,
+          codiceFiscale: config.codiceFiscale,
+          telefono: config.telefono,
+          email: config.email
+        }
+      : {
+          nome: config.nome,
+          comune: config.comune,
+          provincia: config.provincia,
+          codiceFiscale: config.codiceFiscale,
+          partitaIva: config.partitaIva,
+          indirizzo: config.indirizzo,
+          cap: config.cap,
+          telefono: config.telefono,
+          email: config.email,
+          nomePresidente: config.nomePresidente,
+          annoCorrente: config.annoCorrente,
+          quotaStandardOrdinario: config.quotaStandardOrdinario,
+          quotaStandardSostenitore: config.quotaStandardSostenitore,
+          quotaStandardGiovane: config.quotaStandardGiovane
+        },
+    ts: Date.now()
+  };
+
+  const encoded = toBase64Url(JSON.stringify(payload));
+  const params = new URLSearchParams();
+  params.set('area_soci', '1');
+  params.set('tessera', socio.numeroTessera);
+  params.set('blocco_socio', '1');
+  if (encoded) {
+    params.set('sync_socio', encoded);
+  }
+  return `${baseUrl}?${params.toString()}`;
+}
+
+/**
+ * Decodifica un eventuale payload `sync_socio` presente nell'URL o in una stringa scansionata da QR/Barcode
+ * e aggiorna immediatamente il database locale affinché i dati coincidano al 100% col database.
+ */
+export function applyUrlPortalSync(rawUrlOrSearch?: string): {
+  socioSincronizzato: Socio | null;
+  configSincronizzata: ProLocoInfo | null;
+  annoSincronizzato: number | null;
+} {
+  try {
+    const searchStr =
+      rawUrlOrSearch !== undefined
+        ? rawUrlOrSearch.includes('?')
+          ? rawUrlOrSearch.split('?')[1]
+          : rawUrlOrSearch
+        : typeof window !== 'undefined'
+        ? window.location.search
+        : '';
+
+    if (!searchStr) {
+      return { socioSincronizzato: null, configSincronizzata: null, annoSincronizzato: null };
+    }
+
+    const params = new URLSearchParams(searchStr);
+    const encoded = params.get('sync_socio');
+    if (!encoded) {
+      return { socioSincronizzato: null, configSincronizzata: null, annoSincronizzato: null };
+    }
+
+    const jsonStr = fromBase64Url(encoded);
+    if (!jsonStr) {
+      return { socioSincronizzato: null, configSincronizzata: null, annoSincronizzato: null };
+    }
+
+    const parsed = JSON.parse(jsonStr) as PortalSyncPayload;
+    if (!parsed || !parsed.socio || !parsed.socio.numeroTessera) {
+      return { socioSincronizzato: null, configSincronizzata: null, annoSincronizzato: null };
+    }
+
+    const socioIncoming: Socio = {
+      ...parsed.socio,
+      pin: parsed.socio.pin && parsed.socio.pin.trim() ? parsed.socio.pin.trim() : '1234'
+    };
+
+    // Sincronizza il socio nell'elenco soci locale preservando l'eventuale fototessera già presente
+    const sociAttuali = loadSoci();
+    const targetTesseraUpper = socioIncoming.numeroTessera.trim().toUpperCase();
+    const idxEsistente = sociAttuali.findIndex(
+      s => s.id === socioIncoming.id || s.numeroTessera.trim().toUpperCase() === targetTesseraUpper
+    );
+
+    let socioFinale: Socio = socioIncoming;
+    let nuovaListaSoci: Socio[];
+    if (idxEsistente >= 0) {
+      socioFinale = {
+        ...sociAttuali[idxEsistente],
+        ...socioIncoming,
+        foto: socioIncoming.foto || sociAttuali[idxEsistente].foto
+      };
+      nuovaListaSoci = sociAttuali.map((s, i) => (i === idxEsistente ? socioFinale : s));
+    } else {
+      nuovaListaSoci = [socioFinale, ...sociAttuali];
+    }
+
+    localStorage.setItem(STORAGE_KEY_SOCI, JSON.stringify(nuovaListaSoci));
+
+    let configFinale: ProLocoInfo | null = null;
+    if (parsed.config && parsed.config.nome) {
+      const cfgAttuale = loadProLocoConfig();
+      configFinale = {
+        ...cfgAttuale,
+        ...parsed.config
+      };
+      localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(configFinale));
+    }
+
+    return {
+      socioSincronizzato: socioFinale,
+      configSincronizzata: configFinale,
+      annoSincronizzato: parsed.anno || null
+    };
+  } catch (err) {
+    console.error('Errore decodifica payload sync_socio:', err);
+    return { socioSincronizzato: null, configSincronizzata: null, annoSincronizzato: null };
+  }
+}
+
+export function syncDatabaseToServer(partial?: Record<string, unknown>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const payload = partial || {
+      azzerato: false,
+      soci: loadSoci(),
+      config: loadProLocoConfig(),
+      eventi: loadEventi(),
+      donazioni: loadDonazioni(),
+      campagne: loadCampagneFondi(),
+      cestino: loadCestino(),
+      sitoConfig: loadSitoWebConfig(),
+      comunicazioni: loadComunicazioniSoci(),
+      archivioGiornalini: loadArchivioGiornalini(),
+      giornalinoConfig: loadGiornalinoConfig()
+    };
+
+    fetch('/api/db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, azzerato: false })
+    }).catch(() => {
+      // Ignora errori di rete in modalità offline
+    });
+  } catch {
+    // ignore
+  }
+}
+
+export function resetDatabaseOnServer(extra?: Record<string, unknown>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    fetch('/api/db/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(extra || {})
+    }).catch(() => {
+      // ignore
+    });
+  } catch {
+    // ignore
+  }
+}
+
+export interface ServerDatabaseSnapshot {
+  azzerato?: boolean;
+  soci?: Socio[];
+  config?: ProLocoInfo;
+  eventi?: ProLocoEvento[];
+  donazioni?: DonazioneTerzi[];
+  campagne?: CampagnaRaccoltaFondi[];
+  cestino?: ElementoCestino[];
+  sitoConfig?: SitoWebConfig;
+  comunicazioni?: ComunicazioneSocio[];
+  archivioGiornalini?: EdizioneGiornalino[];
+  giornalinoAttivoId?: string;
+  giornalinoConfig?: GiornalinoConfig;
+  updatedAt?: number;
+}
+
+export async function fetchDatabaseFromServer(): Promise<ServerDatabaseSnapshot | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const res = await fetch('/api/db', { cache: 'no-store' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || !data.db || typeof data.db !== 'object') return null;
+    const db = data.db as ServerDatabaseSnapshot;
+
+    // Se il server non è ancora inizializzato (nessun campo salvato), invia lo stato locale attuale al server
+    if (db.soci === undefined && db.azzerato === undefined) {
+      syncDatabaseToServer();
+      return null;
+    }
+
+    // Sincronizza il localStorage locale con i dati autorevoli del server
+    if (Array.isArray(db.soci)) {
+      localStorage.setItem(STORAGE_KEY_SOCI, JSON.stringify(db.soci));
+    }
+    if (db.config) {
+      localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(db.config));
+    }
+    if (Array.isArray(db.eventi)) {
+      localStorage.setItem(STORAGE_KEY_EVENTI, JSON.stringify(db.eventi));
+    }
+    if (Array.isArray(db.donazioni)) {
+      localStorage.setItem(STORAGE_KEY_DONAZIONI, JSON.stringify(db.donazioni));
+    }
+    if (Array.isArray(db.campagne)) {
+      localStorage.setItem(STORAGE_KEY_CAMPAGNE_DONAZIONI, JSON.stringify(db.campagne));
+    }
+    if (Array.isArray(db.cestino)) {
+      localStorage.setItem(STORAGE_KEY_CESTINO, JSON.stringify(db.cestino));
+    }
+    if (db.sitoConfig) {
+      localStorage.setItem(STORAGE_KEY_SITO_WEB, JSON.stringify(db.sitoConfig));
+    }
+    if (Array.isArray(db.comunicazioni)) {
+      localStorage.setItem(STORAGE_KEY_COMUNICAZIONI_SOCI, JSON.stringify(db.comunicazioni));
+    }
+    if (Array.isArray(db.archivioGiornalini)) {
+      localStorage.setItem(STORAGE_KEY_ARCHIVIO_GIORNALINI, JSON.stringify(db.archivioGiornalini));
+    }
+    if (typeof db.giornalinoAttivoId === 'string') {
+      localStorage.setItem(STORAGE_KEY_GIORNALINO_ATTIVO_ID, db.giornalinoAttivoId);
+    }
+    if (db.giornalinoConfig) {
+      localStorage.setItem(STORAGE_KEY_GIORNALINO, JSON.stringify(db.giornalinoConfig));
+    }
+
+    // Applica eventuale payload sync_socio nell'URL sopra ai dati del server
+    applyUrlPortalSync();
+
+    return db;
+  } catch {
+    return null;
+  }
+}
+
+
 
 
 

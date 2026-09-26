@@ -18,7 +18,9 @@ import {
   ArrowLeft,
   CheckCircle2,
   ListChecks,
-  Layers
+  Layers,
+  KeyRound,
+  Lock
 } from 'lucide-react';
 
 interface MemberModalProps {
@@ -78,6 +80,7 @@ export const MemberModal: React.FC<MemberModalProps> = ({
   const [ruoloDirettivo, setRuoloDirettivo] = useState<SocioRuoloDirettivo>(socio?.ruoloDirettivo || 'Nessuno');
   const [dataIscrizione, setDataIscrizione] = useState(socio?.dataIscrizione || new Date().toISOString().slice(0, 10));
   const [numeroTessera, setNumeroTessera] = useState(socio?.numeroTessera || '');
+  const [pin, setPin] = useState(socio?.pin || '');
   const [attivo, setAttivo] = useState(socio ? socio.attivo : true);
   const [consensoPrivacy, setConsensoPrivacy] = useState(socio ? socio.consensoPrivacy : true);
   const [foto, setFoto] = useState<string>(socio?.foto || '');
@@ -171,6 +174,11 @@ export const MemberModal: React.FC<MemberModalProps> = ({
         setStepCorrente(1);
         return false;
       }
+      if (!pin.trim()) {
+        setErroreStep('Inserisci il PIN personale nell\'Anagrafe (Step 1) necessario per sbloccare l\'Area Riservata Soci.');
+        setStepCorrente(1);
+        return false;
+      }
     }
     if (stepCheck >= 3) {
       if (!numeroTessera.trim()) {
@@ -221,6 +229,7 @@ export const MemberModal: React.FC<MemberModalProps> = ({
     const socioAggiornato: Socio = {
       id: socioId,
       numeroTessera: numeroTessera.trim().toUpperCase(),
+      pin: pin.trim(),
       nome: nome.trim(),
       cognome: cognome.trim(),
       codiceFiscale: codiceFiscale.trim().toUpperCase(),
@@ -517,6 +526,66 @@ export const MemberModal: React.FC<MemberModalProps> = ({
                       onChange={(e) => setLuogoNascita(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     />
+                  </div>
+                </div>
+
+                {/* Blocco Credenziali Sblocco Area Riservata Soci (PIN + Numero Tessera associato) */}
+                <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <KeyRound className="w-4 h-4 text-emerald-700" />
+                      <span className="text-xs font-bold text-emerald-950">
+                        PIN di Sblocco Area Riservata Soci (associato al N° Tessera)
+                      </span>
+                    </div>
+                    <span className="text-[10.5px] font-semibold text-emerald-700 bg-white px-2 py-0.5 rounded-md border border-emerald-200">
+                      Obbligatorio per accesso tramite link
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    Questo <strong>PIN personale</strong> è abbinato al Numero Tessera del socio e verrà richiesto per sbloccare l&apos;Area Riservata Soci aperta tramite il link inviato al socio.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-emerald-950 mb-1">
+                        Numero Tessera Associato *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Es. PL-2025-010"
+                        value={numeroTessera}
+                        onChange={(e) => setNumeroTessera(e.target.value.toUpperCase())}
+                        className="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-2 text-xs font-mono font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-emerald-950 mb-1">
+                        PIN Sblocco Area Riservata *
+                      </label>
+                      <div className="flex gap-1.5">
+                        <div className="relative flex-1">
+                          <Lock className="w-3.5 h-3.5 text-emerald-600 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            required
+                            maxLength={12}
+                            placeholder="Es. 12345"
+                            value={pin}
+                            onChange={(e) => setPin(e.target.value.trim())}
+                            className="w-full bg-white border border-emerald-300 rounded-lg pl-8 pr-2.5 py-2 text-xs font-mono font-extrabold text-emerald-900 tracking-wider focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPin(String(Math.floor(1000 + Math.random() * 9000)))}
+                          title="Genera un nuovo PIN casuale a 4 cifre"
+                          className="px-2.5 py-2 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer shrink-0"
+                        >
+                          Genera PIN
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -841,8 +910,8 @@ export const MemberModal: React.FC<MemberModalProps> = ({
                       <strong className="text-slate-900">{cognome || '—'} {nome || '—'}</strong> ({codiceFiscale || 'C.F. mancante'})
                     </div>
                     <div>
-                      <span className="text-slate-400">Tessera & Qualifica:</span>{' '}
-                      <strong className="font-mono text-emerald-800">{numeroTessera}</strong> · {categoria}
+                      <span className="text-slate-400">Tessera, PIN & Qualifica:</span>{' '}
+                      <strong className="font-mono text-emerald-800">{numeroTessera}</strong> (PIN: <strong className="font-mono text-emerald-900">{pin || '—'}</strong>) · {categoria}
                     </div>
                     <div>
                       <span className="text-slate-400">Recapiti:</span>{' '}

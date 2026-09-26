@@ -130,6 +130,7 @@ export interface QuotaAssociativa {
 export interface Socio {
   id: string;
   numeroTessera: string; // Es. PL-2025-001
+  pin?: string; // PIN personale per sblocco Area Riservata Soci associato al numero tessera
   nome: string;
   cognome: string;
   codiceFiscale: string;

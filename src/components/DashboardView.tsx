@@ -137,7 +137,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return annoEv === annoSelezionato;
   });
 
-  const donazioniEffettive = donazioni && donazioni.length > 0 ? donazioni : loadDonazioni();
+  const donazioniEffettive = donazioni ?? loadDonazioni();
   const donazioniAnno = donazioniEffettive.filter(d => d.anno === annoSelezionato && d.stato !== 'annullata_ripensamento');
   const totaleDonazioniAnno = donazioniAnno.reduce((acc, d) => acc + (d.importo || 0), 0);
 

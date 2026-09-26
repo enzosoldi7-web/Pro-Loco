@@ -91,6 +91,10 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
   // Campagne di raccolta fondi
   const [campagne, setCampagne] = useState<CampagnaRaccoltaFondi[]>(() => loadCampagneFondi());
 
+  useEffect(() => {
+    setCampagne(loadCampagneFondi());
+  }, [donazioni]);
+
   // Modali
   const [modalDonazioneAperta, setModalDonazioneAperta] = useState<boolean>(false);
   const [donazioneInModifica, setDonazioneInModifica] = useState<DonazioneTerzi | null>(null);

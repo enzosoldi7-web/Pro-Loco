@@ -27,6 +27,10 @@ import {
   INITIAL_EVENTI,
   INITIAL_DONAZIONI,
   INITIAL_CAMPAGNE_FONDI,
+  INITIAL_ARCHIVIO_GIORNALINI,
+  INITIAL_COMUNICAZIONI_SOCI,
+  DEFAULT_SITO_WEB_CONFIG,
+  DEFAULT_GIORNALINO_CONFIG,
   ripristinaEventiSimulati,
   loadDonazioni,
   saveDonazioni,
@@ -45,7 +49,16 @@ import {
   rimuoviDalCestino,
   svuotaCestino,
   saveComunicazioniSoci,
-  saveSessioneSocioId
+  saveSessioneSocioId,
+  loadBloccoPortaleSocio,
+  saveBloccoPortaleSocio,
+  azzeraDatabase,
+  getEmptySitoWebConfig,
+  getEmptyGiornalinoConfig,
+  applyUrlPortalSync,
+  fetchDatabaseFromServer,
+  syncDatabaseToServer,
+  buildSyncedMemberPortalUrl
 } from './storage';
 import { Header } from './components/Header';
 import { StatsBar } from './components/StatsBar';
@@ -80,12 +93,21 @@ import { Award, ShieldCheck, Heart, Sparkles, PartyPopper, Printer } from 'lucid
 
 export default function App() {
   const { isFullscreen, toggleFullscreen, enterFullscreen } = useFullscreen();
-  const [config, setConfig] = useState<ProLocoInfo>(() => loadProLocoConfig());
+
+  // Prima di inizializzare lo stato, applica l'eventuale payload sincronizzato nel link del Portale Soci
+  const [initialUrlSync] = useState(() => applyUrlPortalSync());
+
+  const [config, setConfig] = useState<ProLocoInfo>(() => initialUrlSync.configSincronizzata || loadProLocoConfig());
   const [soci, setSoci] = useState<Socio[]>(() => loadSoci());
   const [eventi, setEventi] = useState<ProLocoEvento[]>(() => loadEventi());
   const [donazioni, setDonazioni] = useState<DonazioneTerzi[]>(() => loadDonazioni());
   const [cestino, setCestino] = useState<ElementoCestino[]>(() => loadCestino());
-  const [paginaAttiva, setPaginaAttiva] = useState<PaginaPrincipale>('dashboard');
+  const [paginaAttiva, setPaginaAttiva] = useState<PaginaPrincipale>(() => {
+    if (loadBloccoPortaleSocio()) {
+      return 'portale_soci';
+    }
+    return 'dashboard';
+  });
   const [tabGestionale, setTabGestionale] = useState<SottoTabGestionale>('soci');
   const [sitoConfig, setSitoConfig] = useState<SitoWebConfig>(() => loadSitoWebConfig());
   const [giornalinoConfig, setGiornalinoConfig] = useState<GiornalinoConfig>(() => loadGiornalinoConfig());
@@ -95,9 +117,9 @@ export default function App() {
   const [tabEditorSitoAttivo, setTabEditorSitoAttivo] = useState<'generale' | 'sezioni' | 'avvisi' | 'territorio' | 'aspetto' | 'sicurezza'>('generale');
   const [vistaEditorForzata, setVistaEditorForzata] = useState<boolean>(false);
 
-  // Il gestionale si posiziona in automatico sempre sull'anno di riferimento in base al sistema del PC
+  // Il gestionale si posiziona in automatico sempre sull'anno di riferimento in base al sistema del PC o al link sincronizzato
   const [annoSelezionato, setAnnoSelezionato] = useState<number>(() => {
-    return new Date().getFullYear();
+    return initialUrlSync.annoSincronizzato || new Date().getFullYear();
   });
 
   // Stati per Modali Soci
@@ -118,24 +140,85 @@ export default function App() {
   const [mostraStampaLibroSoci, setMostraStampaLibroSoci] = useState<boolean>(false);
   const [mostraStampaProgrammaEventi, setMostraStampaProgrammaEventi] = useState<boolean>(false);
 
-  // Controllo parametri URL (per verifica scansionando il QR Code della tessera o accesso al Portale Soci)
+  // Sincronizzazione continua tra Database Server (/api/db), schede aperte (storage event) e Link Portale Soci
+  useEffect(() => {
+    let active = true;
+
+    const sincronizzaDalServer = async () => {
+      const db = await fetchDatabaseFromServer();
+      if (!active || !db) return;
+
+      // Riapplica l'eventuale payload URL sync_socio sopra i dati del server così il link ha sempre il socio esatto
+      const urlSync = applyUrlPortalSync();
+
+      setSoci(loadSoci());
+      setConfig(urlSync.configSincronizzata || loadProLocoConfig());
+      setEventi(loadEventi());
+      setDonazioni(loadDonazioni());
+      setCestino(loadCestino());
+      setSitoConfig(loadSitoWebConfig());
+      setArchivioGiornalini(loadArchivioGiornalini());
+      setGiornalinoConfig(loadGiornalinoConfig());
+      setGiornalinoAttivoId(loadGiornalinoAttivoId());
+    };
+
+    sincronizzaDalServer();
+
+    const handleStorageChange = () => {
+      if (!active) return;
+      setSoci(loadSoci());
+      setConfig(loadProLocoConfig());
+      setEventi(loadEventi());
+      setDonazioni(loadDonazioni());
+      setCestino(loadCestino());
+      setSitoConfig(loadSitoWebConfig());
+      setArchivioGiornalini(loadArchivioGiornalini());
+      setGiornalinoConfig(loadGiornalinoConfig());
+      setGiornalinoAttivoId(loadGiornalinoAttivoId());
+    };
+
+    const handleWindowFocus = () => {
+      sincronizzaDalServer();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      active = false;
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, []);
+
+  // Controllo parametri URL (per link della tessera, lettura barcode/QR Code o accesso al Portale Soci: blocco totale senza ritorno indietro)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const isAreaSoci = params.get('area_soci') || params.get('portale_soci') || params.get('portale') === 'soci';
-    const tesseraParam = params.get('tessera');
+    const isAreaSoci =
+      Boolean(params.get('area_soci')) ||
+      Boolean(params.get('portale_soci')) ||
+      params.get('portale') === 'soci' ||
+      Boolean(params.get('blocco_socio')) ||
+      Boolean(params.get('sync_socio'));
+    const tesseraParam = params.get('tessera') || params.get('cf') || params.get('barcode');
     
-    if (isAreaSoci) {
+    if (isAreaSoci || tesseraParam || loadBloccoPortaleSocio()) {
+      saveBloccoPortaleSocio(true);
       setPaginaAttiva('portale_soci');
       if (tesseraParam && soci.length > 0) {
-        const trovato = soci.find(s => s.numeroTessera.toUpperCase() === tesseraParam.toUpperCase());
-        if (trovato) {
+        const query = tesseraParam.trim().toUpperCase();
+        const pinParam = (params.get('pin') || '').trim();
+        const trovato = soci.find(
+          s =>
+            s.numeroTessera.trim().toUpperCase() === query ||
+            s.codiceFiscale.trim().toUpperCase() === query
+        );
+        if (trovato && pinParam && (trovato.pin || '1234').trim() === pinParam) {
           saveSessioneSocioId(trovato.id);
+        } else if (tesseraParam) {
+          // Richiede sempre lo sblocco tramite combinazione Numero Tessera + PIN
+          saveSessioneSocioId(null);
         }
-      }
-    } else if (tesseraParam && soci.length > 0) {
-      const trovato = soci.find(s => s.numeroTessera.toUpperCase() === tesseraParam.toUpperCase());
-      if (trovato) {
-        setSocioTessera(trovato);
       }
     }
   }, [soci]);
@@ -153,9 +236,10 @@ export default function App() {
     saveSoci(nuovaLista);
     setSocioModale(null);
 
-    // Se stiamo visualizzando la tessera o quote di questo socio, aggiorna lo stato
+    // Se stiamo visualizzando la tessera, quote o link di questo socio, aggiorna lo stato
     if (socioTessera?.id === socioAggiornato.id) setSocioTessera(socioAggiornato);
     if (socioQuote?.id === socioAggiornato.id) setSocioQuote(socioAggiornato);
+    if (socioLinkPortale?.id === socioAggiornato.id) setSocioLinkPortale(socioAggiornato);
   };
 
   // Handler eliminazione socio (con tracciamento nel Cestino di Sistema)
@@ -192,12 +276,15 @@ export default function App() {
     setSoci(nuovaLista);
     saveSoci(nuovaLista);
 
-    // Aggiorna anche il socio attivo nella modale delle quote
+    // Aggiorna anche il socio attivo nelle modali collegate
     const socioAggiornato = nuovaLista.find(s => s.id === socioId);
     if (socioAggiornato) {
       setSocioQuote(socioAggiornato);
       if (socioTessera?.id === socioId) {
         setSocioTessera(socioAggiornato);
+      }
+      if (socioLinkPortale?.id === socioId) {
+        setSocioLinkPortale(socioAggiornato);
       }
     }
   };
@@ -243,7 +330,6 @@ export default function App() {
   // Handler gestione Cestino di Sistema (Audit Trail ex Punto 1.4)
   const handleRipristinaDaCestino = (item: ElementoCestino) => {
     if (item.tipoEntita === 'donazione') {
-      const donazioneOriginale = item.datiOriginali as DonazioneTerzi;
       const idDon = item.entitaId;
       const nuovaLista = donazioni.map(d => {
         if (d.id === idDon) {
@@ -296,7 +382,7 @@ export default function App() {
     setCestino(loadCestino());
   };
 
-  // Ripristino dati di prova realistici (Soci, Eventi, Donazioni, Campagne)
+  // Ripristino dati di prova realistici (Soci, Eventi, Donazioni, Campagne, Sito, Giornalino, Comunicazioni)
   const handleRipristinaDemo = () => {
     setSoci(INITIAL_SOCI);
     saveSoci(INITIAL_SOCI);
@@ -307,7 +393,22 @@ export default function App() {
     saveCampagneFondi(INITIAL_CAMPAGNE_FONDI);
     setConfig(DEFAULT_PRO_LOCO);
     saveProLocoConfig(DEFAULT_PRO_LOCO);
+    setSitoConfig(DEFAULT_SITO_WEB_CONFIG);
+    saveSitoWebConfig(DEFAULT_SITO_WEB_CONFIG);
+    setArchivioGiornalini(INITIAL_ARCHIVIO_GIORNALINI);
+    saveArchivioGiornalini(INITIAL_ARCHIVIO_GIORNALINI);
+    if (INITIAL_ARCHIVIO_GIORNALINI.length > 0) {
+      setGiornalinoAttivoId(INITIAL_ARCHIVIO_GIORNALINI[0].id);
+      saveGiornalinoAttivoId(INITIAL_ARCHIVIO_GIORNALINI[0].id);
+      setGiornalinoConfig(INITIAL_ARCHIVIO_GIORNALINI[0]);
+      saveGiornalinoConfig(INITIAL_ARCHIVIO_GIORNALINI[0]);
+    } else {
+      setGiornalinoConfig(DEFAULT_GIORNALINO_CONFIG);
+      saveGiornalinoConfig(DEFAULT_GIORNALINO_CONFIG);
+    }
+    saveComunicazioniSoci(INITIAL_COMUNICAZIONI_SOCI);
     setCestino(loadCestino());
+    syncDatabaseToServer();
   };
 
   // Ripristino specifico dei 3 eventi simulati
@@ -316,21 +417,27 @@ export default function App() {
     setEventi(ripristinati);
   };
 
-  // Azzeramento completo dell'intero database (Soci, Eventi, Quote, Donazioni, Campagne, Cestino)
+  // Azzeramento completo dell'intero database (Soci, Eventi, Quote, Donazioni, Campagne, Cestino, Giornalino, Comunicazioni, Sito Web)
   const handleAzzeraDatabase = () => {
+    azzeraDatabase();
+    const emptySito = getEmptySitoWebConfig();
+    const emptyGiornalino = getEmptyGiornalinoConfig();
+
     setSoci([]);
-    saveSoci([]);
     setEventi([]);
-    saveEventi([]);
     setDonazioni([]);
-    saveDonazioni([]);
-    saveCampagneFondi([]);
-    svuotaCestino();
     setCestino([]);
+    setArchivioGiornalini([]);
+    setGiornalinoAttivoId('');
+    setGiornalinoConfig(emptyGiornalino);
+    setSitoConfig(emptySito);
+
     setSocioModale(null);
     setSocioTessera(null);
     setSocioQuote(null);
     setSocioPrivacy(null);
+    setSocioSchedaStampa(null);
+    setSocioLinkPortale(null);
     setRicevutaAttiva(null);
     setEventoModale(null);
     setEventoStampa(null);
@@ -375,12 +482,14 @@ export default function App() {
       setConfig(dati.config);
       saveProLocoConfig(dati.config);
     }
+    syncDatabaseToServer();
   };
 
   // Handlers Gestione e Pubblicazione Sito Web Pubblico
   const handleSalvaSitoConfig = (nuovaConfig: SitoWebConfig) => {
     setSitoConfig(nuovaConfig);
     saveSitoWebConfig(nuovaConfig);
+    syncDatabaseToServer();
   };
 
   const handlePubblicaEBlinda = (nuovaConfig: SitoWebConfig) => {
@@ -401,6 +510,7 @@ export default function App() {
 
     setSitoConfig(configBlindata);
     saveSitoWebConfig(configBlindata);
+    syncDatabaseToServer();
     setVistaEditorForzata(false);
   };
 
@@ -671,8 +781,7 @@ export default function App() {
           annoSelezionato={annoSelezionato}
           onAggiornaSocio={handleSalvaSocio}
           onAggiornaEvento={handleSalvaEvento}
-          onTornaAlSito={() => setPaginaAttiva('sitoweb')}
-          onVaiAlGestionale={() => setPaginaAttiva('gestionale')}
+          onTornaAlSito={() => {}}
         />
         <FullscreenFloatingControls
           isFullscreen={isFullscreen}
@@ -962,19 +1071,19 @@ export default function App() {
       {/* 2. Modale Tessera Digitale del Socio */}
       {socioTessera && (
         <DigitalCardModal
-          socio={socioTessera}
+          socio={soci.find(s => s.id === socioTessera.id) || socioTessera}
           config={config}
           annoSelezionato={annoSelezionato}
           onClose={() => setSocioTessera(null)}
           onRinnovaQuota={(socio) => {
             setSocioTessera(null);
-            setSocioQuote(socio);
+            setSocioQuote(soci.find(s => s.id === socio.id) || socio);
           }}
           onApriSchedaSocio={(socio) => {
-            setSocioSchedaStampa(socio);
+            setSocioSchedaStampa(soci.find(s => s.id === socio.id) || socio);
           }}
           onInviaLinkPortale={(socio) => {
-            setSocioLinkPortale(socio);
+            setSocioLinkPortale(soci.find(s => s.id === socio.id) || socio);
           }}
         />
       )}
@@ -982,14 +1091,14 @@ export default function App() {
       {/* 3. Modale Registro Quote e Pagamenti */}
       {socioQuote && (
         <PaymentModal
-          socio={socioQuote}
+          socio={soci.find(s => s.id === socioQuote.id) || socioQuote}
           soci={soci}
           config={config}
           annoSelezionato={annoSelezionato}
           onClose={() => setSocioQuote(null)}
           onSalvaQuote={handleSalvaQuote}
           onVisualizzaRicevuta={(socio, quota) => {
-            setRicevutaAttiva({ socio, quota });
+            setRicevutaAttiva({ socio: soci.find(s => s.id === socio.id) || socio, quota });
           }}
         />
       )}
@@ -1095,11 +1204,11 @@ export default function App() {
       {/* 14. Modale Invio Link Portale Web dei Soci */}
       {socioLinkPortale && (
         <SendMemberPortalLinkModal
-          socio={socioLinkPortale}
+          socio={soci.find(s => s.id === socioLinkPortale.id) || socioLinkPortale}
           config={config}
           annoSelezionato={annoSelezionato}
           onClose={() => setSocioLinkPortale(null)}
-          onApriPortaleComeSocio={(socio) => {
+          onApriPortaleComeSocio={() => {
             setSocioLinkPortale(null);
             setSocioTessera(null);
             setPaginaAttiva('portale_soci');

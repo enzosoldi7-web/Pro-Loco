@@ -128,7 +128,7 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
 
   // Stati Gestione Donazioni da Terzi
   const [listaDonazioni, setListaDonazioni] = useState<DonazioneTerzi[]>(() => {
-    if (donazioni && donazioni.length > 0) return donazioni;
+    if (donazioni !== undefined) return donazioni;
     return loadDonazioni();
   });
   const [modalDonazioneAperta, setModalDonazioneAperta] = useState<boolean>(false);

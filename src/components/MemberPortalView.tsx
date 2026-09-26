@@ -15,7 +15,12 @@ import {
   loadComunicazioniSoci, 
   saveComunicazioniSoci,
   loadSessioneSocioId,
-  saveSessioneSocioId
+  saveSessioneSocioId,
+  saveBloccoPortaleSocio,
+  loadSoci,
+  applyUrlPortalSync,
+  fetchDatabaseFromServer,
+  buildSyncedMemberPortalUrl
 } from '../storage';
 import { ReceiptModal } from './ReceiptModal';
 import { DigitalCardModal } from './DigitalCardModal';
@@ -81,10 +86,22 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
   onVaiAlGestionale
 }) => {
   // Sessione Socio Loggato
-  const [socioIdAttivo, setSocioIdAttivo] = useState<string | null>(() => loadSessioneSocioId());
+  const [socioIdAttivo, setSocioIdAttivo] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tesseraUrl = params.get('tessera') || params.get('cf') || params.get('barcode');
+    const pinUrl = params.get('pin');
+    // Se il socio apre il link con il numero tessera ma non ha ancora inserito il PIN, richiede lo sblocco con PIN
+    if (tesseraUrl && !pinUrl) {
+      return null;
+    }
+    return loadSessioneSocioId();
+  });
   
-  // Campi form login
-  const [inputIdentificativo, setInputIdentificativo] = useState<string>('');
+  // Campi form login (Numero Tessera precompilato se proviene dal link inviato al socio)
+  const [inputIdentificativo, setInputIdentificativo] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get('tessera') || params.get('cf') || params.get('barcode') || '').trim().toUpperCase();
+  });
   const [inputPin, setInputPin] = useState<string>('');
   const [erroreLogin, setErroreLogin] = useState<string | null>(null);
   
@@ -110,24 +127,43 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
   // QR Code data URL per la tessera rapida
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
 
-  // Trova il socio attivo
+  // Trova il socio attivo (cercando sia nello stato React che nel database sincronizzato)
   const socioAttivo = useMemo(() => {
     if (!socioIdAttivo) return null;
-    return soci.find(s => s.id === socioIdAttivo) || null;
+    const daStato = soci.find(s => s.id === socioIdAttivo);
+    if (daStato) return daStato;
+    const daStorage = loadSoci().find(s => s.id === socioIdAttivo);
+    return daStorage || null;
   }, [socioIdAttivo, soci]);
 
-  // Genera QR code se socio loggato
+  // Sincronizzazione automatica comunicazioni e dati dal server/storage quando si apre il Portale Soci
+  useEffect(() => {
+    let mounted = true;
+    applyUrlPortalSync();
+    setComunicazioni(loadComunicazioniSoci());
+
+    fetchDatabaseFromServer().then(db => {
+      if (!mounted || !db) return;
+      applyUrlPortalSync();
+      setComunicazioni(loadComunicazioniSoci());
+    });
+
+    const onStorage = () => {
+      if (!mounted) return;
+      setComunicazioni(loadComunicazioniSoci());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      mounted = false;
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [soci]);
+
+  // Genera QR code se socio loggato (con link diretto blindato e sincronizzato al portale socio)
   useEffect(() => {
     if (socioAttivo) {
-      const payloadVerifica = JSON.stringify({
-        tessera: socioAttivo.numeroTessera,
-        cf: socioAttivo.codiceFiscale,
-        nome: `${socioAttivo.nome} ${socioAttivo.cognome}`,
-        proloco: config.nome,
-        anno: annoSelezionato,
-        ruolo: socioAttivo.ruoloDirettivo !== 'Nessuno' ? socioAttivo.ruoloDirettivo : socioAttivo.categoria
-      });
-      QRCode.toDataURL(payloadVerifica, {
+      const linkBlindato = buildSyncedMemberPortalUrl(socioAttivo, config, annoSelezionato, true);
+      QRCode.toDataURL(linkBlindato, {
         width: 180,
         margin: 1,
         color: { dark: '#064e3b', light: '#ffffff' }
@@ -135,7 +171,66 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
       .then(url => setQrCodeDataUrl(url))
       .catch(err => console.error('Errore generazione QR:', err));
     }
-  }, [socioAttivo, config.nome, annoSelezionato]);
+  }, [socioAttivo, config, annoSelezionato]);
+
+  // Blocco totale navigazione indietro (History Trap + Tastiera + URL Blindato)
+  useEffect(() => {
+    saveBloccoPortaleSocio(true);
+
+    const costruisciUrlBlindato = () => {
+      const params = new URLSearchParams(window.location.search);
+      params.set('area_soci', '1');
+      params.set('blocco_socio', '1');
+      if (socioAttivo?.numeroTessera) {
+        params.set('tessera', socioAttivo.numeroTessera);
+      }
+      return `${window.location.pathname}?${params.toString()}`;
+    };
+
+    try {
+      const targetUrl = costruisciUrlBlindato();
+      window.history.replaceState({ portaleSocioBlindato: true }, '', targetUrl);
+      for (let i = 0; i < 5; i++) {
+        window.history.pushState({ portaleSocioBlindato: true, step: i }, '', targetUrl);
+      }
+    } catch {
+      // ignore history errors
+    }
+
+    const handlePopState = (e: PopStateEvent) => {
+      e.preventDefault();
+      try {
+        const targetUrl = costruisciUrlBlindato();
+        window.history.pushState({ portaleSocioBlindato: true }, '', targetUrl);
+      } catch {
+        // ignore
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+
+      if (
+        (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) ||
+        (e.metaKey && (e.key === '[' || e.key === ']' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) ||
+        e.key === 'BrowserBack' ||
+        e.key === 'BrowserForward' ||
+        (!isInput && e.key === 'Backspace')
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
+    };
+  }, [socioAttivo]);
 
   // Prepara campi per modifica recapiti
   useEffect(() => {
@@ -146,48 +241,148 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
     }
   }, [socioAttivo]);
 
-  // Controllo automatico parametri URL per login diretto (da link inviato al socio)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tesseraUrl = params.get('tessera') || params.get('cf');
-    if (tesseraUrl && soci.length > 0) {
-      const trovato = soci.find(s => 
-        s.numeroTessera.toUpperCase() === tesseraUrl.toUpperCase() || 
-        s.codiceFiscale.toUpperCase() === tesseraUrl.toUpperCase()
-      );
-      if (trovato && socioIdAttivo !== trovato.id) {
-        setSocioIdAttivo(trovato.id);
-        saveSessioneSocioId(trovato.id);
+  // Funzione universale per interpretare codice tessera, CF, URL o JSON letto da lettore Barcode / QR
+  const trovaSocioDaCodiceOBarcode = (rawInput: string): Socio | undefined => {
+    const pulito = rawInput.trim();
+    if (!pulito) return undefined;
+
+    // Se l'input o l'URL contiene il payload sync_socio, applicalo subito
+    if (pulito.includes('sync_socio=')) {
+      const syncRes = applyUrlPortalSync(pulito);
+      if (syncRes.socioSincronizzato) {
+        return syncRes.socioSincronizzato;
       }
     }
-  }, [soci, socioIdAttivo]);
 
-  // Gestione Login Socio
+    // Uniamo i soci nello stato con quelli eventualmente appena sincronizzati in storage
+    const elencoSoci = soci.length > 0 ? soci : loadSoci();
+
+    // 1. Se il barcode/QR contiene un URL con ?tessera=... o ?cf=...
+    if (pulito.includes('tessera=') || pulito.includes('cf=')) {
+      try {
+        const queryPart = pulito.includes('?') ? pulito.split('?')[1] : pulito;
+        const p = new URLSearchParams(queryPart);
+        const t = p.get('tessera') || p.get('cf');
+        if (t) {
+          const upperT = t.trim().toUpperCase();
+          const matchUrl =
+            elencoSoci.find(
+              s =>
+                s.numeroTessera.trim().toUpperCase() === upperT ||
+                s.codiceFiscale.trim().toUpperCase() === upperT
+            ) ||
+            loadSoci().find(
+              s =>
+                s.numeroTessera.trim().toUpperCase() === upperT ||
+                s.codiceFiscale.trim().toUpperCase() === upperT
+            );
+          if (matchUrl) return matchUrl;
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    // 2. Se il barcode/QR contiene un payload JSON {"tessera":"..."}
+    if (pulito.startsWith('{') && pulito.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(pulito);
+        const t = (parsed.tessera || parsed.cf || '').toString().trim().toUpperCase();
+        if (t) {
+          const matchJson = elencoSoci.find(
+            s =>
+              s.numeroTessera.trim().toUpperCase() === t ||
+              s.codiceFiscale.trim().toUpperCase() === t
+          );
+          if (matchJson) return matchJson;
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    // 3. Ricerca diretta esatta per Numero Tessera, Codice Fiscale o Email
+    const query = pulito.toUpperCase();
+    return (
+      elencoSoci.find(
+        s =>
+          s.numeroTessera.trim().toUpperCase() === query ||
+          s.codiceFiscale.trim().toUpperCase() === query ||
+          (s.email && s.email.trim().toUpperCase() === query)
+      ) ||
+      loadSoci().find(
+        s =>
+          s.numeroTessera.trim().toUpperCase() === query ||
+          s.codiceFiscale.trim().toUpperCase() === query ||
+          (s.email && s.email.trim().toUpperCase() === query)
+      )
+    );
+  };
+
+  // Controllo parametri URL per associazione Numero Tessera dal link inviato al socio e verifica combinazione col PIN
+  useEffect(() => {
+    const urlSync = applyUrlPortalSync();
+    const params = new URLSearchParams(window.location.search);
+    const tesseraUrl =
+      params.get('tessera') ||
+      params.get('cf') ||
+      params.get('barcode') ||
+      urlSync.socioSincronizzato?.numeroTessera;
+    const pinUrl = params.get('pin');
+
+    if (tesseraUrl) {
+      const trovato = urlSync.socioSincronizzato || trovaSocioDaCodiceOBarcode(tesseraUrl);
+      if (trovato) {
+        setInputIdentificativo(trovato.numeroTessera);
+        if (pinUrl) {
+          const pinAtteso = (trovato.pin || '1234').trim();
+          if (pinUrl.trim() === pinAtteso) {
+            setSocioIdAttivo(trovato.id);
+            saveSessioneSocioId(trovato.id);
+            saveBloccoPortaleSocio(true);
+            setErroreLogin(null);
+          } else {
+            setSocioIdAttivo(null);
+            saveSessioneSocioId(null);
+            setErroreLogin('Errore di sblocco: il Numero della Tessera e il PIN non corrispondono. Verifica il PIN e riprova.');
+          }
+        }
+      } else {
+        setInputIdentificativo(tesseraUrl.trim().toUpperCase());
+      }
+    }
+  }, [soci]);
+
+  // Gestione Sblocco Area Riservata Soci: verifica combinazione tra Numero Tessera e PIN personale registrato in Anagrafe
   const handleLogin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErroreLogin(null);
 
-    const query = inputIdentificativo.trim().toUpperCase();
+    const query = inputIdentificativo.trim();
+    const pinInserito = inputPin.trim();
+
     if (!query) {
-      setErroreLogin('Inserisci il tuo Numero Tessera, Codice Fiscale o Email.');
+      setErroreLogin('Inserisci il Numero della Tessera associato al tuo profilo socio.');
       return;
     }
 
-    const trovato = soci.find(s => 
-      s.numeroTessera.toUpperCase() === query ||
-      s.codiceFiscale.toUpperCase() === query ||
-      s.email.toUpperCase() === query
-    );
-
-    if (!trovato) {
-      setErroreLogin('Nessun socio trovato con le credenziali inserite. Controlla il numero tessera o il codice fiscale.');
+    if (!pinInserito) {
+      setErroreLogin('Inserisci il PIN personale per sbloccare l\'Area Riservata Soci associata al numero della tessera.');
       return;
     }
 
-    // Se inserito un pin, verifica che non sia vuoto
+    const trovato = trovaSocioDaCodiceOBarcode(query);
+    const pinValido = trovato ? (trovato.pin || '1234').trim() : '';
+
+    if (!trovato || pinInserito !== pinValido) {
+      setErroreLogin('Accesso negato: il Numero della Tessera e il PIN inseriti non corrispondono. Verifica i dati comunicati dalla segreteria e riprova.');
+      return;
+    }
+
+    // Combinazione Numero Tessera + PIN verificata con successo: sblocca l'Area Riservata Soci
     setSocioIdAttivo(trovato.id);
     saveSessioneSocioId(trovato.id);
-    setInputIdentificativo('');
+    saveBloccoPortaleSocio(true);
     setInputPin('');
   };
 
@@ -330,42 +525,25 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
     return (
       <div className="min-h-screen bg-[#f6f4ee] text-stone-800 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
         
-        {/* Header di navigazione pulito */}
+        {/* Header di navigazione blindato (nessun tasto per tornare indietro) */}
         <header className="bg-[#fdfcf9]/95 backdrop-blur-md border-b border-stone-200/80 sticky top-0 z-30 shadow-2xs">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={onTornaAlSito}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-stone-700 bg-white hover:bg-stone-50 border border-stone-200 rounded-xl transition cursor-pointer"
-                title="Torna alla homepage del sito web"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Torna al Sito</span>
-              </button>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-800 text-white flex items-center justify-center font-bold text-xs">
-                  <Building2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h1 className="text-sm font-extrabold text-stone-900 tracking-tight leading-none">
-                    {config.nome}
-                  </h1>
-                  <span className="text-[11px] text-stone-500 font-medium">Portale Web del Socio</span>
-                </div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-emerald-800 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div>
+                <h1 className="text-sm font-extrabold text-stone-900 tracking-tight leading-none">
+                  {config.nome}
+                </h1>
+                <span className="text-[11px] text-stone-500 font-medium">Portale Web Ufficiale del Socio</span>
               </div>
             </div>
 
-            {onVaiAlGestionale && (
-              <button
-                type="button"
-                onClick={onVaiAlGestionale}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-900 bg-emerald-100/70 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition cursor-pointer"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-                <span className="hidden sm:inline">Pannello Direttivo</span>
-              </button>
-            )}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl">
+              <Lock className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Accesso Diretto Blindato Socio</span>
+            </div>
           </div>
         </header>
 
@@ -378,20 +556,20 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
             className="w-full max-w-md bg-white rounded-3xl border border-stone-200/90 shadow-[0_4px_24px_-6px_rgba(45,38,30,0.06)] p-6 sm:p-8"
           >
-            {/* Intestazione del Login */}
+            {/* Intestazione dello Sblocco Area Riservata Soci */}
             <div className="text-center space-y-2 mb-6">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-800 text-white flex items-center justify-center mx-auto shadow-sm ring-4 ring-emerald-50">
                 <KeyRound className="w-7 h-7 text-emerald-100" />
               </div>
               <h2 className="text-2xl font-extrabold text-stone-900 tracking-tight">
-                Area Riservata Soci
+                Sblocco Area Riservata Soci
               </h2>
               <p className="text-xs text-stone-600 leading-relaxed max-w-sm mx-auto">
-                Accedi per consultare la tua tessera digitale, lo stato del tesseramento, la cronologia dei pagamenti e le comunicazioni ufficiali.
+                Per sbloccare l&apos;area riservata inviata tramite link, verifica il tuo <strong>Numero Tessera</strong> e inserisci il <strong>PIN personale</strong> abbinato in anagrafe.
               </p>
             </div>
 
-            {/* Messaggio Errore */}
+            {/* Messaggio Errore se Numero Tessera e PIN non si combinano */}
             {erroreLogin && (
               <div className="mb-5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-shake">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -399,47 +577,60 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
               </div>
             )}
 
-            {/* Form di Autenticazione */}
+            {/* Form di Sblocco Area Riservata (Numero Tessera + PIN) */}
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  Numero Tessera o Codice Fiscale
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-stone-700">
+                    Numero della Tessera Socio *
+                  </label>
+                  {inputIdentificativo && (
+                    <span className="text-[10.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      Associato dal link
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <CreditCard className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
                   <input
                     type="text"
                     required
+                    autoFocus={!inputIdentificativo}
                     value={inputIdentificativo}
-                    onChange={(e) => setInputIdentificativo(e.target.value)}
-                    placeholder="Es. PL-2025-001 oppure RSSMRA85..."
-                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50/80 border border-stone-200 rounded-xl text-xs font-semibold text-stone-900 placeholder:text-stone-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 transition"
+                    onChange={(e) => setInputIdentificativo(e.target.value.toUpperCase())}
+                    placeholder="Es. PL-2025-001 (o scansiona Barcode)"
+                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50/80 border border-stone-200 rounded-xl text-xs font-mono font-bold text-stone-900 placeholder:text-stone-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 transition"
                   />
                 </div>
                 <span className="text-[10.5px] text-stone-400 mt-1 block">
-                  Puoi utilizzare indifferentemente il numero di tessera o il codice fiscale.
+                  Numero tessera associato al link personale o letto da Barcode / QR Code.
                 </span>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-stone-700">
-                    PIN o Password Socio
+                    PIN di Sblocco Area Riservata *
                   </label>
-                  <span className="text-[10.5px] text-stone-400">
-                    Predefinito per soci registrati
+                  <span className="text-[10.5px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                    Obbligatorio
                   </span>
                 </div>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
                   <input
                     type="password"
+                    required
+                    autoFocus={Boolean(inputIdentificativo)}
                     value={inputPin}
                     onChange={(e) => setInputPin(e.target.value)}
-                    placeholder="Inserisci PIN (opzionale per accesso demo)"
-                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50/80 border border-stone-200 rounded-xl text-xs font-semibold text-stone-900 placeholder:text-stone-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 transition"
+                    placeholder="Inserisci il PIN personale associato alla tessera"
+                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50/80 border border-stone-200 rounded-xl text-xs font-mono font-bold text-stone-900 placeholder:text-stone-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 transition"
                   />
                 </div>
+                <span className="text-[10.5px] text-stone-400 mt-1 block">
+                  L&apos;accesso viene concesso solo se Numero Tessera e PIN corrispondono.
+                </span>
               </div>
 
               <button
@@ -448,49 +639,12 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
                 className="w-full py-3 px-4 bg-emerald-800 hover:bg-emerald-700 active:bg-emerald-900 text-white text-xs font-extrabold rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer mt-2"
               >
                 <UserCheck className="w-4 h-4" />
-                <span>Accedi alla Mia Area Personale</span>
+                <span>Sblocca e Accedi all&apos;Area Riservata</span>
               </button>
             </form>
 
-            {/* Separatore */}
-            <div className="my-6 flex items-center gap-3">
-              <div className="flex-1 h-px bg-stone-200"></div>
-              <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider">
-                Oppure Accesso Rapido Demo
-              </span>
-              <div className="flex-1 h-px bg-stone-200"></div>
-            </div>
-
-            {/* Selettore rapido soci per test istantaneo */}
-            <div className="bg-[#f9f8f4] rounded-2xl p-3.5 border border-stone-200/80 space-y-2">
-              <p className="text-[11px] font-bold text-stone-700 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span>Testa subito come uno dei soci registrati:</span>
-              </p>
-              <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1">
-                {soci.slice(0, 6).map(s => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => handleLoginRapido(s)}
-                    className="w-full text-left px-3 py-2 bg-white hover:bg-emerald-50/80 border border-stone-200 hover:border-emerald-300 rounded-xl transition flex items-center justify-between group cursor-pointer text-xs shadow-2xs"
-                  >
-                    <div>
-                      <span className="font-bold text-stone-800 group-hover:text-emerald-900 block">
-                        {s.nome} {s.cognome}
-                      </span>
-                      <span className="text-[10px] text-stone-500">
-                        Tessera: {s.numeroTessera} • {s.categoria} {s.ruoloDirettivo !== 'Nessuno' ? `(${s.ruoloDirettivo})` : ''}
-                      </span>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-stone-400 group-hover:text-emerald-700" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Recapiti assistenza segreteria */}
-            <div className="mt-5 pt-4 border-t border-stone-100 text-center text-[11px] text-stone-500 space-y-1">
+            <div className="mt-6 pt-4 border-t border-stone-100 text-center text-[11px] text-stone-500 space-y-1">
               <p>Problemi ad accedere con la tua tessera?</p>
               <p className="font-semibold text-stone-700">
                 Contatta la Segreteria: {config.telefono || '333 1234567'} • {config.email || 'info@proloco.it'}
@@ -505,25 +659,15 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
     );
   }
 
-  // Socio Loggato: Dashboard Personale
+  // Socio Loggato: Dashboard Personale Blindata (Nessuna possibilità di tornare indietro)
   return (
     <div className="min-h-screen bg-[#f6f4ee] text-stone-800 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
       
-      {/* 1. HEADER PERSONALE DEL SOCIO */}
+      {/* 1. HEADER PERSONALE DEL SOCIO (BLINDATO - SENZA TASTI INDIETRO O USCITA AL GESTIONALE) */}
       <header className="bg-[#fdfcf9]/95 backdrop-blur-md border-b border-stone-200/80 sticky top-0 z-30 shadow-2xs no-print">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onTornaAlSito}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-stone-700 bg-white hover:bg-stone-50 border border-stone-200 rounded-xl transition cursor-pointer"
-              title="Torna alla homepage del sito web"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Portale Pubblico</span>
-            </button>
-
             <div className="flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white flex items-center justify-center font-extrabold text-sm shadow-xs ring-1 ring-emerald-600/20">
                 {socioAttivo.foto ? (
@@ -563,28 +707,13 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-center">
-            {onVaiAlGestionale && (
-              <button
-                type="button"
-                onClick={onVaiAlGestionale}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-stone-700 bg-stone-100 hover:bg-stone-200 border border-stone-300 rounded-xl transition cursor-pointer"
-                title="Pannello di controllo della Pro Loco"
-              >
-                <Building2 className="w-3.5 h-3.5 text-stone-600" />
-                <span className="hidden md:inline">Dashboard Pro Loco</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              id="btn-logout-socio"
-              onClick={handleLogout}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition cursor-pointer"
-              title="Esci dalla sessione socio"
+            <div
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl select-none"
+              title="Accesso personale blindato tramite Tessera / Barcode"
             >
-              <LogOut className="w-3.5 h-3.5 text-rose-600" />
-              <span>Esci</span>
-            </button>
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Area Socio Protetta • {config.nome}</span>
+            </div>
           </div>
 
         </div>
@@ -1370,6 +1499,7 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
           annoSelezionato={annoSelezionato}
           onClose={() => setMostraModalTesseraDigitale(false)}
           onRinnovaQuota={() => {}}
+          solaLetturaSocio={true}
         />
       )}
 

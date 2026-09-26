@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Socio, ProLocoInfo } from '../types';
-import { getStatoQuotaSocio } from '../storage';
+import { getStatoQuotaSocio, buildSyncedMemberPortalUrl, syncDatabaseToServer } from '../storage';
 import QRCode from 'qrcode';
 import { 
   X, 
@@ -31,6 +31,7 @@ interface DigitalCardModalProps {
   onRinnovaQuota: (socio: Socio) => void;
   onApriSchedaSocio?: (socio: Socio) => void;
   onInviaLinkPortale?: (socio: Socio) => void;
+  solaLetturaSocio?: boolean;
 }
 
 export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
@@ -40,7 +41,8 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
   onClose,
   onRinnovaQuota,
   onApriSchedaSocio,
-  onInviaLinkPortale
+  onInviaLinkPortale,
+  solaLetturaSocio = false
 }) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -59,18 +61,11 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
 
   useEffect(() => {
     if (!socio) return;
+    syncDatabaseToServer();
     
-    const verificationData = JSON.stringify({
-      tessera: socio.numeroTessera,
-      nome: `${socio.nome} ${socio.cognome}`,
-      cf: socio.codiceFiscale,
-      proloco: config.nome,
-      anno: annoSelezionato,
-      stato: getStatoQuotaSocio(socio, annoSelezionato) === 'in_regola' ? 'VALIDA' : 'DA_RINNOVARE',
-      unpli: config.codiceUnpli || 'UNPLI-NAZ'
-    });
+    const portalLink = buildSyncedMemberPortalUrl(socio, config, annoSelezionato, true);
 
-    QRCode.toDataURL(verificationData, {
+    QRCode.toDataURL(portalLink, {
       width: 240,
       margin: 1,
       color: {
@@ -93,7 +88,8 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
   };
 
   const handleCopyLink = () => {
-    const link = `${window.location.origin}?tessera=${encodeURIComponent(socio.numeroTessera)}&anno=${annoSelezionato}`;
+    syncDatabaseToServer();
+    const link = buildSyncedMemberPortalUrl(socio, config, annoSelezionato, false);
     navigator.clipboard.writeText(link).then(() => {
       setCopiato(true);
       setTimeout(() => setCopiato(false), 2500);
@@ -138,12 +134,14 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
                 Quota associativa per l'anno <strong>{annoSelezionato}</strong> non ancora registrata.
               </span>
             </div>
-            <button
-              onClick={() => onRinnovaQuota(socio)}
-              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shrink-0 shadow-2xs"
-            >
-              Registra Quota
-            </button>
+            {!solaLetturaSocio && (
+              <button
+                onClick={() => onRinnovaQuota(socio)}
+                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shrink-0 shadow-2xs"
+              >
+                Registra Quota
+              </button>
+            )}
           </div>
         )}
 
