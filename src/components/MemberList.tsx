@@ -19,10 +19,13 @@ import {
   LayoutGrid,
   List,
   UserCheck,
+  UserPlus,
   ShieldCheck,
   FileText,
   Printer,
-  Receipt
+  Receipt,
+  Send,
+  Globe
 } from 'lucide-react';
 
 interface MemberListProps {
@@ -38,6 +41,7 @@ interface MemberListProps {
   onStampaLibroSoci?: () => void;
   onVisualizzaRicevuta?: (socio: Socio, quota: QuotaAssociativa) => void;
   onStampaSchedaSocio?: (socio: Socio) => void;
+  onInviaLinkPortale?: (socio: Socio) => void;
 }
 
 export const MemberList: React.FC<MemberListProps> = ({
@@ -52,7 +56,8 @@ export const MemberList: React.FC<MemberListProps> = ({
   onStampaPrivacy,
   onStampaLibroSoci,
   onVisualizzaRicevuta,
-  onStampaSchedaSocio
+  onStampaSchedaSocio,
+  onInviaLinkPortale
 }) => {
   const [filtri, setFiltri] = useState<FiltriSoci>({
     ricerca: '',
@@ -64,16 +69,19 @@ export const MemberList: React.FC<MemberListProps> = ({
 
   const [visualizzazione, setVisualizzazione] = useState<'tabella' | 'schede'>('tabella');
 
+  // Soci attivi (non cancellati)
+  const sociAttivi = soci.filter(s => !s.dataCancellazione);
+
   // Calcolo conteggi stati quota
   const conteggi = {
-    tutti: soci.length,
-    in_regola: soci.filter(s => getStatoQuotaSocio(s, annoSelezionato) === 'in_regola').length,
-    da_rinnovare: soci.filter(s => getStatoQuotaSocio(s, annoSelezionato) === 'da_rinnovare').length,
-    scaduta: soci.filter(s => getStatoQuotaSocio(s, annoSelezionato) === 'scaduta').length
+    tutti: sociAttivi.length,
+    in_regola: sociAttivi.filter(s => getStatoQuotaSocio(s, annoSelezionato) === 'in_regola').length,
+    da_rinnovare: sociAttivi.filter(s => getStatoQuotaSocio(s, annoSelezionato) === 'da_rinnovare').length,
+    scaduta: sociAttivi.filter(s => getStatoQuotaSocio(s, annoSelezionato) === 'scaduta').length
   };
 
   // Filtraggio soci
-  const sociFiltrati = soci.filter(socio => {
+  const sociFiltrati = sociAttivi.filter(socio => {
     // Ricerca testuale
     if (filtri.ricerca.trim()) {
       const q = filtri.ricerca.toLowerCase().trim();
@@ -146,6 +154,142 @@ export const MemberList: React.FC<MemberListProps> = ({
 
   return (
     <div className="space-y-4 no-print">
+
+      {/* ASSETTO ORGANIZZATIVO A STEP (PUNTO 1.1 - FLUSSO SEQUENZIALE ALBO SOCI & EVENTI) */}
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-emerald-200/90 shadow-xs space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <span className="px-2.5 py-1 rounded-full text-[10.5px] font-black uppercase tracking-wider bg-emerald-800 text-white">
+              Punto 1.1 • Assetto Organizzativo a Step
+            </span>
+            <div>
+              <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">
+                Percorso Sequenziale di Gestione Socio, Cariche Direttive, Quote e Impiego Eventi
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Gli inserimenti e le verifiche seguono 4 step ordinati in sequenza, collegati direttamente alle squadre e ai turni stand degli Eventi (1.2).
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onNuovoSocio}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-2xs transition cursor-pointer shrink-0"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>Avvia Inserimento in Sequenza (Step 1 → 4)</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {/* Step 1 */}
+          <div
+            onClick={onNuovoSocio}
+            className="p-3 rounded-xl bg-emerald-50/60 hover:bg-emerald-50 border border-emerald-200 transition cursor-pointer flex flex-col justify-between group"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-emerald-700 text-white">
+                  Step 1 • Anagrafica
+                </span>
+                <span className="text-[11px] font-mono font-bold text-emerald-800">
+                  {sociAttivi.length} iscritti
+                </span>
+              </div>
+              <h4 className="text-xs font-extrabold text-slate-900 group-hover:text-emerald-800">
+                1. Censimento & Dati Socio
+              </h4>
+              <p className="text-[10.5px] text-slate-600 mt-0.5 leading-snug">
+                Inserimento sequenziale: Nome, Cognome, C.F., contatti, residenza e foto tessera.
+              </p>
+            </div>
+            <span className="text-[10px] font-bold text-emerald-800 mt-2 inline-flex items-center gap-1">
+              + Iscrivi nuovo socio in sequenza →
+            </span>
+          </div>
+
+          {/* Step 2 */}
+          <div
+            onClick={() => setFiltri({ ...filtri, categoria: filtri.categoria === 'Volontario Attivo' ? 'tutte' : 'Volontario Attivo' })}
+            className="p-3 rounded-xl bg-teal-50/60 hover:bg-teal-50 border border-teal-200 transition cursor-pointer flex flex-col justify-between group"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-teal-700 text-white">
+                  Step 2 • Ruolo & Staff
+                </span>
+                <span className="text-[11px] font-mono font-bold text-teal-800">
+                  {sociAttivi.filter(s => s.ruoloDirettivo && s.ruoloDirettivo !== 'Nessuno').length} direttivo
+                </span>
+              </div>
+              <h4 className="text-xs font-extrabold text-slate-900 group-hover:text-teal-800">
+                2. Assetto Direttivo & Mansioni Eventi
+              </h4>
+              <p className="text-[10.5px] text-slate-600 mt-0.5 leading-snug">
+                Qualifica UNPLI, carica nel Consiglio Direttivo e competenze operative per gli stand eventi.
+              </p>
+            </div>
+            <span className="text-[10px] font-bold text-teal-800 mt-2 inline-flex items-center gap-1">
+              {filtri.categoria === 'Volontario Attivo' ? 'Mostra tutte le categorie' : 'Filtra Volontari Attivi per Eventi →'}
+            </span>
+          </div>
+
+          {/* Step 3 */}
+          <div
+            onClick={() => setFiltri({ ...filtri, statoQuota: filtri.statoQuota === 'da_rinnovare' ? 'tutti' : 'da_rinnovare' })}
+            className="p-3 rounded-xl bg-amber-50/60 hover:bg-amber-50 border border-amber-200 transition cursor-pointer flex flex-col justify-between group"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-amber-600 text-white">
+                  Step 3 • Quota {annoSelezionato}
+                </span>
+                <span className="text-[11px] font-mono font-bold text-amber-900">
+                  {conteggi.in_regola}/{conteggi.tutti} in regola
+                </span>
+              </div>
+              <h4 className="text-xs font-extrabold text-slate-900 group-hover:text-amber-900">
+                3. Versamento Quota & Ricevuta
+              </h4>
+              <p className="text-[10.5px] text-slate-600 mt-0.5 leading-snug">
+                Registrazione pagamento annuale, metodo di incasso ed emissione ricevuta numerata.
+              </p>
+            </div>
+            <span className="text-[10px] font-bold text-amber-800 mt-2 inline-flex items-center gap-1">
+              {conteggi.da_rinnovare + conteggi.scaduta > 0
+                ? `Verifica ${conteggi.da_rinnovare + conteggi.scaduta} quote da regolarizzare →`
+                : 'Tutte le quote sono in regola ✓'}
+            </span>
+          </div>
+
+          {/* Step 4 */}
+          <div
+            onClick={() => onStampaLibroSoci && onStampaLibroSoci()}
+            className="p-3 rounded-xl bg-indigo-50/60 hover:bg-indigo-50 border border-indigo-200 transition cursor-pointer flex flex-col justify-between group"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-indigo-700 text-white">
+                  Step 4 • Tessera & Albo
+                </span>
+                <span className="text-[11px] font-mono font-bold text-indigo-800">
+                  {sociAttivi.filter(s => s.consensoPrivacy).length} GDPR ok
+                </span>
+              </div>
+              <h4 className="text-xs font-extrabold text-slate-900 group-hover:text-indigo-900">
+                4. Tessera UNPLI, GDPR & Libro Soci
+              </h4>
+              <p className="text-[10.5px] text-slate-600 mt-0.5 leading-snug">
+                Emissione Tessera Socio, modulo consenso privacy firmato e abilitazione per i turni Evento.
+              </p>
+            </div>
+            <span className="text-[10px] font-bold text-indigo-800 mt-2 inline-flex items-center gap-1">
+              Stampa Libro Soci Ufficiale A4 →
+            </span>
+          </div>
+        </div>
+      </div>
       
       {/* BARRA FILTRI E RICERCA */}
       <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs space-y-3">
@@ -349,9 +493,21 @@ export const MemberList: React.FC<MemberListProps> = ({
                       
                       {/* Numero Tessera */}
                       <td className="py-3 px-4 font-mono font-bold text-emerald-800 whitespace-nowrap">
-                        <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200/80 text-[11px]">
-                          {socio.numeroTessera}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200/80 text-[11px]">
+                            {socio.numeroTessera}
+                          </span>
+                          {onInviaLinkPortale && (
+                            <button
+                              type="button"
+                              onClick={() => onInviaLinkPortale(socio)}
+                              title={`Invia al socio ${socio.nome} ${socio.cognome} il link per accedere al Portale Web`}
+                              className="p-1 text-teal-700 hover:text-teal-900 hover:bg-teal-100/70 rounded-md transition-colors border border-teal-200/60 cursor-pointer shadow-2xs"
+                            >
+                              <Send className="w-3 h-3 text-teal-700" />
+                            </button>
+                          )}
+                        </div>
                       </td>
 
                       {/* Nome, Cognome, CF */}
@@ -469,7 +625,7 @@ export const MemberList: React.FC<MemberListProps> = ({
                           <button
                             onClick={() => onVisualizzaTessera(socio)}
                             title="Tessera Digitale del Socio"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors border border-emerald-200"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors border border-emerald-200 cursor-pointer"
                           >
                             <CreditCard className="w-3.5 h-3.5" />
                             <span className="hidden sm:inline">Tessera</span>
@@ -633,13 +789,13 @@ export const MemberList: React.FC<MemberListProps> = ({
                 </div>
 
                 {/* Azioni Card */}
-                <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between gap-1.5 flex-wrap">
                   <button
                     onClick={() => onVisualizzaTessera(socio)}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors"
+                    className="flex-1 min-w-[90px] inline-flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
                   >
                     <CreditCard className="w-3.5 h-3.5" />
-                    <span>Tessera Digitale</span>
+                    <span>Tessera</span>
                   </button>
 
                   {/* Scheda Socio A4 / PDF */}

@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { ProLocoInfo, Socio, ProLocoEvento, SitoWebConfig, GiornalinoConfig, PaginaPrincipale, SottoTabGestionale, EdizioneGiornalino, DonazioneTerzi } from '../types';
+import { 
+  ProLocoInfo, 
+  Socio, 
+  ProLocoEvento, 
+  SitoWebConfig, 
+  GiornalinoConfig, 
+  PaginaPrincipale, 
+  SottoTabGestionale, 
+  EdizioneGiornalino, 
+  DonazioneTerzi,
+  CampagnaRaccoltaFondi,
+  ComunicazioneSocio
+} from '../types';
 import { 
   Building2, 
   Calendar, 
@@ -42,9 +54,13 @@ import {
   HeartHandshake,
   Maximize2,
   Minimize2,
-  KeyRound
+  KeyRound,
+  Megaphone,
+  UserCheck
 } from 'lucide-react';
 import { esportaLibroSociCSV, esportaBackupJSON, esportaBilancioCompletoCSV, esportaCodiceSitoHTML, loadDonazioni } from '../storage';
+import { calcolaRiepilogoQuoteSoci } from '../utils/quoteHelpers';
+import { aggregaEventiPerBilancio } from '../utils/eventoHelpers';
 
 interface DashboardViewProps {
   config: ProLocoInfo;
@@ -55,6 +71,7 @@ interface DashboardViewProps {
   archivioGiornalini?: EdizioneGiornalino[];
   annoSelezionato: number;
   donazioni?: DonazioneTerzi[];
+  cestinoCount?: number;
   onNavigaPagina: (
     pagina: PaginaPrincipale, 
     sottoTab?: SottoTabGestionale, 
@@ -68,7 +85,16 @@ interface DashboardViewProps {
   onCambiaAnno: (anno: number) => void;
   onApriImpostazioni: () => void;
   onApriApkModal: () => void;
-  onImportaBackup: (dati: { soci: Socio[]; config: ProLocoInfo; eventi?: ProLocoEvento[]; donazioni?: DonazioneTerzi[] }) => void;
+  onImportaBackup: (dati: { 
+    soci: Socio[]; 
+    config: ProLocoInfo; 
+    eventi?: ProLocoEvento[]; 
+    donazioni?: DonazioneTerzi[];
+    campagne?: CampagnaRaccoltaFondi[];
+    sitoConfig?: SitoWebConfig;
+    archivioGiornalini?: EdizioneGiornalino[];
+    comunicazioni?: ComunicazioneSocio[];
+  }) => void;
   onRipristinaDemo: () => void;
   onAzzeraDatabase?: () => void;
   isFullscreen?: boolean;
@@ -84,6 +110,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   archivioGiornalini = [],
   annoSelezionato,
   donazioni,
+  cestinoCount = 0,
   onNavigaPagina,
   onCambiaAnno,
   onApriImpostazioni,
@@ -99,16 +126,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [mostraConfermaRipristinoDemo, setMostraConfermaRipristinoDemo] = useState(false);
   const [annoDaConfermare, setAnnoDaConfermare] = useState<number | null>(null);
 
-  // Calcolo statistiche rapide per la dashboard
-  const sociAnno = soci.filter(s => s.quote.some(q => q.anno === annoSelezionato));
-  const totaleSociInRegola = sociAnno.length;
-  const totaleIncassiQuote = soci.reduce((acc, s) => {
-    const qAnno = s.quote.find(q => q.anno === annoSelezionato);
-    return acc + (qAnno ? qAnno.importo : 0);
-  }, 0);
+  // Calcolo statistiche rapide per la dashboard sincronizzate al 100% con StatsBar e Bilancio Generale
+  const sociAttivi = soci.filter(s => !s.dataCancellazione);
+  const riepilogoQuote = calcolaRiepilogoQuoteSoci(sociAttivi, annoSelezionato, config);
+  const totaleSociInRegola = riepilogoQuote.sociInRegolaCount;
+  const totaleIncassiQuote = riepilogoQuote.incassoTotaleAnno;
 
   const eventiAnno = eventi.filter(e => {
-    const annoEv = new Date(e.dataInizio).getFullYear();
+    const annoEv = parseInt(e.dataInizio.slice(0, 4), 10) || new Date(e.dataInizio).getFullYear();
     return annoEv === annoSelezionato;
   });
 
@@ -116,8 +141,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const donazioniAnno = donazioniEffettive.filter(d => d.anno === annoSelezionato && d.stato !== 'annullata_ripensamento');
   const totaleDonazioniAnno = donazioniAnno.reduce((acc, d) => acc + (d.importo || 0), 0);
 
-  const totaleSpeseEventi = eventiAnno.reduce((acc, e) => acc + (e.costiSostenuti || e.budgetPrevisto || 0), 0);
-  const totaleEntrateEventi = eventiAnno.reduce((acc, e) => acc + (e.entrateRealizzate || e.entratePreviste || 0), 0);
+  const aggregatoEventi = aggregaEventiPerBilancio(eventiAnno);
+  const totaleSpeseEventi = aggregatoEventi.costiCompetenzaProLoco;
+  const totaleEntrateEventi = aggregatoEventi.entrateCompetenzaProLoco;
   const totaleEntrateComplessive = totaleIncassiQuote + totaleEntrateEventi + totaleDonazioniAnno;
   const avanzoEconomico = totaleEntrateComplessive - totaleSpeseEventi;
 
@@ -136,7 +162,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             soci: parsed.soci,
             config: parsed.configurazione,
             eventi: parsed.eventi || [],
-            donazioni: parsed.donazioni || []
+            donazioni: parsed.donazioni || [],
+            campagne: parsed.campagne || [],
+            sitoConfig: parsed.sitoConfig,
+            archivioGiornalini: parsed.archivioGiornalini,
+            comunicazioni: parsed.comunicazioni || []
           });
           alert('Backup ripristinato con successo!');
           setMostraMenuBackup(false);
@@ -236,7 +266,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     
                     <button
                       onClick={() => {
-                        esportaBackupJSON(soci, config, eventi, donazioniEffettive);
+                        esportaBackupJSON(soci, config, eventi, donazioniEffettive, undefined, sitoConfig, archivioGiornalini);
                         setMostraMenuBackup(false);
                       }}
                       className="w-full text-left px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer font-medium"
@@ -321,17 +351,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               >
                 <Smartphone className="w-3.5 h-3.5 text-slate-600" />
                 <span>App Android</span>
-              </button>
-
-              {/* Tasto 3.5: Portale Web del Socio */}
-              <button
-                id="btn-portale-soci-dashboard"
-                onClick={() => onNavigaPagina('portale_soci')}
-                title="Accedi al Portale Riservato del Socio (Tessere, Quote, Ricevute, Avvisi)"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-950 bg-emerald-100/90 hover:bg-emerald-200/90 border border-emerald-300 rounded-xl transition-all duration-150 shadow-2xs cursor-pointer"
-              >
-                <KeyRound className="w-3.5 h-3.5 text-emerald-800" />
-                <span>Area Soci</span>
               </button>
 
               {/* Tasto 4: Configurazione */}
@@ -439,7 +458,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             I 3 Moduli della Piattaforma Pro Loco
           </h3>
           <p className="text-xs text-slate-600 mt-1.5">
-            Seleziona l'area operativa: Gestionale Amministrativo (Soci, Eventi, Bilancio, Donazioni), Portale Sito Web Pubblico o Studio Editoriale Giornalino.
+            Seleziona l'area operativa: Gestionale Amministrativo (Soci, Eventi, Turni Stand, Bilancio, Donazioni), Portale Sito Web Pubblico o Studio Editoriale Giornalino.
           </p>
         </div>
 
@@ -474,62 +493,66 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </p>
               </div>
 
-              {/* Elenco sottomoduli racchiusi nel Gestionale (1.1, 1.2, 1.3, 1.4) */}
+              {/* Elenco sottomoduli racchiusi nel Gestionale (1.1, 1.2, 1.3, 1.4, 1.5) in Sequenza a Step */}
               <div className="bg-slate-50 rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 space-y-2.5">
                 <div className="flex items-center justify-between pb-1 border-b border-slate-200/60">
                   <span className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider">
-                    Sezioni del Gestionale:
+                    Assetto Organizzativo a Step (In Sequenza):
                   </span>
                   <span className="text-[10.5px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md">
-                    UNPLI CTS
+                    Flusso Sequenziale
                   </span>
                 </div>
                 
-                <button
-                  type="button"
-                  id="btn-sub-gestionale-soci"
-                  onClick={() => onNavigaPagina('gestionale', 'soci')}
-                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-emerald-50/60 border border-slate-200 hover:border-emerald-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
-                  title="Albo Ufficiale dei Soci e Tesseramento"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0 border border-emerald-200">
-                      <Users className="w-3.5 h-3.5 text-emerald-700" />
+                <div className="rounded-xl bg-white border border-slate-200 hover:border-emerald-300 transition shadow-2xs overflow-hidden">
+                  <button
+                    type="button"
+                    id="btn-sub-gestionale-soci"
+                    onClick={() => onNavigaPagina('gestionale', 'soci')}
+                    className="w-full text-left p-2.5 hover:bg-emerald-50/60 transition group/sub flex items-center justify-between cursor-pointer"
+                    title="Step 1 Organizzativo: Albo Ufficiale dei Soci e Tesseramento in 4 Step Sequenziali"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-700 text-white font-black text-[11px] flex items-center justify-center shrink-0">
+                        1.1
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-800 group-hover/sub:text-emerald-900 block">
+                          1.1 Albo & Libro Soci (4 Step in Sequenza)
+                        </span>
+                        <span className="text-[10.5px] text-slate-500">
+                          {sociAttivi.length} soci ({totaleSociInRegola} in regola) • Step: 1.Anagrafica → 2.Ruolo → 3.Quota → 4.Tessera
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-emerald-900 block">
-                        1.1 Albo & Libro Soci
-                      </span>
-                      <span className="text-[10.5px] text-slate-500">
-                        {soci.length} soci censiti • {totaleSociInRegola} in regola {annoSelezionato}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-emerald-700 shrink-0 ml-1" />
-                </button>
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-emerald-700 shrink-0 ml-1" />
+                  </button>
+                </div>
 
-                <button
-                  type="button"
-                  id="btn-sub-gestionale-eventi"
-                  onClick={() => onNavigaPagina('gestionale', 'eventi')}
-                  className="w-full text-left p-2.5 rounded-xl bg-white hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
-                  title="Calendario Manifestazioni e Budget"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-800 flex items-center justify-center shrink-0 border border-teal-200">
-                      <PartyPopper className="w-3.5 h-3.5 text-teal-700" />
+                <div className="rounded-xl bg-white border border-slate-200 hover:border-teal-300 transition shadow-2xs overflow-hidden">
+                  <button
+                    type="button"
+                    id="btn-sub-gestionale-eventi"
+                    onClick={() => onNavigaPagina('gestionale', 'eventi')}
+                    className="w-full text-left p-2.5 hover:bg-teal-50/60 transition group/sub flex items-center justify-between cursor-pointer"
+                    title="Step 2 Organizzativo: Calendario Manifestazioni, Stand e Turni in 5 Step Sequenziali"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-teal-700 text-white font-black text-[11px] flex items-center justify-center shrink-0">
+                        1.2
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-800 group-hover/sub:text-teal-900 block">
+                          1.2 Eventi, Stand & Turni (5 Step in Sequenza)
+                        </span>
+                        <span className="text-[10.5px] text-slate-500">
+                          {eventiAnno.length} eventi ({aggregatoEventi.totaleStands} stand • {aggregatoEventi.totaleTurniAssegnati} turni) • 5 Step
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-800 group-hover/sub:text-teal-900 block">
-                        1.2 Calendario Eventi
-                      </span>
-                      <span className="text-[10.5px] text-slate-500">
-                        {eventi.length} manifestazioni con rendiconto
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-teal-700 shrink-0 ml-1" />
-                </button>
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover/sub:text-teal-700 shrink-0 ml-1" />
+                  </button>
+                </div>
 
                 <button
                   type="button"
@@ -547,7 +570,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         1.3 Bilancio Generale
                       </span>
                       <span className="text-[10.5px] text-slate-500">
-                        Rendiconto Cassa CTS Modello D
+                        Rendiconto Cassa CTS Modello D • {avanzoEconomico >= 0 ? '+' : ''}€{avanzoEconomico.toLocaleString('it-IT')}
                       </span>
                     </div>
                   </div>
@@ -570,7 +593,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         1.4 Donazioni, Rendiconto & Adempimenti
                       </span>
                       <span className="text-[10.5px] text-slate-500">
-                        Art. 83 CTS • 730 Precompilato • Mod. C/D RUNTS • Certificati
+                        {donazioniAnno.length} erogazioni (€{totaleDonazioniAnno.toLocaleString('it-IT')}) • Art. 83 CTS • 730
                       </span>
                     </div>
                   </div>
@@ -592,7 +615,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <span className="text-xs font-bold text-rose-950 group-hover/sub:text-rose-900 block flex items-center gap-1.5">
                         <span>1.5 Cestino & Audit Log</span>
                         <span className="text-[9.5px] font-black uppercase px-1.5 py-0.2 rounded bg-rose-200/80 text-rose-900">
-                          Punto 1.4
+                          {cestinoCount > 0 ? `${cestinoCount} record` : 'Punto 1.4'}
                         </span>
                       </span>
                       <span className="text-[10.5px] text-rose-700/80">
@@ -601,32 +624,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-rose-400 group-hover/sub:text-rose-700 shrink-0 ml-1" />
-                </button>
-
-                <button
-                  type="button"
-                  id="btn-sub-gestionale-portale-soci"
-                  onClick={() => onNavigaPagina('portale_soci')}
-                  className="w-full text-left p-2.5 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200 hover:border-emerald-300 transition group/sub flex items-center justify-between cursor-pointer shadow-2xs"
-                  title="Portale Web del Socio: Dati anagrafici, stato tesseramento, cronologia quote e avvisi"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                      <KeyRound className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <span className="text-xs font-black text-emerald-950 group-hover/sub:text-emerald-900 block flex items-center gap-1.5">
-                        <span>Portale Web dei Soci</span>
-                        <span className="text-[9.5px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-900">
-                          Area Riservata
-                        </span>
-                      </span>
-                      <span className="text-[10.5px] text-emerald-800/80">
-                        Accesso soci • Tessere • Quote • Ricevute • Bacheca Avvisi
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-emerald-700 shrink-0 ml-1" />
                 </button>
               </div>
 

@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react';
 import { ProLocoEvento, ProLocoInfo, Socio } from '../types';
 import { Printer, X, Calendar, MapPin, Users, Euro, ShieldCheck, Clock, FileDown, Loader2 } from 'lucide-react';
 import { esportaElementoInPDF } from '../utils/pdfExport';
+import { STAND_SIMULATI_DEFAULT } from '../storage';
+import { calcolaEconomiaEvento } from '../utils/eventoHelpers';
 
 interface EventPrintModalProps {
   evento: ProLocoEvento;
@@ -32,8 +34,9 @@ export const EventPrintModal: React.FC<EventPrintModalProps> = ({
     setGenerandoPDF(false);
   };
 
+  const econ = calcolaEconomiaEvento(evento);
   const responsabile = soci.find(s => s.id === evento.responsabileId);
-  const volontariCoinvolti = soci.filter(s => evento.volontariIds?.includes(s.id));
+  const volontariCoinvolti = soci.filter(s => econ.volontariUniciIds.includes(s.id));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-hidden print:static print:p-0 print:bg-white print:overflow-visible print:block">
@@ -224,22 +227,21 @@ export const EventPrintModal: React.FC<EventPrintModalProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {(() => {
-                    const prevFood = evento.spesePreventivo?.food || Math.round((evento.budgetPrevisto || 0) * 0.45);
-                    const prevIntr = evento.spesePreventivo?.intrattenimento || Math.round((evento.budgetPrevisto || 0) * 0.25);
-                    const prevAltre = evento.spesePreventivo?.altreSpese || Math.round((evento.budgetPrevisto || 0) * 0.20);
-                    const prevVarie = evento.spesePreventivo?.varie || Math.round((evento.budgetPrevisto || 0) * 0.10);
-                    const totPrev = prevFood + prevIntr + prevAltre + prevVarie || evento.budgetPrevisto;
+                    const prevFood = econ.foodPrev;
+                    const prevIntr = econ.intrattenimentoPrev;
+                    const prevAltre = econ.altreSpesePrev;
+                    const prevVarie = econ.variePrev;
+                    const totPrev = econ.costiProLocoPreventivo;
 
-                    const consFood = evento.speseConsuntivo?.food || Math.round((evento.costiSostenuti || 0) * 0.50);
-                    const consIntr = evento.speseConsuntivo?.intrattenimento || Math.round((evento.costiSostenuti || 0) * 0.25);
-                    const consAltre = evento.speseConsuntivo?.altreSpese || Math.round((evento.costiSostenuti || 0) * 0.15);
-                    const consVarie = evento.speseConsuntivo?.varie || Math.round((evento.costiSostenuti || 0) * 0.10);
-                    const totCons = consFood + consIntr + consAltre + consVarie || evento.costiSostenuti;
+                    const consFood = econ.food;
+                    const consIntr = econ.intrattenimento;
+                    const consAltre = econ.altreSpese;
+                    const consVarie = econ.varie;
+                    const totCons = econ.costiProLocoConsuntivo;
 
-                    const diffCosti = totCons - totPrev;
-                    const entratePrev = evento.entratePreviste ?? evento.budgetPrevisto;
-                    const entrateReal = evento.entrateRealizzate || 0;
-                    const margineCons = entrateReal - totCons;
+                    const entratePrev = econ.entrateProLocoPreviste;
+                    const entrateReal = econ.entrateProLocoRealizzate;
+                    const margineCons = econ.margineNettoProLoco;
 
                     const righeSpesa = [
                       { label: 'Food & Beverage (Stand gastronomico, cibi, bevande)', prev: prevFood, cons: consFood },
@@ -312,10 +314,10 @@ export const EventPrintModal: React.FC<EventPrintModalProps> = ({
 
               {/* Barra grafica di ripartizione spese per la stampa */}
               {(() => {
-                const consFood = evento.speseConsuntivo?.food || Math.round((evento.costiSostenuti || 0) * 0.50);
-                const consIntr = evento.speseConsuntivo?.intrattenimento || Math.round((evento.costiSostenuti || 0) * 0.25);
-                const consAltre = evento.speseConsuntivo?.altreSpese || Math.round((evento.costiSostenuti || 0) * 0.15);
-                const consVarie = evento.speseConsuntivo?.varie || Math.round((evento.costiSostenuti || 0) * 0.10);
+                const consFood = econ.food;
+                const consIntr = econ.intrattenimento;
+                const consAltre = econ.altreSpese;
+                const consVarie = econ.varie;
                 const tot = consFood + consIntr + consAltre + consVarie || 1;
 
                 const pFood = ((consFood / tot) * 100);
@@ -354,6 +356,68 @@ export const EventPrintModal: React.FC<EventPrintModalProps> = ({
 
             </div>
           </div>
+
+          {/* Quadro Turni e Assegnazioni per ogni Stand */}
+          {(() => {
+            const stands = evento.standNumerati && evento.standNumerati.length > 0
+              ? evento.standNumerati
+              : STAND_SIMULATI_DEFAULT;
+
+            return (
+              <div>
+                <h3 className="font-bold text-slate-900 border-b border-slate-200 pb-1 mb-2 text-xs uppercase tracking-wide flex items-center justify-between">
+                  <span>Quadro Stand, Turni & Assegnazioni Volontari</span>
+                  <span className="text-[10px] text-slate-500 font-normal">
+                    {stands.length} stand operativi
+                  </span>
+                </h3>
+                <div className="overflow-x-auto rounded border border-slate-200">
+                  <table className="w-full text-[10.5px] text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 uppercase text-[9.5px] font-bold">
+                        <th className="py-1.5 px-2">Stand</th>
+                        <th className="py-1.5 px-2">Capo Stand / Orario</th>
+                        <th className="py-1.5 px-2">Turni & Volontari Assegnati (Mansione e Fascia Oraria)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {stands.map((st, idx) => {
+                        const def = STAND_SIMULATI_DEFAULT[idx];
+                        const turni = Array.isArray(st.turniAssegnazioni) && st.turniAssegnazioni.length > 0
+                          ? st.turniAssegnazioni
+                          : (def?.turniAssegnazioni || []);
+                        return (
+                          <tr key={st.id || st.numero} className="align-top">
+                            <td className="py-1.5 px-2 font-bold text-slate-900 whitespace-nowrap">
+                              <div>#{st.numero} - {st.nome}</div>
+                              <div className="text-[9px] text-slate-500 font-normal">{st.tipologia}</div>
+                            </td>
+                            <td className="py-1.5 px-2 whitespace-nowrap">
+                              <div className="font-semibold text-slate-800">{st.responsabile || '—'}</div>
+                              <div className="text-[9.5px] font-mono text-slate-500">{st.orarioAperturaStand || def?.orarioAperturaStand || '18:30 - 23:30'}</div>
+                            </td>
+                            <td className="py-1.5 px-2">
+                              {turni.length === 0 ? (
+                                <span className="text-slate-400 italic">Nessun turno assegnato</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {turni.map(t => (
+                                    <span key={t.id} className="inline-block bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[9.5px]">
+                                      <strong>{t.nomeVolontario || t.nominativo || 'Volontario'}</strong> ({(t.mansione || 'Operatore').split(' / ')[0]} • {t.orarioSpecifico || (t.orarioInizio && t.orarioFine ? `${t.orarioInizio}-${t.orarioFine}` : '') || (t.fasciaOraria || '').split(' ')[0]})
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Squadra Operativa Volontari */}
           <div>

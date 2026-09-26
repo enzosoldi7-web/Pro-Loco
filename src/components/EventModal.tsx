@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ProLocoEvento, CategoriaEvento, StatoEvento, Socio, DettaglioSpeseEvento, TipoEvento, StandEvento } from '../types';
+import { ProLocoEvento, CategoriaEvento, StatoEvento, Socio, DettaglioSpeseEvento, TipoEvento, StandEvento, FasciaOrariaTurno, MansioneStand, AssegnazioneVolontarioStand } from '../types';
 import { 
   X, 
   Calendar, 
@@ -28,16 +28,21 @@ import {
   Trash2,
   ArrowUpDown,
   RotateCcw,
-  RefreshCw
+  RefreshCw,
+  ChevronRight,
+  ChevronLeft,
+  ListChecks
 } from 'lucide-react';
 import { EventBudgetChart } from './EventBudgetChart';
 import { calcolaEconomiaEvento, getInfoTipoEvento } from '../utils/eventoHelpers';
 import { STAND_SIMULATI_DEFAULT } from '../storage';
+import { FASCE_ORARIE_TURNO, MANSIONI_STAND } from './EventStandsModal';
 
 interface EventModalProps {
   evento: ProLocoEvento | null; // null se è nuovo
   soci: Socio[];
   annoPredefinito: number;
+  stepIniziale?: 1 | 2 | 3 | 4 | 5;
   onSalva: (evento: ProLocoEvento) => void;
   onClose: () => void;
 }
@@ -66,10 +71,13 @@ export const EventModal: React.FC<EventModalProps> = ({
   evento,
   soci,
   annoPredefinito,
+  stepIniziale = 1,
   onSalva,
   onClose,
 }) => {
   const isModifica = !!evento;
+  const [stepAttivo, setStepAttivo] = useState<1 | 2 | 3 | 4 | 5>(stepIniziale);
+  const [modalitaSequenziale, setModalitaSequenziale] = useState<boolean>(true);
 
   const oggiIso = new Date().toISOString().slice(0, 10);
   const dataDefault = `${annoPredefinito}-06-15`;
@@ -182,9 +190,72 @@ export const EventModal: React.FC<EventModalProps> = ({
         spesaConsuntivo: s.spesaConsuntivo ?? def?.spesaConsuntivo ?? 0,
         incassoPrevisto: s.incassoPrevisto ?? def?.incassoPrevisto ?? (s.incassoStimato || 0),
         incassoConsuntivo: s.incassoConsuntivo ?? def?.incassoConsuntivo ?? (s.incassoStimato || 0),
+        orarioAperturaStand: s.orarioAperturaStand ?? def?.orarioAperturaStand ?? '18:30 - 23:30',
+        volontariRichiesti: s.volontariRichiesti ?? def?.volontariRichiesti ?? 3,
+        turniAssegnazioni: Array.isArray(s.turniAssegnazioni) && s.turniAssegnazioni.length > 0
+          ? s.turniAssegnazioni
+          : (def?.turniAssegnazioni ? [...def.turniAssegnazioni] : [])
       };
     });
   });
+
+  // Stato per inserimento rapido turno nello stand dentro EventModal
+  const [standTurnoApertoIdx, setStandTurnoApertoIdx] = useState<number | null>(null);
+  const [turnoSocioId, setTurnoSocioId] = useState<string>('');
+  const [turnoNomeManuale, setTurnoNomeManuale] = useState<string>('');
+  const [turnoMansione, setTurnoMansione] = useState<MansioneStand>('Servizio ai Tavoli / Runner');
+  const [turnoFascia, setTurnoFascia] = useState<FasciaOrariaTurno>('Cena (Servizio Serale)');
+  const [turnoOrarioSpec, setTurnoOrarioSpec] = useState<string>('18:30 - 23:30');
+
+  const handleAggiungiTurnoInModal = (standIdx: number) => {
+    const sSel = soci.find(s => s.id === turnoSocioId);
+    const nom = sSel ? `${sSel.nome} ${sSel.cognome}` : turnoNomeManuale.trim();
+    if (!nom) return;
+
+    const nuovoTurno: AssegnazioneVolontarioStand = {
+      id: `trn-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      socioId: sSel?.id,
+      nomeVolontario: nom,
+      nominativo: nom,
+      numeroTessera: sSel?.numeroTessera,
+      telefono: sSel?.telefono || '',
+      mansione: turnoMansione,
+      fasciaOraria: turnoFascia,
+      orarioSpecifico: turnoOrarioSpec.trim() || undefined,
+      orarioInizio: '18:30',
+      orarioFine: '23:30',
+      confermato: true
+    };
+
+    setStandNumerati(prev => {
+      const copy = [...prev];
+      const attuali = copy[standIdx].turniAssegnazioni || [];
+      copy[standIdx] = {
+        ...copy[standIdx],
+        turniAssegnazioni: [...attuali, nuovoTurno]
+      };
+      return copy;
+    });
+
+    if (sSel && !volontariIds.includes(sSel.id)) {
+      setVolontariIds(prev => [...prev, sSel.id]);
+    }
+
+    setTurnoSocioId('');
+    setTurnoNomeManuale('');
+  };
+
+  const handleRimuoviTurnoInModal = (standIdx: number, turnoId: string) => {
+    setStandNumerati(prev => {
+      const copy = [...prev];
+      const attuali = copy[standIdx].turniAssegnazioni || [];
+      copy[standIdx] = {
+        ...copy[standIdx],
+        turniAssegnazioni: attuali.filter(t => t.id !== turnoId)
+      };
+      return copy;
+    });
+  };
 
   // Calcolo aggregato cifre stand (spese, incassi, margini e differenze)
   const totaliStand = useMemo(() => {
@@ -357,6 +428,55 @@ export const EventModal: React.FC<EventModalProps> = ({
 
   const [errore, setErrore] = useState<string | null>(null);
 
+  const STEPS_EVENTO = [
+    { num: 1 as const, titolo: '1. Dati, Date & Modello', desc: 'Titolo, date, luogo, locandina e modello (Nativo/Ibrido/Terzi)' },
+    { num: 2 as const, titolo: '2. Quadro Economico', desc: '4 Voci di spesa, entrate e ripartizione bilancio' },
+    { num: 3 as const, titolo: '3. Squadra & Iscrizioni', desc: 'Coordinatore, volontari da Albo 1.1 e capienza soci' },
+    { num: 4 as const, titolo: '4. Stand & Turni in Sequenza', desc: 'Stand numerati #1..N, costi/incassi e turni per stand' },
+    { num: 5 as const, titolo: '5. Permessi & Conferma', desc: 'Comune, SIAE, Safety, HACCP e riepilogo finale' },
+  ];
+
+  const validaStepCorrente = (stepTarget: number): boolean => {
+    if (stepTarget > 1) {
+      if (!titolo.trim()) {
+        setErrore('Step 1 incompleto: inserisci il Titolo dell\'evento prima di proseguire in sequenza.');
+        setStepAttivo(1);
+        return false;
+      }
+      if (!dataInizio) {
+        setErrore('Step 1 incompleto: imposta la Data di Inizio prima di proseguire in sequenza.');
+        setStepAttivo(1);
+        return false;
+      }
+      if (!luogo.trim()) {
+        setErrore('Step 1 incompleto: indica il Luogo / Piazza dell\'evento prima di proseguire in sequenza.');
+        setStepAttivo(1);
+        return false;
+      }
+    }
+    setErrore(null);
+    return true;
+  };
+
+  const handleVaiAStep = (target: 1 | 2 | 3 | 4 | 5) => {
+    if (validaStepCorrente(target)) {
+      setStepAttivo(target);
+    }
+  };
+
+  const handleStepSuccessivo = () => {
+    if (stepAttivo < 5 && validaStepCorrente(stepAttivo + 1)) {
+      setStepAttivo((stepAttivo + 1) as 1 | 2 | 3 | 4 | 5);
+    }
+  };
+
+  const handleStepPrecedente = () => {
+    if (stepAttivo > 1) {
+      setErrore(null);
+      setStepAttivo((stepAttivo - 1) as 1 | 2 | 3 | 4 | 5);
+    }
+  };
+
   const handleToggleVolontario = (socioId: string) => {
     if (volontariIds.includes(socioId)) {
       setVolontariIds(volontariIds.filter(id => id !== socioId));
@@ -398,6 +518,14 @@ export const EventModal: React.FC<EventModalProps> = ({
       return;
     }
 
+    // Sincronizza automaticamente i soci assegnati nei turni degli stand con la squadra operativa dell'evento
+    const sociSet = new Set<string>(volontariIds);
+    standNumerati.forEach(st => {
+      (st.turniAssegnazioni || []).forEach(t => {
+        if (t.socioId) sociSet.add(t.socioId);
+      });
+    });
+
     const nuovoEvento: ProLocoEvento = {
       id: evento?.id || `evento-${Date.now()}`,
       titolo: titolo.trim(),
@@ -426,7 +554,7 @@ export const EventModal: React.FC<EventModalProps> = ({
       entrateRealizzate: Number(entrateRealizzate) || 0,
       spesePreventivo: spesePrev,
       speseConsuntivo: speseCons,
-      volontariIds,
+      volontariIds: Array.from(sociSet),
       responsabileId,
       permessoComunale,
       licenzaSIAE,
@@ -473,36 +601,81 @@ export const EventModal: React.FC<EventModalProps> = ({
           </button>
         </div>
 
-        {/* Barra di Navigazione Rapida Capitoli (sempre accessibile su ogni monitor) */}
-        <div className="px-5 sm:px-6 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
-          <button
-            type="button"
-            onClick={() => document.getElementById('sezione-dati-evento')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 transition-colors shrink-0 cursor-pointer"
-          >
-            1. Dati & Programma
-          </button>
-          <button
-            type="button"
-            onClick={() => document.getElementById('sezione-economia-evento')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 transition-colors shrink-0 cursor-pointer"
-          >
-            2. Economia (4 Voci di Spesa)
-          </button>
-          <button
-            type="button"
-            onClick={() => document.getElementById('sezione-staff-evento')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 transition-colors shrink-0 cursor-pointer"
-          >
-            3. Squadra Volontari
-          </button>
-          <button
-            type="button"
-            onClick={() => document.getElementById('sezione-permessi-evento')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 transition-colors shrink-0 cursor-pointer"
-          >
-            4. Permessi & Normative
-          </button>
+        {/* Barra Assetto Organizzativo Sezionato in 5 Step Sequenziali */}
+        <div className="px-5 sm:px-6 py-3 bg-slate-50 border-b border-slate-200 shrink-0 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-black uppercase tracking-wider bg-emerald-700 text-white">
+                Inserimento in Sequenza • Step {stepAttivo} di 5
+              </span>
+              <span className="text-xs font-bold text-slate-800">
+                {STEPS_EVENTO[stepAttivo - 1].titolo}
+              </span>
+              <span className="hidden md:inline text-[11px] text-slate-500">
+                — {STEPS_EVENTO[stepAttivo - 1].desc}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setModalitaSequenziale(!modalitaSequenziale)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
+                modalitaSequenziale
+                  ? 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100'
+                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+              }`}
+              title="Passa tra l'inserimento guidato a step in sequenza e la vista completa"
+            >
+              <ListChecks className="w-3.5 h-3.5 text-emerald-700" />
+              <span>{modalitaSequenziale ? 'Modalità a Step in Sequenza (Attiva)' : 'Passa a Step in Sequenza'}</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+            {STEPS_EVENTO.map((st) => {
+              const isCurrent = modalitaSequenziale && stepAttivo === st.num;
+              const isCompleted = stepAttivo > st.num;
+              return (
+                <button
+                  key={st.num}
+                  type="button"
+                  onClick={() => {
+                    if (modalitaSequenziale) {
+                      handleVaiAStep(st.num);
+                    } else {
+                      const ids = ['sezione-dati-evento', 'sezione-economia-evento', 'sezione-staff-evento', 'sezione-stand-evento', 'sezione-permessi-evento'];
+                      document.getElementById(ids[st.num - 1])?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }}
+                  className={`text-left p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
+                    isCurrent
+                      ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs ring-2 ring-emerald-500/30'
+                      : isCompleted
+                      ? 'bg-emerald-50/90 text-emerald-950 border-emerald-300 hover:bg-emerald-100/80'
+                      : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-lg text-[11px] font-black flex items-center justify-center shrink-0 ${
+                    isCurrent
+                      ? 'bg-white text-emerald-900'
+                      : isCompleted
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {isCompleted ? '✓' : st.num}
+                  </div>
+                  <div className="min-w-0">
+                    <div className={`text-[11px] font-extrabold truncate ${isCurrent ? 'text-white' : 'text-slate-900'}`}>
+                      {st.titolo.replace(/^\d+\.\s*/, '')}
+                    </div>
+                    <div className={`text-[9.5px] truncate ${isCurrent ? 'text-emerald-100' : 'text-slate-500'}`}>
+                      Step {st.num}/5
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {errore && (
@@ -517,7 +690,35 @@ export const EventModal: React.FC<EventModalProps> = ({
           
           <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-6">
           
-            {/* Sezione 1: Dati Essenziali */}
+            {/* STEP 1: Dati Essenziali, Date, Locandina & Scelta Modello Organizzativo */}
+            <div className={modalitaSequenziale && stepAttivo !== 1 ? 'hidden' : 'space-y-5'}>
+              <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-200/70 px-2 py-0.5 rounded">
+                    Step 1 di 5 • Identità & Assetto Evento
+                  </span>
+                  <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 mt-1">
+                    Inserimento Anagrafica Manifestazione, Date, Luogo e Modello Organizzativo
+                  </h4>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {(['nativo', 'ibrido', 'gestione'] as TipoEvento[]).map((t, idx) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTipoEvento(t)}
+                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                        tipoEvento === t
+                          ? 'bg-emerald-800 text-white border-emerald-900 shadow-2xs'
+                          : 'bg-white text-slate-700 border-slate-300 hover:bg-emerald-50'
+                      }`}
+                    >
+                      {idx + 1}. {t === 'nativo' ? 'Nativo Pro Loco' : t === 'ibrido' ? 'Ibrido (Partner)' : 'Conto Terzi'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
             <div id="sezione-dati-evento" className="space-y-4 scroll-mt-2">
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -715,9 +916,10 @@ export const EventModal: React.FC<EventModalProps> = ({
               </div>
             </div>
           </div>
+          </div>
 
-          {/* Sezione 3: Economia Evento (Bilancio Preventivo & Consuntivo Analitico) */}
-          <div id="sezione-economia-evento" className="bg-slate-50/80 p-4 rounded-xl border border-slate-200 space-y-4 scroll-mt-2">
+          {/* STEP 2: Economia Evento (Bilancio Preventivo & Consuntivo Analitico) */}
+          <div id="sezione-economia-evento" className={`${modalitaSequenziale && stepAttivo !== 2 ? 'hidden' : ''} bg-slate-50/80 p-4 rounded-xl border border-slate-200 space-y-4 scroll-mt-2`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
               <div>
                 <h4 className="font-bold text-slate-900 flex items-center gap-1.5 text-xs sm:text-sm">
@@ -1336,7 +1538,8 @@ export const EventModal: React.FC<EventModalProps> = ({
 
           </div>
 
-          {/* Sezione 4: Volontari & Responsabile (Collegamento con Anagrafica Soci) */}
+          {/* STEP 3: Volontari & Responsabile (Collegamento con Anagrafica Soci 1.1) + Iscrizioni Soci */}
+          <div className={modalitaSequenziale && stepAttivo !== 3 ? 'hidden' : 'space-y-4'}>
           <div id="sezione-staff-evento" className="border border-slate-200 p-3.5 rounded-xl bg-slate-50/50 scroll-mt-2">
             <h4 className="font-bold text-slate-900 mb-2 flex items-center justify-between text-xs">
               <span className="flex items-center gap-1.5">
@@ -1482,9 +1685,10 @@ export const EventModal: React.FC<EventModalProps> = ({
               </div>
             </div>
           </div>
+          </div>
 
-          {/* Sezione 5: Stand Numerati & Riferimento Food (Specifiche di Allestimento ed Economia Analitica) */}
-          <div id="sezione-stand-evento" className="border border-slate-200 p-3.5 sm:p-4 rounded-xl bg-slate-50/80 space-y-3.5 scroll-mt-2">
+          {/* STEP 4: Stand Numerati, Bilancio Stand & Turni/Assegnazioni in Sequenza */}
+          <div id="sezione-stand-evento" className={`${modalitaSequenziale && stepAttivo !== 4 ? 'hidden' : ''} border border-slate-200 p-3.5 sm:p-4 rounded-xl bg-slate-50/80 space-y-3.5 scroll-mt-2`}>
             
             {/* Intestazione Sezione Stand */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-200">
@@ -1828,6 +2032,129 @@ export const EventModal: React.FC<EventModalProps> = ({
 
                     </div>
 
+                    {/* Turni e Assegnazioni Volontari per questo Stand */}
+                    <div className="bg-indigo-50/50 p-2.5 rounded-lg border border-indigo-200/70 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10.5px] font-bold text-indigo-950 flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Turni & Assegnazioni Stand #{stand.numero}:</span>
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                            {(stand.turniAssegnazioni || []).length} / {stand.volontariRichiesti || 3} volontari
+                          </span>
+                          <div className="flex items-center gap-1 text-[10px] text-slate-600">
+                            <span>Orario Stand:</span>
+                            <input
+                              type="text"
+                              value={stand.orarioAperturaStand || ''}
+                              onChange={(e) => handleAggiornaStand(idx, 'orarioAperturaStand', e.target.value)}
+                              placeholder="18:30 - 23:30"
+                              className="w-24 px-1.5 py-0.5 bg-white border border-slate-300 rounded font-mono text-[10px]"
+                            />
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] text-slate-600">
+                            <span>Fabbisogno:</span>
+                            <input
+                              type="number"
+                              min="1"
+                              max="30"
+                              value={stand.volontariRichiesti ?? 3}
+                              onChange={(e) => handleAggiornaStand(idx, 'volontariRichiesti', Math.max(1, Number(e.target.value)))}
+                              className="w-10 px-1 py-0.5 bg-white border border-slate-300 rounded font-mono text-center text-[10px]"
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setStandTurnoApertoIdx(standTurnoApertoIdx === idx ? null : idx)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10.5px] transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>{standTurnoApertoIdx === idx ? 'Chiudi Box Turno' : 'Assegna Volontario / Turno'}</span>
+                        </button>
+                      </div>
+
+                      {/* Form rapido assegnazione turno */}
+                      {standTurnoApertoIdx === idx && (
+                        <div className="grid grid-cols-1 sm:grid-cols-5 gap-1.5 p-2 bg-white rounded-md border border-indigo-200">
+                          <select
+                            value={turnoSocioId}
+                            onChange={(e) => {
+                              setTurnoSocioId(e.target.value);
+                              const found = soci.find(s => s.id === e.target.value);
+                              if (found) setTurnoNomeManuale(`${found.nome} ${found.cognome}`);
+                            }}
+                            className="px-2 py-1 bg-slate-50 border border-slate-300 rounded text-[11px]"
+                          >
+                            <option value="">-- Socio da Albo --</option>
+                            {soci.filter(s => !s.dataCancellazione).map(s => (
+                              <option key={s.id} value={s.id}>{s.cognome} {s.nome} (#{s.numeroTessera})</option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            value={turnoNomeManuale}
+                            onChange={(e) => setTurnoNomeManuale(e.target.value)}
+                            placeholder="O digita nome..."
+                            className="px-2 py-1 bg-slate-50 border border-slate-300 rounded text-[11px]"
+                          />
+                          <select
+                            value={turnoMansione}
+                            onChange={(e) => setTurnoMansione(e.target.value as MansioneStand)}
+                            className="px-2 py-1 bg-slate-50 border border-slate-300 rounded text-[11px]"
+                          >
+                            {MANSIONI_STAND.map(m => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={turnoFascia}
+                            onChange={(e) => setTurnoFascia(e.target.value as FasciaOrariaTurno)}
+                            className="px-2 py-1 bg-slate-50 border border-slate-300 rounded text-[11px]"
+                          >
+                            {FASCE_ORARIE_TURNO.map(f => (
+                              <option key={f} value={f}>{f}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => handleAggiungiTurnoInModal(idx)}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-[11px] cursor-pointer"
+                          >
+                            + Aggiungi Turno
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Lista chip volontari assegnati a questo stand */}
+                      {(stand.turniAssegnazioni || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {(stand.turniAssegnazioni || []).map(t => (
+                            <div
+                              key={t.id}
+                              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white border border-indigo-200 text-[10.5px] shadow-2xs"
+                            >
+                              <span className="font-bold text-slate-900">{t.nomeVolontario || t.nominativo || 'Volontario'}</span>
+                              <span className="text-indigo-700 font-semibold">({(t.mansione || 'Operatore').split(' / ')[0]})</span>
+                              <span className="font-mono text-[9.5px] text-slate-500 bg-slate-100 px-1 rounded">
+                                {t.orarioSpecifico || (t.orarioInizio && t.orarioFine ? `${t.orarioInizio}-${t.orarioFine}` : '') || (t.fasciaOraria || '').split(' ')[0]}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRimuoviTurnoInModal(idx, t.id)}
+                                className="text-rose-500 hover:text-rose-700 font-bold ml-0.5 cursor-pointer"
+                                title="Rimuovi turno"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     {/* Descrizione opzionale */}
                     <div>
                       <input
@@ -1845,7 +2172,8 @@ export const EventModal: React.FC<EventModalProps> = ({
 
           </div>
 
-          {/* Sezione 6: Conformità e Burocrazia Pro Loco */}
+          {/* STEP 5: Conformità, Burocrazia Pro Loco & Riepilogo Sequenziale Finale */}
+          <div className={modalitaSequenziale && stepAttivo !== 5 ? 'hidden' : 'space-y-4'}>
           <div id="sezione-permessi-evento" className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 scroll-mt-2">
             <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
               <ShieldCheck className="w-4 h-4 text-amber-700" />
@@ -1921,13 +2249,63 @@ export const EventModal: React.FC<EventModalProps> = ({
             />
           </div>
 
+          {/* Quadro Riepilogativo Finale dei 5 Step Sequenziali */}
+          <div className="bg-emerald-50/90 border border-emerald-300 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                <span className="font-extrabold text-emerald-950 text-xs sm:text-sm">
+                  Riepilogo Finale Inserimento in Sequenza (5 Step Completati)
+                </span>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-200 text-emerald-950">
+                Pronto al Salvataggio
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px]">
+              <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 1 • Evento</span>
+                <span className="font-bold text-slate-900 truncate block">{titolo || 'Da compilare'}</span>
+                <span className="text-[10px] text-emerald-700 font-medium">{dataInizio} • {luogo}</span>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 2 • Bilancio</span>
+                <span className="font-bold text-slate-900 font-mono block">Costi: €{totalePreventivo.toLocaleString('it-IT')}</span>
+                <span className="text-[10px] text-emerald-700 font-mono">Ricavi: €{entratePreviste.toLocaleString('it-IT')}</span>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 3 • Squadra</span>
+                <span className="font-bold text-slate-900 block">{volontariIds.length} Soci Volontari</span>
+                <span className="text-[10px] text-emerald-700">{iscrizioniAperte ? `Iscrizioni aperte (${postiMassimi} posti)` : 'Iscrizioni chiuse'}</span>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 4 • Stand & Turni</span>
+                <span className="font-bold text-slate-900 block">{standNumerati.length} Stand Attivi</span>
+                <span className="text-[10px] text-indigo-700 font-semibold">
+                  {standNumerati.reduce((acc, s) => acc + (s.turniAssegnazioni?.length || 0), 0)} turni assegnati
+                </span>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 5 • Permessi</span>
+                <span className="font-bold text-slate-900 block">
+                  {[permessoComunale, licenzaSIAE, pianoSicurezzaSafety, aslHaccp].filter(Boolean).length}/4 Autorizzazioni
+                </span>
+                <span className="text-[10px] text-emerald-700">Checklist verificata</span>
+              </div>
+            </div>
+          </div>
           </div>
 
-          {/* Barra Pulsanti - Fissa in basso sempre visibile su qualunque monitor */}
-          <div className="px-5 sm:px-6 py-3 border-t border-slate-200 bg-slate-50/95 flex items-center justify-between shrink-0">
+          </div>
+
+          {/* Barra Pulsanti Sequenziali - Fissa in basso sempre visibile su qualunque monitor */}
+          <div className="px-5 sm:px-6 py-3 border-t border-slate-200 bg-slate-50/95 flex flex-wrap items-center justify-between gap-2 shrink-0">
             <div className="hidden sm:flex items-center gap-2">
               <span className="px-2.5 py-1 rounded-md bg-slate-200 text-slate-700 text-[11px] font-semibold">
-                Costi Previsti: €{(totalePreventivo || 0).toLocaleString('it-IT')}
+                Costi Prev: €{(totalePreventivo || 0).toLocaleString('it-IT')}
+              </span>
+              <span className="px-2.5 py-1 rounded-md bg-indigo-100 text-indigo-800 text-[11px] font-bold">
+                Stand: {standNumerati.length} ({standNumerati.reduce((a, s) => a + (s.turniAssegnazioni?.length || 0), 0)} turni)
               </span>
               <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold ${
                 (marginePreventivo || 0) >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
@@ -1935,21 +2313,55 @@ export const EventModal: React.FC<EventModalProps> = ({
                 {(marginePreventivo || 0) >= 0 ? 'Margine Prev: +' : 'Disavanzo: '}€{(marginePreventivo || 0).toLocaleString('it-IT')}
               </span>
             </div>
-            <div className="flex items-center gap-2.5 ml-auto">
+            <div className="flex items-center gap-2 ml-auto">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200/80 rounded-lg transition-colors cursor-pointer"
+                className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200/80 rounded-lg transition-colors cursor-pointer"
               >
                 Annulla
               </button>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 rounded-lg shadow-sm transition-colors cursor-pointer"
-              >
-                <CheckSquare className="w-4 h-4" />
-                <span>{isModifica ? 'Salva Modifiche Evento' : 'Pianifica e Salva Evento'}</span>
-              </button>
+
+              {modalitaSequenziale && stepAttivo > 1 && (
+                <button
+                  type="button"
+                  onClick={handleStepPrecedente}
+                  className="inline-flex items-center gap-1 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition-colors cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Step {stepAttivo - 1}</span>
+                </button>
+              )}
+
+              {modalitaSequenziale && stepAttivo < 5 ? (
+                <>
+                  {isModifica && (
+                    <button
+                      type="submit"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <CheckSquare className="w-3.5 h-3.5" />
+                      <span>Salva Ora</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleStepSuccessivo}
+                    className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 rounded-lg shadow-sm transition-colors cursor-pointer"
+                  >
+                    <span>Avanti: Step {stepAttivo + 1} di 5</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 rounded-lg shadow-sm transition-colors cursor-pointer"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  <span>{isModifica ? 'Completa e Salva Modifiche Evento' : 'Completa Sequenza e Salva Evento'}</span>
+                </button>
+              )}
             </div>
           </div>
 

@@ -12,7 +12,8 @@ import {
   EdizioneGiornalino,
   DonazioneTerzi,
   CampagnaRaccoltaFondi,
-  ElementoCestino
+  ElementoCestino,
+  ComunicazioneSocio
 } from './types';
 import { 
   loadSoci, 
@@ -42,13 +43,16 @@ import {
   saveCestino,
   aggiungiAlCestino,
   rimuoviDalCestino,
-  svuotaCestino
+  svuotaCestino,
+  saveComunicazioniSoci,
+  saveSessioneSocioId
 } from './storage';
 import { Header } from './components/Header';
 import { StatsBar } from './components/StatsBar';
 import { MemberList } from './components/MemberList';
 import { MemberModal } from './components/MemberModal';
 import { DigitalCardModal } from './components/DigitalCardModal';
+import { SendMemberPortalLinkModal } from './components/SendMemberPortalLinkModal';
 import { PaymentModal } from './components/PaymentModal';
 import { ReceiptModal } from './components/ReceiptModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -81,7 +85,7 @@ export default function App() {
   const [eventi, setEventi] = useState<ProLocoEvento[]>(() => loadEventi());
   const [donazioni, setDonazioni] = useState<DonazioneTerzi[]>(() => loadDonazioni());
   const [cestino, setCestino] = useState<ElementoCestino[]>(() => loadCestino());
-  const [paginaAttiva, setPaginaAttiva] = useState<PaginaPrincipale>('gestionale');
+  const [paginaAttiva, setPaginaAttiva] = useState<PaginaPrincipale>('dashboard');
   const [tabGestionale, setTabGestionale] = useState<SottoTabGestionale>('soci');
   const [sitoConfig, setSitoConfig] = useState<SitoWebConfig>(() => loadSitoWebConfig());
   const [giornalinoConfig, setGiornalinoConfig] = useState<GiornalinoConfig>(() => loadGiornalinoConfig());
@@ -102,6 +106,7 @@ export default function App() {
   const [socioQuote, setSocioQuote] = useState<Socio | null>(null);
   const [socioPrivacy, setSocioPrivacy] = useState<Socio | null>(null);
   const [socioSchedaStampa, setSocioSchedaStampa] = useState<Socio | null>(null);
+  const [socioLinkPortale, setSocioLinkPortale] = useState<Socio | null>(null);
   const [ricevutaAttiva, setRicevutaAttiva] = useState<{ socio: Socio; quota: QuotaAssociativa } | null>(null);
   const [mostraImpostazioni, setMostraImpostazioni] = useState<boolean>(false);
   const [mostraApkModal, setMostraApkModal] = useState<boolean>(false);
@@ -113,11 +118,21 @@ export default function App() {
   const [mostraStampaLibroSoci, setMostraStampaLibroSoci] = useState<boolean>(false);
   const [mostraStampaProgrammaEventi, setMostraStampaProgrammaEventi] = useState<boolean>(false);
 
-  // Controllo parametri URL (per verifica scansionando il QR Code della tessera)
+  // Controllo parametri URL (per verifica scansionando il QR Code della tessera o accesso al Portale Soci)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const isAreaSoci = params.get('area_soci') || params.get('portale_soci') || params.get('portale') === 'soci';
     const tesseraParam = params.get('tessera');
-    if (tesseraParam && soci.length > 0) {
+    
+    if (isAreaSoci) {
+      setPaginaAttiva('portale_soci');
+      if (tesseraParam && soci.length > 0) {
+        const trovato = soci.find(s => s.numeroTessera.toUpperCase() === tesseraParam.toUpperCase());
+        if (trovato) {
+          saveSessioneSocioId(trovato.id);
+        }
+      }
+    } else if (tesseraParam && soci.length > 0) {
       const trovato = soci.find(s => s.numeroTessera.toUpperCase() === tesseraParam.toUpperCase());
       if (trovato) {
         setSocioTessera(trovato);
@@ -278,6 +293,7 @@ export default function App() {
   const handleSalvaDonazioni = (nuoveDonazioni: DonazioneTerzi[]) => {
     setDonazioni(nuoveDonazioni);
     saveDonazioni(nuoveDonazioni);
+    setCestino(loadCestino());
   };
 
   // Ripristino dati di prova realistici (Soci, Eventi, Donazioni, Campagne)
@@ -291,6 +307,7 @@ export default function App() {
     saveCampagneFondi(INITIAL_CAMPAGNE_FONDI);
     setConfig(DEFAULT_PRO_LOCO);
     saveProLocoConfig(DEFAULT_PRO_LOCO);
+    setCestino(loadCestino());
   };
 
   // Ripristino specifico dei 3 eventi simulati
@@ -299,7 +316,7 @@ export default function App() {
     setEventi(ripristinati);
   };
 
-  // Azzeramento completo dell'intero database (Soci, Eventi, Quote, Donazioni, Campagne)
+  // Azzeramento completo dell'intero database (Soci, Eventi, Quote, Donazioni, Campagne, Cestino)
   const handleAzzeraDatabase = () => {
     setSoci([]);
     saveSoci([]);
@@ -308,6 +325,8 @@ export default function App() {
     setDonazioni([]);
     saveDonazioni([]);
     saveCampagneFondi([]);
+    svuotaCestino();
+    setCestino([]);
     setSocioModale(null);
     setSocioTessera(null);
     setSocioQuote(null);
@@ -326,6 +345,7 @@ export default function App() {
     campagne?: CampagnaRaccoltaFondi[];
     sitoConfig?: SitoWebConfig;
     archivioGiornalini?: EdizioneGiornalino[];
+    comunicazioni?: ComunicazioneSocio[];
   }) => {
     setSoci(dati.soci);
     saveSoci(dati.soci);
@@ -347,6 +367,9 @@ export default function App() {
     if (dati.archivioGiornalini && Array.isArray(dati.archivioGiornalini)) {
       setArchivioGiornalini(dati.archivioGiornalini);
       saveArchivioGiornalini(dati.archivioGiornalini);
+    }
+    if (dati.comunicazioni && Array.isArray(dati.comunicazioni)) {
+      saveComunicazioniSoci(dati.comunicazioni);
     }
     if (dati.config) {
       setConfig(dati.config);
@@ -437,6 +460,7 @@ export default function App() {
           soci={soci}
           eventi={eventi}
           donazioni={donazioni}
+          cestinoCount={cestino.length}
           sitoConfig={sitoConfig}
           giornalinoConfig={giornalinoConfig}
           archivioGiornalini={archivioGiornalini}
@@ -669,6 +693,7 @@ export default function App() {
         soci={soci}
         eventi={eventi}
         donazioni={donazioni}
+        cestinoCount={cestino.length}
         sitoConfig={sitoConfig}
         tabAttivo={tabGestionale}
         annoSelezionato={annoSelezionato}
@@ -775,6 +800,7 @@ export default function App() {
                   onStampaLibroSoci={() => setMostraStampaLibroSoci(true)}
                   onVisualizzaRicevuta={(socio, quota) => setRicevutaAttiva({ socio, quota })}
                   onStampaSchedaSocio={(socio) => setSocioSchedaStampa(socio)}
+                  onInviaLinkPortale={(socio) => setSocioLinkPortale(socio)}
                 />
               </>
             ) : tabGestionale === 'eventi' ? (
@@ -947,6 +973,9 @@ export default function App() {
           onApriSchedaSocio={(socio) => {
             setSocioSchedaStampa(socio);
           }}
+          onInviaLinkPortale={(socio) => {
+            setSocioLinkPortale(socio);
+          }}
         />
       )}
 
@@ -1060,6 +1089,21 @@ export default function App() {
           config={config}
           annoSelezionato={annoSelezionato}
           onClose={() => setSocioSchedaStampa(null)}
+        />
+      )}
+
+      {/* 14. Modale Invio Link Portale Web dei Soci */}
+      {socioLinkPortale && (
+        <SendMemberPortalLinkModal
+          socio={socioLinkPortale}
+          config={config}
+          annoSelezionato={annoSelezionato}
+          onClose={() => setSocioLinkPortale(null)}
+          onApriPortaleComeSocio={(socio) => {
+            setSocioLinkPortale(null);
+            setSocioTessera(null);
+            setPaginaAttiva('portale_soci');
+          }}
         />
       )}
 

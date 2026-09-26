@@ -1,4 +1,5 @@
 import { Socio, ProLocoInfo, QuotaAssociativa, StatoQuota, ProLocoEvento, StandEvento, SitoWebConfig, GiornalinoConfig, ArticoloGiornalino, EdizioneGiornalino, DonazioneTerzi, CampagnaRaccoltaFondi, ElementoCestino, ComunicazioneSocio } from './types';
+import { calcolaEconomiaEvento, aggregaEventiPerBilancio } from './utils/eventoHelpers';
 
 const STORAGE_KEY_SOCI = 'proloco_gestione_soci_v1';
 const STORAGE_KEY_CONFIG = 'proloco_gestione_config_v1';
@@ -811,12 +812,61 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     tipologia: 'Food / Gastronomia',
     riferimentoFood: true,
     responsabile: 'Marco Valenti (Chef Volontario)',
+    orarioAperturaStand: '18:00 - 23:30',
+    volontariRichiesti: 3,
     descrizione: 'Pasta fresca tirata a mano, sughi tipici della tradizione contadina e polenta rustica. Cucina coperta certificata HACCP.',
     spesaPreventivo: 1400,
     spesaConsuntivo: 1250,
     incassoPrevisto: 3600,
     incassoConsuntivo: 3800,
-    incassoStimato: 3800
+    incassoStimato: 3800,
+    turniAssegnazioni: [
+      {
+        id: 'trn-1-1',
+        socioId: 'socio-1',
+        nomeVolontario: 'Valenti Marco',
+        nominativo: 'Valenti Marco',
+        numeroTessera: 'PL-2025-001',
+        telefono: '338 1234567',
+        mansione: 'Responsabile Stand / Capo Postazione',
+        fasciaOraria: 'Cena (Servizio Serale)',
+        orarioInizio: '18:00',
+        orarioFine: '23:30',
+        orarioSpecifico: '18:00 - 23:30',
+        confermato: true,
+        note: 'Coordinamento brigata cucina e controllo porzioni'
+      },
+      {
+        id: 'trn-1-2',
+        socioId: 'socio-8',
+        nomeVolontario: 'Neri Chiara',
+        nominativo: 'Neri Chiara',
+        numeroTessera: 'PL-2025-008',
+        telefono: '348 9900112',
+        mansione: 'Cuoco / Addetto Cucina',
+        fasciaOraria: 'Cena (Servizio Serale)',
+        orarioInizio: '18:30',
+        orarioFine: '23:00',
+        orarioSpecifico: '18:30 - 23:00',
+        confermato: true,
+        note: 'Cottura primi piatti e impiattamento'
+      },
+      {
+        id: 'trn-1-3',
+        socioId: 'socio-6',
+        nomeVolontario: 'Mancini Donatella',
+        nominativo: 'Mancini Donatella',
+        numeroTessera: 'PL-2025-006',
+        telefono: '333 7162534',
+        mansione: 'Cuoco / Addetto Cucina',
+        fasciaOraria: 'Pomeriggio (Accoglienza)',
+        orarioInizio: '15:30',
+        orarioFine: '19:30',
+        orarioSpecifico: '15:30 - 19:30',
+        confermato: true,
+        note: 'Preparazione pasta fresca e sughi tradizionali'
+      }
+    ]
   },
   {
     id: 'std-2',
@@ -824,13 +874,47 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     nome: 'Griglia, Carni & Rosticceria alla Brace',
     tipologia: 'Food / Griglia & Brace',
     riferimentoFood: true,
-    responsabile: 'Roberto Ferri (Mastro Fuochista)',
+    responsabile: 'Alessandro Moretti (Mastro Fuochista)',
+    orarioAperturaStand: '18:30 - 23:30',
+    volontariRichiesti: 2,
     descrizione: 'Salsicce artigianali, tagliata, arrosticini e contorni cotti alla brace a vista. Impianto con cappa aspirante e braciere protetto.',
     spesaPreventivo: 1200,
     spesaConsuntivo: 1100,
     incassoPrevisto: 3000,
     incassoConsuntivo: 3200,
-    incassoStimato: 3200
+    incassoStimato: 3200,
+    turniAssegnazioni: [
+      {
+        id: 'trn-2-1',
+        socioId: 'socio-3',
+        nomeVolontario: 'Moretti Alessandro',
+        nominativo: 'Moretti Alessandro',
+        numeroTessera: 'PL-2025-003',
+        telefono: '335 4433221',
+        mansione: 'Fuochista / Addetto Griglia',
+        fasciaOraria: 'Cena (Servizio Serale)',
+        orarioInizio: '18:00',
+        orarioFine: '23:30',
+        orarioSpecifico: '18:00 - 23:30',
+        confermato: true,
+        note: 'Accensione bracieri e cottura tagliata/salsicce'
+      },
+      {
+        id: 'trn-2-2',
+        socioId: 'socio-7',
+        nomeVolontario: 'Bianchi Roberto',
+        nominativo: 'Bianchi Roberto',
+        numeroTessera: 'PL-2025-007',
+        telefono: '340 1122334',
+        mansione: 'Servizio ai Tavoli / Runner',
+        fasciaOraria: 'Cena (Servizio Serale)',
+        orarioInizio: '19:00',
+        orarioFine: '23:00',
+        orarioSpecifico: '19:00 - 23:00',
+        confermato: true,
+        note: 'Porzionamento carni e uscita vassoi caldi'
+      }
+    ]
   },
   {
     id: 'std-3',
@@ -838,13 +922,32 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     nome: 'Friggitoria & Dolci Tradizionali del Borgo',
     tipologia: 'Food / Friggitoria & Dolci',
     riferimentoFood: true,
-    responsabile: 'Lucia Bianchi',
+    responsabile: 'Elena Rossi',
+    orarioAperturaStand: '18:30 - 23:30',
+    volontariRichiesti: 2,
     descrizione: 'Fritti dorati al cartoccio, frittelle di castagne, bomboloni caldi e ciambelle della festa preparate al momento.',
     spesaPreventivo: 450,
     spesaConsuntivo: 420,
     incassoPrevisto: 1000,
     incassoConsuntivo: 1100,
-    incassoStimato: 1100
+    incassoStimato: 1100,
+    turniAssegnazioni: [
+      {
+        id: 'trn-3-1',
+        socioId: 'socio-4',
+        nomeVolontario: 'Rossi Elena',
+        nominativo: 'Rossi Elena',
+        numeroTessera: 'PL-2025-004',
+        telefono: '349 5566778',
+        mansione: 'Addetto Friggitoria / Dolci',
+        fasciaOraria: 'Cena (Servizio Serale)',
+        orarioInizio: '18:30',
+        orarioFine: '23:30',
+        orarioSpecifico: '18:30 - 23:30',
+        confermato: true,
+        note: 'Frittelle di castagne e cartocci caldi'
+      }
+    ]
   },
   {
     id: 'std-4',
@@ -852,13 +955,47 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     nome: 'Punto Beverage, Birreria Artigianale & Vini DOC',
     tipologia: 'Beverage / Bar & Vini',
     riferimentoFood: true,
-    responsabile: 'Simone Rossi',
+    responsabile: 'Federico Conti',
+    orarioAperturaStand: '18:00 - 24:00',
+    volontariRichiesti: 2,
     descrizione: 'Vini tipici delle colline, birre artigianali alla spina, acqua minerale e bibite fresche. Banco spillatura a flusso continuo.',
     spesaPreventivo: 450,
     spesaConsuntivo: 430,
     incassoPrevisto: 1400,
     incassoConsuntivo: 1400,
-    incassoStimato: 1400
+    incassoStimato: 1400,
+    turniAssegnazioni: [
+      {
+        id: 'trn-4-1',
+        socioId: 'socio-5',
+        nomeVolontario: 'Conti Federico',
+        nominativo: 'Conti Federico',
+        numeroTessera: 'PL-2025-005',
+        telefono: '320 8765412',
+        mansione: 'Barista / Spillatore Bevande',
+        fasciaOraria: 'Cena (Servizio Serale)',
+        orarioInizio: '18:00',
+        orarioFine: '24:00',
+        orarioSpecifico: '18:00 - 24:00',
+        confermato: true,
+        note: 'Gestione spine birra artigianale e mescita vini DOC'
+      },
+      {
+        id: 'trn-4-2',
+        socioId: 'socio-3',
+        nomeVolontario: 'Moretti Alessandro',
+        nominativo: 'Moretti Alessandro',
+        numeroTessera: 'PL-2025-003',
+        telefono: '335 4433221',
+        mansione: 'Logistica / Rifornimento Scorte',
+        fasciaOraria: 'Mattina (Allestimento & Prep)',
+        orarioInizio: '10:00',
+        orarioFine: '12:30',
+        orarioSpecifico: '10:00 - 12:30',
+        confermato: true,
+        note: 'Carico fusti refrigerati e calici degustazione'
+      }
+    ]
   },
   {
     id: 'std-5',
@@ -866,13 +1003,47 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     nome: 'Cassa Centrale & Ritiro Ticket Ristoro',
     tipologia: 'Cassa & Ticket',
     riferimentoFood: false,
-    responsabile: 'Elena Moretti (Tesoriere)',
+    responsabile: 'Giulia Bernardi (Segreteria)',
+    orarioAperturaStand: '18:00 - 23:00',
+    volontariRichiesti: 2,
     descrizione: 'Postazione scontrini e gettoni unificata per gli stand gastronomici con terminale POS contactless e contanti.',
     spesaPreventivo: 200,
     spesaConsuntivo: 180,
     incassoPrevisto: 0,
     incassoConsuntivo: 0,
-    incassoStimato: 0
+    incassoStimato: 0,
+    turniAssegnazioni: [
+      {
+        id: 'trn-5-1',
+        socioId: 'socio-2',
+        nomeVolontario: 'Bernardi Giulia',
+        nominativo: 'Bernardi Giulia',
+        numeroTessera: 'PL-2025-002',
+        telefono: '347 9876543',
+        mansione: 'Cassiere / Addetto Ticket',
+        fasciaOraria: 'Cena (Servizio Serale)',
+        orarioInizio: '18:00',
+        orarioFine: '23:00',
+        orarioSpecifico: '18:00 - 23:00',
+        confermato: true,
+        note: 'Cassa principale e emissione ticket POS'
+      },
+      {
+        id: 'trn-5-2',
+        socioId: 'socio-7',
+        nomeVolontario: 'Bianchi Roberto',
+        nominativo: 'Bianchi Roberto',
+        numeroTessera: 'PL-2025-007',
+        telefono: '340 1122334',
+        mansione: 'Cassiere / Addetto Ticket',
+        fasciaOraria: 'Notte (Chiusura & Riordino)',
+        orarioInizio: '22:30',
+        orarioFine: '24:00',
+        orarioSpecifico: '22:30 - 24:00',
+        confermato: true,
+        note: 'Chiusura cassa serale e conteggio incassi stand'
+      }
+    ]
   },
   {
     id: 'std-6',
@@ -880,13 +1051,32 @@ export const STAND_SIMULATI_DEFAULT: StandEvento[] = [
     nome: 'Mercatino Artigianato & Prodotti Tipici Km 0',
     tipologia: 'Mercatino & Artigianato',
     riferimentoFood: false,
-    responsabile: 'Alessandro Donati',
+    responsabile: 'Donatella Mancini',
+    orarioAperturaStand: '10:00 - 22:00',
+    volontariRichiesti: 2,
     descrizione: 'Bancarelle espositive di hobbisti locali, miele, olio extravergine d\'oliva e artigianato artistico del territorio.',
     spesaPreventivo: 100,
     spesaConsuntivo: 80,
     incassoPrevisto: 0,
     incassoConsuntivo: 0,
-    incassoStimato: 0
+    incassoStimato: 0,
+    turniAssegnazioni: [
+      {
+        id: 'trn-6-1',
+        socioId: 'socio-6',
+        nomeVolontario: 'Mancini Donatella',
+        nominativo: 'Mancini Donatella',
+        numeroTessera: 'PL-2025-006',
+        telefono: '333 7162534',
+        mansione: 'Accoglienza / Info Point',
+        fasciaOraria: 'Mattina (Allestimento & Prep)',
+        orarioInizio: '09:30',
+        orarioFine: '13:30',
+        orarioSpecifico: '09:30 - 13:30',
+        confermato: true,
+        note: 'Assegnazione piazzole espositori e punto informativo Pro Loco'
+      }
+    ]
   }
 ];
 
@@ -1699,7 +1889,8 @@ export function esportaLibroSociCSV(soci: Socio[], annoCorrente: number): void {
     'Stato Socio'
   ];
 
-  const righe = soci.map(s => {
+  const sociAttivi = soci.filter(s => !s.dataCancellazione);
+  const righe = sociAttivi.map(s => {
     const statoQuota = getStatoQuotaSocio(s, annoCorrente);
     const ultimaQuota = s.quote?.length > 0 ? [...s.quote].sort((a, b) => b.anno - a.anno)[0].anno : 'Nessuna';
     return [
@@ -1759,8 +1950,26 @@ export function loadEventi(): ProLocoEvento[] {
       // Se gli stand non hanno ancora spesaPreventivo / spesaConsuntivo, li arricchiamo con fallback
       stands = stands.map((s, idx) => {
         const defaultStand = STAND_SIMULATI_DEFAULT[idx] || STAND_SIMULATI_DEFAULT.find(d => d.numero === s.numero);
+        const rawTurni = Array.isArray(s.turniAssegnazioni) && s.turniAssegnazioni.length > 0
+          ? s.turniAssegnazioni
+          : (defaultStand?.turniAssegnazioni || []);
+        const turniNormalizzati = rawTurni.map(t => {
+          const nome = t.nomeVolontario || t.nominativo || 'Volontario';
+          const spec = t.orarioSpecifico || (t.orarioInizio && t.orarioFine ? `${t.orarioInizio} - ${t.orarioFine}` : '18:30 - 23:30');
+          return {
+            ...t,
+            nomeVolontario: nome,
+            nominativo: nome,
+            orarioSpecifico: spec,
+            orarioInizio: t.orarioInizio || spec.split(' - ')[0] || '18:30',
+            orarioFine: t.orarioFine || spec.split(' - ')[1] || '23:30'
+          };
+        });
         return {
           ...s,
+          orarioAperturaStand: s.orarioAperturaStand ?? defaultStand?.orarioAperturaStand ?? '18:30 - 23:30',
+          volontariRichiesti: s.volontariRichiesti ?? defaultStand?.volontariRichiesti ?? 2,
+          turniAssegnazioni: turniNormalizzati,
           spesaPreventivo: s.spesaPreventivo ?? defaultStand?.spesaPreventivo ?? 0,
           spesaConsuntivo: s.spesaConsuntivo ?? defaultStand?.spesaConsuntivo ?? 0,
           incassoPrevisto: s.incassoPrevisto ?? defaultStand?.incassoPrevisto ?? (s.incassoStimato || 0),
@@ -1888,38 +2097,29 @@ export function esportaEventiCSV(eventi: ProLocoEvento[], anno?: number): void {
   const filtrati = anno ? eventi.filter(e => e.dataInizio.startsWith(anno.toString())) : eventi;
 
   const righe = filtrati.map(e => {
-    const tipo = e.tipoEvento || 'nativo';
+    const econ = calcolaEconomiaEvento(e);
+    const tipo = econ.tipo;
     const etichettaTipo = tipo === 'nativo' ? '1. Nativo (100% Pro Loco)' : tipo === 'ibrido' ? '2. Ibrido (Co-organizzato)' : '3. Gestione (Conto Terzi)';
     const partnerOCommittente = tipo === 'ibrido' ? (e.partnerIbridoNome || 'Partner') : tipo === 'gestione' ? (e.committenteNome || 'Committente') : 'Pro Loco Diretta';
 
-    const prevFood = e.spesePreventivo?.food || 0;
-    const prevIntr = e.spesePreventivo?.intrattenimento || 0;
-    const prevAltre = e.spesePreventivo?.altreSpese || 0;
-    const prevVarie = e.spesePreventivo?.varie || 0;
-    const totPrev = prevFood + prevIntr + prevAltre + prevVarie || e.budgetPrevisto || 0;
+    const prevFood = econ.foodPrev;
+    const prevIntr = econ.intrattenimentoPrev;
+    const prevAltre = econ.altreSpesePrev;
+    const prevVarie = econ.variePrev;
+    const totPrev = econ.costiTotaliPreventivo;
 
-    const consFood = e.speseConsuntivo?.food || 0;
-    const consIntr = e.speseConsuntivo?.intrattenimento || 0;
-    const consAltre = e.speseConsuntivo?.altreSpese || 0;
-    const consVarie = e.speseConsuntivo?.varie || 0;
-    const totCons = consFood + consIntr + consAltre + consVarie || e.costiSostenuti || 0;
+    const consFood = econ.food;
+    const consIntr = econ.intrattenimento;
+    const consAltre = econ.altreSpese;
+    const consVarie = econ.varie;
+    const totCons = econ.costiTotaliConsuntivo;
 
     const deltaCosti = totCons - totPrev;
-    const margine = (e.entrateRealizzate || 0) - totCons;
+    const margine = econ.avanzoDisavanzoConsuntivo;
 
-    // Calcolo quota bilancio Pro Loco
-    let costiProLoco = totCons;
-    let entrateProLoco = e.entrateRealizzate || 0;
-    if (tipo === 'ibrido') {
-      const pSpese = e.percentualeSpeseProLoco !== undefined ? e.percentualeSpeseProLoco : 50;
-      const pEntr = e.percentualeEntrateProLoco !== undefined ? e.percentualeEntrateProLoco : 50;
-      costiProLoco = Math.max(0, Math.round((totCons * pSpese) / 100) - (e.contributoPartner || 0));
-      entrateProLoco = Math.round(((e.entrateRealizzate || 0) * pEntr) / 100);
-    } else if (tipo === 'gestione') {
-      costiProLoco = totCons;
-      entrateProLoco = (e.compensoGestione || 0) + (e.rimborsoSpeseCommittente || 0) || (e.entrateRealizzate || 0);
-    }
-    const margineProLoco = entrateProLoco - costiProLoco;
+    const costiProLoco = econ.costiProLocoConsuntivo;
+    const entrateProLoco = econ.entrateProLocoRealizzate;
+    const margineProLoco = econ.margineNettoProLoco;
 
     return [
       `"${e.id}"`,
@@ -1944,8 +2144,8 @@ export function esportaEventiCSV(eventi: ProLocoEvento[], anno?: number): void {
       `"${consVarie}"`,
       `"${totCons}"`,
       `"${deltaCosti}"`,
-      `"${e.entratePreviste || 0}"`,
-      `"${e.entrateRealizzate || 0}"`,
+      `"${econ.entrateTotaliPreviste}"`,
+      `"${econ.entrateTotaliRealizzate}"`,
       `"${margine}"`,
       `"${costiProLoco}"`,
       `"${entrateProLoco}"`,
@@ -1955,7 +2155,7 @@ export function esportaEventiCSV(eventi: ProLocoEvento[], anno?: number): void {
       `"${e.licenzaSIAE ? 'SI' : 'NO'}"`,
       `"${e.pianoSicurezzaSafety ? 'SI' : 'NO'}"`,
       `"${e.aslHaccp ? 'SI' : 'NO'}"`,
-      `"${e.volontariIds ? e.volontariIds.length : 0}"`
+      `"${econ.volontariUniciIds.length}"`
     ].join(';');
   });
 
@@ -2027,6 +2227,88 @@ export function esportaStandEventoCSV(evento: ProLocoEvento, stands: StandEvento
   const link = document.createElement('a');
   link.setAttribute('href', url);
   link.setAttribute('download', `Macro_Stand_${(evento.titolo || 'Evento').replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+export function esportaTurniStandCSV(evento: ProLocoEvento, stands?: StandEvento[]): void {
+  const listaStands = stands && stands.length > 0
+    ? stands
+    : (evento.standNumerati && evento.standNumerati.length > 0 ? evento.standNumerati : STAND_SIMULATI_DEFAULT);
+  const intestazioni = [
+    'Evento',
+    'Data Evento',
+    'N° Stand',
+    'Denominazione Stand',
+    'Tipologia Stand',
+    'Referente Stand',
+    'Orario Apertura Stand',
+    'Volontario Assegnato',
+    'N° Tessera Socio',
+    'Telefono',
+    'Mansione nello Stand',
+    'Fascia Oraria Turno',
+    'Orario Inizio Turno',
+    'Orario Fine Turno',
+    'Stato Disponibilità',
+    'Note Operative'
+  ];
+
+  const righe: string[] = [];
+
+  listaStands.forEach(s => {
+    const turni = s.turniAssegnazioni || [];
+    if (turni.length === 0) {
+      righe.push([
+        `"${(evento.titolo || '').replace(/"/g, '""')}"`,
+        `"${evento.dataInizio || ''}"`,
+        `"#${s.numero}"`,
+        `"${(s.nome || '').replace(/"/g, '""')}"`,
+        `"${(s.tipologia || '').replace(/"/g, '""')}"`,
+        `"${(s.responsabile || '').replace(/"/g, '""')}"`,
+        `"${(s.orarioAperturaStand || '').replace(/"/g, '""')}"`,
+        `"Nessun volontario assegnato"`,
+        `"-"`,
+        `"-"`,
+        `"-"`,
+        `"-"`,
+        `"-"`,
+        `"-"`,
+        `"DA COPRIRE"`,
+        `""`
+      ].join(';'));
+    } else {
+      turni.forEach(t => {
+        const nome = t.nomeVolontario || t.nominativo || '';
+        righe.push([
+          `"${(evento.titolo || '').replace(/"/g, '""')}"`,
+          `"${t.dataTurno || evento.dataInizio || ''}"`,
+          `"#${s.numero}"`,
+          `"${(s.nome || '').replace(/"/g, '""')}"`,
+          `"${(s.tipologia || '').replace(/"/g, '""')}"`,
+          `"${(s.responsabile || '').replace(/"/g, '""')}"`,
+          `"${(s.orarioAperturaStand || '').replace(/"/g, '""')}"`,
+          `"${nome.replace(/"/g, '""')}"`,
+          `"${t.numeroTessera || '-'}"`,
+          `"${t.telefono || '-'}"`,
+          `"${(t.mansione || '').replace(/"/g, '""')}"`,
+          `"${(t.fasciaOraria || '').replace(/"/g, '""')}"`,
+          `"${t.orarioInizio || t.orarioSpecifico || ''}"`,
+          `"${t.orarioFine || ''}"`,
+          `"${t.confermato ? 'CONFERMATO' : 'IN ATTESA'}"`,
+          `"${(t.note || '').replace(/"/g, '""')}"`
+        ].join(';'));
+      });
+    }
+  });
+
+  const csvContent = '\uFEFF' + [intestazioni.join(';'), ...righe].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `Turni_Assegnazioni_Stand_${(evento.titolo || 'Evento').replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -2262,7 +2544,8 @@ export function esportaDonazioniCSV(donazioni: DonazioneTerzi[], anno?: number):
     'Note Amministrative'
   ];
 
-  const filtrati = anno ? donazioni.filter(d => d.anno === anno) : donazioni;
+  const donazioniAttive = donazioni.filter(d => d.stato !== 'annullata_ripensamento');
+  const filtrati = anno ? donazioniAttive.filter(d => d.anno === anno) : donazioniAttive;
 
   const righe = filtrati.map(d => [
     `"${d.ricevutaNumero}"`,
@@ -2398,8 +2681,9 @@ export function esportaBilancioCompletoCSV(
   const annoRif = anno || config.annoCorrente;
   const annoFiltro = anno && anno !== 0 ? anno : null;
 
-  // Filtro quote dell'anno
-  const tutteQuote = soci.flatMap(s => s.quote || []);
+  // Filtro quote dell'anno (escludendo soci cancellati)
+  const sociAttivi = soci.filter(s => !s.dataCancellazione);
+  const tutteQuote = sociAttivi.flatMap(s => s.quote || []);
   const quoteAnno = annoFiltro 
     ? tutteQuote.filter(q => q.anno === annoFiltro)
     : tutteQuote;
@@ -2418,8 +2702,9 @@ export function esportaBilancioCompletoCSV(
     ? eventi.filter(e => e.dataInizio.startsWith(annoFiltro.toString()))
     : eventi;
 
-  const totaleEntrateEventi = eventiAnno.reduce((sum, e) => sum + (e.entrateRealizzate || 0), 0);
-  const totaleCostiEventi = eventiAnno.reduce((sum, e) => sum + (e.costiSostenuti || 0), 0);
+  const aggregatoEventi = aggregaEventiPerBilancio(eventiAnno);
+  const totaleEntrateEventi = aggregatoEventi.entrateCompetenzaProLoco;
+  const totaleCostiEventi = aggregatoEventi.costiCompetenzaProLoco;
   const totaleEntrateGenerali = totaleQuote + totaleEntrateEventi + totaleDonazioni;
   const totaleUsciteGenerali = totaleCostiEventi;
   const avanzoGestione = totaleEntrateGenerali - totaleUsciteGenerali;
@@ -2466,25 +2751,27 @@ export function esportaBilancioCompletoCSV(
   );
 
   eventiAnno.forEach(e => {
-    const consFood = e.speseConsuntivo?.food || 0;
-    const consIntr = e.speseConsuntivo?.intrattenimento || 0;
-    const consAltre = e.speseConsuntivo?.altreSpese || 0;
-    const consVarie = e.speseConsuntivo?.varie || 0;
-    const totCons = consFood + consIntr + consAltre + consVarie || e.costiSostenuti || 0;
-    const margine = (e.entrateRealizzate || 0) - totCons;
+    const econ = calcolaEconomiaEvento(e);
+    const consFood = econ.food;
+    const consIntr = econ.intrattenimento;
+    const consAltre = econ.altreSpese;
+    const consVarie = econ.varie;
+    const totCons = econ.costiProLocoConsuntivo;
+    const entrateComp = econ.entrateProLocoRealizzate;
+    const margine = econ.margineNettoProLoco;
 
     righeCsv.push([
       `"${e.titolo.replace(/"/g, '""')}"`,
       `"${e.categoria}"`,
       `"${e.dataInizio}"`,
       `"${e.stato.toUpperCase()}"`,
-      `"${e.budgetPrevisto || 0}"`,
+      `"${econ.costiProLocoPreventivo}"`,
       `"${consFood}"`,
       `"${consIntr}"`,
       `"${consAltre}"`,
       `"${consVarie}"`,
       `"${totCons}"`,
-      `"${e.entrateRealizzate || 0}"`,
+      `"${entrateComp}"`,
       `"${margine}"`
     ].join(';'));
   });
@@ -2588,10 +2875,11 @@ export function esportaBackupJSON(
   campagne?: CampagnaRaccoltaFondi[],
   sitoConfig?: SitoWebConfig,
   archivioGiornalini?: EdizioneGiornalino[],
-  cestino?: ElementoCestino[]
+  cestino?: ElementoCestino[],
+  comunicazioni?: ComunicazioneSocio[]
 ): void {
   const data = {
-    versione: '3.1',
+    versione: '4.0',
     dataEsportazione: new Date().toISOString(),
     configurazione: config,
     soci: soci,
@@ -2600,7 +2888,8 @@ export function esportaBackupJSON(
     campagne: campagne || loadCampagneFondi(),
     sitoConfig: sitoConfig || loadSitoWebConfig(),
     archivioGiornalini: archivioGiornalini || loadArchivioGiornalini(),
-    cestino: cestino || loadCestino()
+    cestino: cestino || loadCestino(),
+    comunicazioni: comunicazioni || loadComunicazioniSoci()
   };
   const jsonString = JSON.stringify(data, null, 2);
   const blob = new Blob([jsonString], { type: 'application/json' });
@@ -2619,6 +2908,7 @@ export function azzeraDatabase(): void {
   saveDonazioni([]);
   saveCampagneFondi([]);
   saveCestino([]);
+  saveComunicazioniSoci(INITIAL_COMUNICAZIONI_SOCI);
 }
 
 export function esportaCodiceSitoHTML(

@@ -149,6 +149,7 @@ export interface Socio {
   foto?: string; // Data URL base64 o URL immagine della fototessera
   note?: string;
   competenzeVolontariato?: string[];
+  dataCancellazione?: string; // Data eventuale cancellazione/decadenza dall'albo
   quote: QuotaAssociativa[];
 }
 
@@ -253,6 +254,42 @@ export type TipologiaStand =
   | 'Mercatino & Artigianato'
   | 'Info Point & Servizi';
 
+export type FasciaOrariaTurno =
+  | 'Mattina (Allestimento & Prep)'
+  | 'Pranzo (Servizio Diurno)'
+  | 'Pomeriggio (Accoglienza)'
+  | 'Cena (Servizio Serale)'
+  | 'Notte (Chiusura & Riordino)'
+  | 'Giornata Intera';
+
+export type MansioneStand =
+  | 'Responsabile Stand / Capo Postazione'
+  | 'Cuoco / Addetto Cucina'
+  | 'Fuochista / Addetto Griglia'
+  | 'Addetto Friggitoria / Dolci'
+  | 'Barista / Spillatore Bevande'
+  | 'Cassiere / Addetto Ticket'
+  | 'Servizio ai Tavoli / Runner'
+  | 'Accoglienza / Info Point'
+  | 'Logistica / Rifornimento Scorte';
+
+export interface AssegnazioneVolontarioStand {
+  id: string;
+  socioId?: string; // ID dal database soci (se selezionato dall'Albo)
+  nomeVolontario: string; // Cognome e Nome
+  nominativo?: string; // Alias retrocompatibile
+  numeroTessera?: string;
+  telefono?: string;
+  mansione: MansioneStand | string;
+  fasciaOraria: FasciaOrariaTurno | string;
+  orarioInizio?: string; // es. "18:30"
+  orarioFine?: string; // es. "23:30"
+  orarioSpecifico?: string; // es. "18:30 - 23:30"
+  dataTurno?: string; // YYYY-MM-DD
+  confermato: boolean; // Disponibilità confermata
+  note?: string;
+}
+
 export interface StandEvento {
   id: string;
   numero: number; // Numero assegnato in base all'esigenza (es. 1, 2, 3...)
@@ -261,6 +298,9 @@ export interface StandEvento {
   riferimentoFood: boolean; // Riferimento Food (True = collegato all'area ristorazione / Food & Beverage)
   descrizione?: string;
   responsabile?: string;
+  orarioAperturaStand?: string; // es. "18:30 - 23:30"
+  volontariRichiesti?: number; // Fabbisogno minimo operatori per lo stand
+  turniAssegnazioni?: AssegnazioneVolontarioStand[]; // Turni e volontari assegnati a questo stand
   // Dati economici per singolo stand (Preventivo, Consuntivo e Differenza)
   spesaPreventivo?: number; // Costi preventivati allestimento/merci (€)
   spesaConsuntivo?: number; // Spese consuntive sostenute (€)

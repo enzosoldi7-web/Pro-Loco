@@ -8,14 +8,17 @@ import {
   Mail, 
   Phone, 
   MapPin, 
-  Calendar, 
   Check, 
   ShieldCheck, 
-  HeartHandshake, 
   Euro,
   Camera,
   Upload,
-  Trash2
+  Trash2,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  ListChecks,
+  Layers
 } from 'lucide-react';
 
 interface MemberModalProps {
@@ -38,6 +41,13 @@ const COMPETENZE_DISPONIBILI = [
   'Allestimenti e Grafica'
 ];
 
+const STEPS_SOCIO = [
+  { num: 1, titolo: 'Anagrafica & Foto', sottotitolo: 'Identità, C.F. e fototessera' },
+  { num: 2, titolo: 'Residenza & Contatti', sottotitolo: 'Indirizzo, telefono ed email' },
+  { num: 3, titolo: 'Tessera & Ruolo', sottotitolo: 'Categoria, incarico e competenze' },
+  { num: 4, titolo: 'Quota & Conferma', sottotitolo: 'Versamento annuale e riepilogo' }
+];
+
 export const MemberModal: React.FC<MemberModalProps> = ({
   socio,
   soci,
@@ -47,6 +57,11 @@ export const MemberModal: React.FC<MemberModalProps> = ({
   onSalva
 }) => {
   const isModifica = !!socio;
+
+  // Gestione Step Sequenziale (1..4) oppure Vista Unica
+  const [stepCorrente, setStepCorrente] = useState<number>(1);
+  const [vistaTuttiStep, setVistaTuttiStep] = useState<boolean>(false);
+  const [erroreStep, setErroreStep] = useState<string | null>(null);
 
   const [nome, setNome] = useState(socio?.nome || '');
   const [cognome, setCognome] = useState(socio?.cognome || '');
@@ -76,7 +91,7 @@ export const MemberModal: React.FC<MemberModalProps> = ({
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Seleziona un file immagine valido (JPG, PNG, WebP)');
+      setErroreStep('Seleziona un file immagine valido (JPG, PNG, WebP)');
       return;
     }
 
@@ -84,7 +99,6 @@ export const MemberModal: React.FC<MemberModalProps> = ({
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        // Ridimensionamento ottimale per fototessera (max 360x360 px)
         const canvas = document.createElement('canvas');
         const MAX_SIZE = 360;
         let width = img.width;
@@ -128,7 +142,6 @@ export const MemberModal: React.FC<MemberModalProps> = ({
     }
   }, [isModifica, soci, annoSelezionato, numeroTessera]);
 
-  // Aggiorna importo suggerito quando cambia categoria
   useEffect(() => {
     if (categoria === 'Onorario') setImportoQuota(0);
     else if (categoria === 'Sostenitore') setImportoQuota(config.quotaStandardSostenitore);
@@ -144,8 +157,47 @@ export const MemberModal: React.FC<MemberModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const validaStepCorrente = (targetStep?: number): boolean => {
+    setErroreStep(null);
+    const stepCheck = targetStep ?? stepCorrente;
+    if (stepCheck >= 1) {
+      if (!nome.trim() || !cognome.trim()) {
+        setErroreStep('Compila Nome e Cognome del socio prima di proseguire allo step successivo.');
+        setStepCorrente(1);
+        return false;
+      }
+      if (!codiceFiscale.trim()) {
+        setErroreStep('Inserisci il Codice Fiscale del socio nello Step 1.');
+        setStepCorrente(1);
+        return false;
+      }
+    }
+    if (stepCheck >= 3) {
+      if (!numeroTessera.trim()) {
+        setErroreStep('Verifica il Numero Tessera assegnato nello Step 3.');
+        setStepCorrente(3);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleAvantiStep = () => {
+    if (!validaStepCorrente(stepCorrente)) return;
+    if (stepCorrente < 4) {
+      setStepCorrente(stepCorrente + 1);
+    }
+  };
+
+  const handleIndietroStep = () => {
+    setErroreStep(null);
+    if (stepCorrente > 1) {
+      setStepCorrente(stepCorrente - 1);
+    }
+  };
+
+  const handleSalvaDefinitivo = () => {
+    if (!validaStepCorrente(4)) return;
 
     const socioId = socio?.id || `socio-${Date.now()}`;
     let quoteEsistenti = socio?.quote || [];
@@ -194,500 +246,666 @@ export const MemberModal: React.FC<MemberModalProps> = ({
     onSalva(socioAggiornato);
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vistaTuttiStep && stepCorrente < 4) {
+      handleAvantiStep();
+      return;
+    }
+    handleSalvaDefinitivo();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-hidden">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-3xl w-full max-h-[92vh] flex flex-col relative animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
         
         {/* Intestazione Modale - Fissa in alto */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 bg-white shrink-0">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-slate-200 bg-white shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 shadow-2xs">
+            <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-2xs">
               <User className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 leading-tight">
-                {isModifica ? 'Modifica Scheda Socio' : 'Iscrizione Nuovo Socio Pro Loco'}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 leading-tight">
+                  {isModifica ? 'Modifica Scheda Socio (Percorso a Step)' : 'Iscrizione Sequenziale Nuovo Socio (Punto 1.1)'}
+                </h2>
+                <span className="text-[11px] font-semibold text-emerald-700">
+                  · Passo {stepCorrente} di 4
+                </span>
+              </div>
               <p className="text-xs text-slate-500">
-                {isModifica ? `Aggiornamento anagrafica socio ${socio.numeroTessera}` : 'Inserimento anagrafica nel libro soci e rilascio tessera'}
+                {isModifica
+                  ? `Aggiornamento ordinato scheda socio ${socio.numeroTessera}`
+                  : 'Inserimento guidato in 4 step sequenziali nel Libro Soci e rilascio tessera'}
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-            title="Chiudi"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setVistaTuttiStep(!vistaTuttiStep)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
+                vistaTuttiStep
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+              title="Passa dalla compilazione guidata a step alla vista unica completa"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{vistaTuttiStep ? 'Torna a Step Guidati' : 'Mostra Tutti gli Step'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              title="Chiudi"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
+
+        {/* Barra Stepper Sequenziale 1 → 2 → 3 → 4 */}
+        <div className="px-5 sm:px-6 py-3 bg-slate-50 border-b border-slate-200 shrink-0">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {STEPS_SOCIO.map((st) => {
+              const isCurrent = !vistaTuttiStep && stepCorrente === st.num;
+              const isCompleted = !vistaTuttiStep && stepCorrente > st.num;
+              return (
+                <button
+                  key={st.num}
+                  type="button"
+                  onClick={() => {
+                    setVistaTuttiStep(false);
+                    setErroreStep(null);
+                    setStepCorrente(st.num);
+                  }}
+                  className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                    isCurrent
+                      ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                      : isCompleted
+                        ? 'bg-emerald-50/90 text-emerald-950 border-emerald-200 hover:bg-emerald-100/80'
+                        : 'bg-white text-slate-600 border-slate-200/90 hover:bg-slate-100/70'
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-lg font-mono text-xs font-bold flex items-center justify-center shrink-0 ${
+                    isCurrent
+                      ? 'bg-white text-emerald-800'
+                      : isCompleted
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {isCompleted ? <Check className="w-3.5 h-3.5" /> : st.num}
+                  </div>
+                  <div className="min-w-0">
+                    <div className={`text-[11px] font-bold truncate leading-tight ${
+                      isCurrent ? 'text-white' : 'text-slate-900'
+                    }`}>
+                      {st.titolo}
+                    </div>
+                    <div className={`text-[9.5px] truncate ${
+                      isCurrent ? 'text-emerald-100' : 'text-slate-500'
+                    }`}>
+                      {st.sottotitolo}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {erroreStep && (
+          <div className="mx-5 sm:mx-6 mt-3 px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center justify-between shrink-0">
+            <span>{erroreStep}</span>
+            <button type="button" onClick={() => setErroreStep(null)} className="text-rose-600 font-bold ml-2">✕</button>
+          </div>
+        )}
 
         {/* Formulario con Body a scorrimento interno e Footer fisso */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden min-h-0">
           
-          <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-5">
+          <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-6">
             
-            {/* Sezione 1: Dati Anagrafici Primari e Fototessera */}
-          <div>
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-blue-600" />
-              Dati Anagrafici & Fototessera
-            </h3>
+            {/* STEP 1: Dati Anagrafici Primari e Fototessera */}
+            {(vistaTuttiStep || stepCorrente === 1) && (
+              <div className="space-y-4 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-emerald-700 text-white font-mono text-[11px] inline-flex items-center justify-center">1</span>
+                    <span>Step 1 · Dati Anagrafici & Fototessera Ufficiale</span>
+                  </h3>
+                  <span className="text-[11px] text-slate-500">Campi obbligatori contrassegnati con *</span>
+                </div>
 
-            {/* Fototessera del Socio */}
-            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 mb-3.5 flex flex-col sm:flex-row items-center gap-4">
-              <div className="relative shrink-0">
-                {foto ? (
-                  <div className="w-20 h-24 rounded-lg overflow-hidden border-2 border-blue-500 shadow-xs relative group bg-white">
-                    <img 
-                      src={foto} 
-                      alt="Fototessera Socio" 
-                      className="w-full h-full object-cover object-center" 
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setFoto('')}
-                      title="Rimuovi foto"
-                      className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity text-xs font-bold gap-1"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                {/* Fototessera del Socio */}
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-center gap-4">
+                  <div className="relative shrink-0">
+                    {foto ? (
+                      <div className="w-20 h-24 rounded-lg overflow-hidden border-2 border-emerald-600 shadow-xs relative group bg-white">
+                        <img 
+                          src={foto} 
+                          alt="Fototessera Socio" 
+                          className="w-full h-full object-cover object-center" 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFoto('')}
+                          title="Rimuovi foto"
+                          className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity text-xs font-bold gap-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-20 h-24 rounded-lg border-2 border-dashed border-slate-300 bg-white flex flex-col items-center justify-center text-slate-400 p-1 text-center">
+                        <Camera className="w-6 h-6 text-slate-300 mb-1" />
+                        <span className="text-[9px] font-bold leading-tight">Foto Tessera</span>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="w-20 h-24 rounded-lg border-2 border-dashed border-slate-300 bg-white flex flex-col items-center justify-center text-slate-400 p-1 text-center">
-                    <Camera className="w-6 h-6 text-slate-300 mb-1" />
-                    <span className="text-[9px] font-bold leading-tight">Foto Tessera</span>
+
+                  <div className="flex-1 text-center sm:text-left space-y-1.5">
+                    <div className="flex items-center justify-center sm:justify-start gap-2">
+                      <span className="text-xs font-bold text-slate-800">Fototessera del Socio</span>
+                      <span className="text-[11px] text-slate-500">
+                        · {foto ? 'Fotografia caricata' : 'Opzionale per stampa tessera'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-tight">
+                      La foto verrà stampata sulla tessera digitale e cartacea del socio. Formato consigliato: primo piano frontale (JPG, PNG).
+                    </p>
+                    
+                    <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFotoUpload}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-md text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>{foto ? 'Cambia Fototessera' : 'Carica Fototessera'}</span>
+                      </button>
+
+                      {foto && (
+                        <button
+                          type="button"
+                          onClick={() => setFoto('')}
+                          className="px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-md transition-colors font-medium"
+                        >
+                          Rimuovi
+                        </button>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-
-              <div className="flex-1 text-center sm:text-left space-y-1.5">
-                <div className="flex items-center justify-center sm:justify-start gap-2">
-                  <span className="text-xs font-bold text-slate-800">Fototessera Ufficiale del Socio</span>
-                  {foto ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700">Caricata</span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Consigliata per la tessera</span>
-                  )}
                 </div>
-                <p className="text-[11px] text-slate-500 leading-tight">
-                  La foto verrà stampata sulla tessera digitale e cartacea del socio. Formato consigliato: primo piano frontale (JPG, PNG).
-                </p>
-                
-                <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFotoUpload}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-md text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{foto ? 'Cambia Fototessera' : 'Carica Fototessera'}</span>
-                  </button>
 
-                  {foto && (
-                    <button
-                      type="button"
-                      onClick={() => setFoto('')}
-                      className="px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-md transition-colors font-medium"
-                    >
-                      Rimuovi
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Nome *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Es. Mario"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Cognome *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Es. Rossi"
-                  value={cognome}
-                  onChange={(e) => setCognome(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Codice Fiscale *
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={16}
-                  placeholder="16 caratteri"
-                  value={codiceFiscale}
-                  onChange={(e) => setCodiceFiscale(e.target.value.toUpperCase())}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 uppercase focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Data di Nascita
-                </label>
-                <input
-                  type="date"
-                  value={dataNascita}
-                  onChange={(e) => setDataNascita(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Luogo di Nascita
-                </label>
-                <input
-                  type="text"
-                  placeholder="Es. Siena (SI)"
-                  value={luogoNascita}
-                  onChange={(e) => setLuogoNascita(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Sezione 2: Residenza e Recapiti */}
-          <div>
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-              Residenza e Contatti
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Indirizzo e N° Civico
-                </label>
-                <input
-                  type="text"
-                  placeholder="Es. Via Roma, 14"
-                  value={indirizzo}
-                  onChange={(e) => setIndirizzo(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Città
-                </label>
-                <input
-                  type="text"
-                  value={citta}
-                  onChange={(e) => setCitta(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  CAP / Prov.
-                </label>
-                <div className="flex gap-1">
-                  <input
-                    type="text"
-                    maxLength={5}
-                    placeholder="CAP"
-                    value={cap}
-                    onChange={(e) => setCap(e.target.value)}
-                    className="w-2/3 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                  <input
-                    type="text"
-                    maxLength={2}
-                    placeholder="PR"
-                    value={provincia}
-                    onChange={(e) => setProvincia(e.target.value.toUpperCase())}
-                    className="w-1/3 bg-slate-50 border border-slate-300 rounded-lg px-1 text-center py-1.5 text-xs font-mono font-bold text-slate-900 uppercase focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Telefono / Cellulare
-                </label>
-                <div className="relative">
-                  <Phone className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="tel"
-                    placeholder="Es. 338 1234567"
-                    value={telefono}
-                    onChange={(e) => setTelefono(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Email
-                </label>
-                <div className="relative">
-                  <Mail className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="email"
-                    placeholder="Es. nome@email.it"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Sezione 3: Categoria, Ruolo e Numero Tessera */}
-          <div>
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
-              Inquadramento e Tesseramento
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Categoria Socio *
-                </label>
-                <select
-                  value={categoria}
-                  onChange={(e) => setCategoria(e.target.value as SocioCategoria)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                >
-                  <option value="Ordinario">Ordinario</option>
-                  <option value="Sostenitore">Sostenitore</option>
-                  <option value="Onorario">Onorario</option>
-                  <option value="Giovane">Giovane (Under 25)</option>
-                  <option value="Volontario Attivo">Volontario Attivo</option>
-                  <option value="Membro Direttivo">Membro Direttivo</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Ruolo nel Direttivo
-                </label>
-                <select
-                  value={ruoloDirettivo}
-                  onChange={(e) => setRuoloDirettivo(e.target.value as SocioRuoloDirettivo)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                >
-                  <option value="Nessuno">Nessun incarico</option>
-                  <option value="Presidente">Presidente</option>
-                  <option value="Vicepresidente">Vicepresidente</option>
-                  <option value="Segretario">Segretario</option>
-                  <option value="Tesoriere">Tesoriere</option>
-                  <option value="Consigliere">Consigliere</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Numero Tessera *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Es. PL-2025-010"
-                  value={numeroTessera}
-                  onChange={(e) => setNumeroTessera(e.target.value.toUpperCase())}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-emerald-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Data Prima Iscrizione
-                </label>
-                <input
-                  type="date"
-                  value={dataIscrizione}
-                  onChange={(e) => setDataIscrizione(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center gap-4 pt-5">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={attivo}
-                    onChange={(e) => setAttivo(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
-                  />
-                  <span>Socio Attivo</span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={consensoPrivacy}
-                    onChange={(e) => setConsensoPrivacy(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
-                  />
-                  <span>Consenso Privacy GDPR</span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Sezione Competenze Volontariato */}
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1.5">
-              Disponibilità e Competenze per le Attività Pro Loco:
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {COMPETENZE_DISPONIBILI.map(comp => {
-                const selezionato = competenze.includes(comp);
-                return (
-                  <button
-                    key={comp}
-                    type="button"
-                    onClick={() => toggleCompetenza(comp)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${
-                      selezionato 
-                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {selezionato ? '✓ ' : '+ '}{comp}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Opzione Registrazione Quota Contestuale per Nuovo Socio */}
-          {!isModifica && (
-            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl">
-              <label className="flex items-center gap-2 text-xs font-bold text-emerald-950 cursor-pointer mb-2">
-                <input
-                  type="checkbox"
-                  checked={registraQuotaSubito}
-                  onChange={(e) => setRegistraQuotaSubito(e.target.checked)}
-                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
-                />
-                <span>Registra contestualmente il pagamento della quota per l'anno {annoSelezionato}</span>
-              </label>
-
-              {registraQuotaSubito && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2 pt-2 border-t border-emerald-200/80">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[10px] font-semibold text-emerald-800 mb-1">
-                      Importo (€)
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Nome *
                     </label>
                     <input
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      value={importoQuota}
-                      onChange={(e) => setImportoQuota(Number(e.target.value))}
-                      className="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-900"
+                      type="text"
+                      required
+                      placeholder="Es. Mario"
+                      value={nome}
+                      onChange={(e) => setNome(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-[10px] font-semibold text-emerald-800 mb-1">
-                      Metodo Pagamento
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Cognome *
                     </label>
-                    <select
-                      value={metodoQuota}
-                      onChange={(e) => setMetodoQuota(e.target.value as MetodoPagamento)}
-                      className="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-900"
-                    >
-                      <option value="Contanti">Contanti</option>
-                      <option value="Bonifico Bancario">Bonifico Bancario</option>
-                      <option value="POS / Carta">POS / Carta</option>
-                      <option value="Satispay">Satispay</option>
-                    </select>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Es. Rossi"
+                      value={cognome}
+                      onChange={(e) => setCognome(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
                   </div>
+
                   <div>
-                    <label className="block text-[10px] font-semibold text-emerald-800 mb-1">
-                      Data Scadenza Quota
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Codice Fiscale *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={16}
+                      placeholder="16 caratteri"
+                      value={codiceFiscale}
+                      onChange={(e) => setCodiceFiscale(e.target.value.toUpperCase())}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-mono font-bold text-slate-900 uppercase focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Data di Nascita
                     </label>
                     <input
                       type="date"
-                      value={dataScadenzaQuota}
-                      onChange={(e) => setDataScadenzaQuota(e.target.value)}
-                      className="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-emerald-900"
+                      value={dataNascita}
+                      onChange={(e) => setDataNascita(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Luogo di Nascita
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Es. Siena (SI)"
+                      value={luogoNascita}
+                      onChange={(e) => setLuogoNascita(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* STEP 2: Residenza e Recapiti */}
+            {(vistaTuttiStep || stepCorrente === 2) && (
+              <div className="space-y-4 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-emerald-700 text-white font-mono text-[11px] inline-flex items-center justify-center">2</span>
+                    <span>Step 2 · Domicilio, Residenza e Recapiti Telefonici/Email</span>
+                  </h3>
+                  <span className="text-[11px] text-slate-500">Utili per invio link portale e avvisi</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Indirizzo e N° Civico
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Es. Via Roma, 14"
+                      value={indirizzo}
+                      onChange={(e) => setIndirizzo(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Comune / Città
+                    </label>
+                    <input
+                      type="text"
+                      value={citta}
+                      onChange={(e) => setCitta(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      CAP / Prov.
+                    </label>
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        maxLength={5}
+                        placeholder="CAP"
+                        value={cap}
+                        onChange={(e) => setCap(e.target.value)}
+                        className="w-2/3 bg-slate-50 border border-slate-300 rounded-lg px-2 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        maxLength={2}
+                        placeholder="PR"
+                        value={provincia}
+                        onChange={(e) => setProvincia(e.target.value.toUpperCase())}
+                        className="w-1/3 bg-slate-50 border border-slate-300 rounded-lg px-1 text-center py-2 text-xs font-mono font-bold text-slate-900 uppercase focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Telefono / Cellulare (per WhatsApp e SMS)
+                    </label>
+                    <div className="relative">
+                      <Phone className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="tel"
+                        placeholder="Es. 338 1234567"
+                        value={telefono}
+                        onChange={(e) => setTelefono(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-2.5 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Indirizzo Email
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="email"
+                        placeholder="Es. nome@email.it"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-2.5 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: Categoria, Ruolo, Tessera e Competenze */}
+            {(vistaTuttiStep || stepCorrente === 3) && (
+              <div className="space-y-4 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-emerald-700 text-white font-mono text-[11px] inline-flex items-center justify-center">3</span>
+                    <span>Step 3 · Inquadramento Associativo, Tessera & Competenze</span>
+                  </h3>
+                  <span className="text-[11px] text-slate-500">Qualifica Albo Soci e disponibilità</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Categoria Socio *
+                    </label>
+                    <select
+                      value={categoria}
+                      onChange={(e) => setCategoria(e.target.value as SocioCategoria)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    >
+                      <option value="Ordinario">Ordinario</option>
+                      <option value="Sostenitore">Sostenitore</option>
+                      <option value="Onorario">Onorario</option>
+                      <option value="Giovane">Giovane (Under 25)</option>
+                      <option value="Volontario Attivo">Volontario Attivo</option>
+                      <option value="Membro Direttivo">Membro Direttivo</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Ruolo nel Consiglio Direttivo
+                    </label>
+                    <select
+                      value={ruoloDirettivo}
+                      onChange={(e) => setRuoloDirettivo(e.target.value as SocioRuoloDirettivo)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    >
+                      <option value="Nessuno">Nessun incarico</option>
+                      <option value="Presidente">Presidente</option>
+                      <option value="Vicepresidente">Vicepresidente</option>
+                      <option value="Segretario">Segretario</option>
+                      <option value="Tesoriere">Tesoriere</option>
+                      <option value="Consigliere">Consigliere</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Numero Tessera *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Es. PL-2025-010"
+                      value={numeroTessera}
+                      onChange={(e) => setNumeroTessera(e.target.value.toUpperCase())}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-mono font-bold text-emerald-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Data Prima Iscrizione
+                    </label>
+                    <input
+                      type="date"
+                      value={dataIscrizione}
+                      onChange={(e) => setDataIscrizione(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-4 pt-5">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={attivo}
+                        onChange={(e) => setAttivo(e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                      />
+                      <span>Socio Attivo</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={consensoPrivacy}
+                        onChange={(e) => setConsensoPrivacy(e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                      />
+                      <span>Consenso Privacy GDPR</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Competenze Volontariato */}
+                <div className="pt-2">
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-2">
+                    Disponibilità e Competenze per gli Stand e le Attività Pro Loco (Punto 1.2 Eventi):
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {COMPETENZE_DISPONIBILI.map(comp => {
+                      const selezionato = competenze.includes(comp);
+                      return (
+                        <button
+                          key={comp}
+                          type="button"
+                          onClick={() => toggleCompetenza(comp)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors border cursor-pointer ${
+                            selezionato 
+                              ? 'bg-emerald-700 text-white border-emerald-700' 
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {selezionato ? '✓ ' : '+ '}{comp}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 4: Quota Associativa, Note & Riepilogo Finale */}
+            {(vistaTuttiStep || stepCorrente === 4) && (
+              <div className="space-y-4 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-emerald-700 text-white font-mono text-[11px] inline-flex items-center justify-center">4</span>
+                    <span>Step 4 · Quota Associativa {annoSelezionato}, Note & Riepilogo Finale</span>
+                  </h3>
+                  <span className="text-[11px] text-emerald-700 font-semibold">Ultimo passaggio prima della registrazione</span>
+                </div>
+
+                {!isModifica && (
+                  <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-xl space-y-3">
+                    <label className="flex items-center gap-2 text-xs font-bold text-emerald-950 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={registraQuotaSubito}
+                        onChange={(e) => setRegistraQuotaSubito(e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                      />
+                      <span>Registra contestualmente il pagamento della quota associativa per l'anno {annoSelezionato}</span>
+                    </label>
+
+                    {registraQuotaSubito && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-emerald-200/80">
+                        <div>
+                          <label className="block text-[10.5px] font-semibold text-emerald-900 mb-1">
+                            Importo Quota (€)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={importoQuota}
+                            onChange={(e) => setImportoQuota(Number(e.target.value))}
+                            className="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10.5px] font-semibold text-emerald-900 mb-1">
+                            Metodo di Pagamento
+                          </label>
+                          <select
+                            value={metodoQuota}
+                            onChange={(e) => setMetodoQuota(e.target.value as MetodoPagamento)}
+                            className="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900"
+                          >
+                            <option value="Contanti">Contanti</option>
+                            <option value="Bonifico Bancario">Bonifico Bancario</option>
+                            <option value="POS / Carta">POS / Carta</option>
+                            <option value="Satispay">Satispay</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10.5px] font-semibold text-emerald-900 mb-1">
+                            Data Scadenza Quota
+                          </label>
+                          <input
+                            type="date"
+                            value={dataScadenzaQuota}
+                            onChange={(e) => setDataScadenzaQuota(e.target.value)}
+                            className="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-semibold text-emerald-900"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Note Interne / Osservazioni Segreteria
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Eventuali note su convenzioni, deleghe, allergie o turni preferiti..."
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Riepilogo Sintetico pre-salvataggio */}
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
+                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Riepilogo Scheda Socio pronta per il salvataggio:</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600 pt-1">
+                    <div>
+                      <span className="text-slate-400">Nominativo:</span>{' '}
+                      <strong className="text-slate-900">{cognome || '—'} {nome || '—'}</strong> ({codiceFiscale || 'C.F. mancante'})
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Tessera & Qualifica:</span>{' '}
+                      <strong className="font-mono text-emerald-800">{numeroTessera}</strong> · {categoria}
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Recapiti:</span>{' '}
+                      {telefono || 'Nessun tel.'} · {email || 'Nessuna email'}
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Competenze selezionate:</span>{' '}
+                      <strong>{competenze.length}</strong> ambiti operativi
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* Pulsanti Azione Sequenziali - Fissi in basso */}
+          <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-t border-slate-200 bg-slate-50/90 shrink-0">
+            <div className="flex items-center gap-2">
+              {!vistaTuttiStep && stepCorrente > 1 ? (
+                <button
+                  type="button"
+                  onClick={handleIndietroStep}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Step Precedente</span>
+                </button>
+              ) : (
+                <span className="text-[11px] text-slate-500 hidden sm:inline">
+                  Libro Soci · Anno Sociale {annoSelezionato}
+                </span>
               )}
             </div>
-          )}
 
-          {/* Note generali */}
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-              Note Interne / Osservazioni
-            </label>
-            <textarea
-              rows={2}
-              placeholder="Eventuali note su convenzioni, deleghe o contatti..."
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-            />
-          </div>
-
-          </div>
-
-          {/* Pulsanti Azione - Fissi in basso, sempre visibili su ogni monitor */}
-          <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-t border-slate-200 bg-slate-50/90 shrink-0">
-            <span className="text-[11px] text-slate-500 hidden sm:inline">
-              * Campi anagrafici per Libro Soci • Anno {annoSelezionato}
-            </span>
             <div className="flex items-center gap-2.5 ml-auto">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200/80 rounded-lg transition-colors cursor-pointer"
+                className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200/80 rounded-lg transition-colors cursor-pointer"
               >
                 Annulla
               </button>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-lg shadow-sm transition-colors cursor-pointer"
-              >
-                <Check className="w-4 h-4" />
-                <span>{isModifica ? 'Salva Modifiche' : 'Registra e Tessere Socio'}</span>
-              </button>
+
+              {!vistaTuttiStep && stepCorrente < 4 ? (
+                <button
+                  type="button"
+                  onClick={handleAvantiStep}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg shadow-sm transition-colors cursor-pointer"
+                >
+                  <span>Avanti: Step {stepCorrente + 1}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSalvaDefinitivo}
+                  className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-lg shadow-sm transition-colors cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{isModifica ? 'Salva Modifiche Socio' : 'Conferma e Registra Socio'}</span>
+                </button>
+              )}
             </div>
           </div>
 

@@ -17,7 +17,9 @@ import {
   User,
   FileDown,
   FileText,
-  Loader2
+  Loader2,
+  Send,
+  Globe
 } from 'lucide-react';
 import { esportaElementoInPDF } from '../utils/pdfExport';
 
@@ -28,6 +30,7 @@ interface DigitalCardModalProps {
   onClose: () => void;
   onRinnovaQuota: (socio: Socio) => void;
   onApriSchedaSocio?: (socio: Socio) => void;
+  onInviaLinkPortale?: (socio: Socio) => void;
 }
 
 export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
@@ -36,7 +39,8 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
   annoSelezionato,
   onClose,
   onRinnovaQuota,
-  onApriSchedaSocio
+  onApriSchedaSocio,
+  onInviaLinkPortale
 }) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -324,6 +328,37 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
             )}
           </div>
         </div>
+
+        {/* Box Invio Link Portale Web dei Soci */}
+        {onInviaLinkPortale && (
+          <div className="mb-4 p-3 bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50 border border-teal-200/80 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-teal-950 no-print">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-600 to-emerald-700 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                <Globe className="w-4 h-4 text-emerald-50" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                  <span>Portale Web dei Soci</span>
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-teal-100 text-teal-800 border border-teal-200">
+                    Area Riservata
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-600 truncate">
+                  Il socio può consultare online la tessera con QR, le quote, le ricevute e gli avvisi
+                </div>
+              </div>
+            </div>
+            <button
+              id="btn-box-invia-link-portale"
+              onClick={() => onInviaLinkPortale(socio)}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-lg text-xs shrink-0 shadow-2xs cursor-pointer transition-colors"
+              title="Apri pannello di invio link al socio per consultare il Portale"
+            >
+              <Send className="w-3.5 h-3.5 text-teal-100" />
+              <span>Invia Link per Socio</span>
+            </button>
+          </div>
+        )}
 
         {/* Controlli Interazione Tessera */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 no-print">

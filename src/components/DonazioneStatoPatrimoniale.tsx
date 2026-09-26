@@ -33,8 +33,9 @@ export const DonazioneStatoPatrimoniale: React.FC<DonazioneStatoPatrimonialeProp
 }) => {
   const [modalitaStampa, setModalitaStampa] = useState<boolean>(false);
 
-  // Considera sia le donazioni dell'anno che lo storico dei fondi vincolati
-  const donazioniAnno = donazioni.filter(d => d.anno === annoSelezionato);
+  // Considera sia le donazioni dell'anno che lo storico dei fondi vincolati (escludendo revocate Punto 1.4)
+  const donazioniAttive = donazioni.filter(d => d.stato !== 'annullata_ripensamento');
+  const donazioniAnno = donazioniAttive.filter(d => d.anno === annoSelezionato);
 
   // 1. ATTIVO: Liquidità derivanti da Donazioni
   // Liquidità su C/C ordinario (donazioni con bonifico/POS generiche)
@@ -57,7 +58,7 @@ export const DonazioneStatoPatrimoniale: React.FC<DonazioneStatoPatrimonialeProp
   // 2. PATRIMONIO NETTO & RISERVE VINCOLATE DA DONATORI
   // Dettaglio vincoli per campagna/progetto
   const prospettoVincoli = campagne.map(camp => {
-    const donazioniCampagna = donazioni.filter(d => d.campagnaId === camp.id || d.destinazione === camp.titolo);
+    const donazioniCampagna = donazioniAttive.filter(d => d.campagnaId === camp.id || d.destinazione === camp.titolo);
     const raccoltoTotale = donazioniCampagna.reduce((acc, d) => acc + d.importo, 0);
     const spesoTotale = donazioniCampagna.reduce((acc, d) => acc + (d.spesaEffettuataProgetto || 0), 0) + (camp.oneriSostenuti || 0);
     const saldoResiduoVincolato = Math.max(0, raccoltoTotale - spesoTotale);

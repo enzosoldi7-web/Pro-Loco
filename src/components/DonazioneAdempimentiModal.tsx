@@ -65,8 +65,9 @@ export const DonazioneAdempimentiModal: React.FC<DonazioneAdempimentiModalProps>
     }
   };
 
-  // Donazioni dell'anno
-  const donazioniAnno = donazioni.filter(d => d.anno === annoSelezionato);
+  // Donazioni attive dell'anno (escludendo revocate per ripensamento Punto 1.4)
+  const donazioniAttive = donazioni.filter(d => d.stato !== 'annullata_ripensamento');
+  const donazioniAnno = donazioniAttive.filter(d => d.anno === annoSelezionato);
 
   // 1. Dati per AdE 730 Precompilato
   // Privati cittadini con pagamento tracciabile e codice fiscale inserito
@@ -88,7 +89,7 @@ export const DonazioneAdempimentiModal: React.FC<DonazioneAdempimentiModalProps>
 
   // Campagna selezionata per il rendiconto ex Art. 87 CTS
   const campagnaSelezionata = campagne.find(c => c.id === campagnaRendicontoId) || campagne[0];
-  const donazioniCampagnaSel = donazioni.filter(d => 
+  const donazioniCampagnaSel = donazioniAttive.filter(d => 
     d.campagnaId === campagnaSelezionata?.id || d.destinazione === campagnaSelezionata?.titolo
   );
   const entrateLordeCampagna = donazioniCampagnaSel.reduce((acc, d) => acc + d.importo, 0);

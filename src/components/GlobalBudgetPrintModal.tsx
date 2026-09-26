@@ -22,6 +22,7 @@ import {
 import { esportaElementoInPDF } from '../utils/pdfExport';
 import { calcolaScadenzaQuota, getSociNonRinnovati } from '../utils/quoteHelpers';
 import { STAND_SIMULATI_DEFAULT, loadDonazioni } from '../storage';
+import { calcolaEconomiaEvento, aggregaEventiPerBilancio } from '../utils/eventoHelpers';
 
 interface GlobalBudgetPrintModalProps {
   soci: Socio[];
@@ -55,18 +56,21 @@ export const GlobalBudgetPrintModal: React.FC<GlobalBudgetPrintModalProps> = ({
     setGenerandoPDF(false);
   };
 
+  // Soci attivi (escludendo i cancellati)
+  const sociAttivi = soci.filter(s => !s.dataCancellazione);
+
   // Quote dell'anno
-  const quoteAnno = soci.flatMap(s => (s.quote || []).filter(q => q.anno === annoSelezionato));
+  const quoteAnno = sociAttivi.flatMap(s => (s.quote || []).filter(q => q.anno === annoSelezionato));
   const totaleQuote = quoteAnno.reduce((sum, q) => sum + (q.importo || 0), 0);
 
-  // Donazioni ed Erogazioni Liberali da Terzi dell'anno
+  // Donazioni ed Erogazioni Liberali da Terzi dell'anno (escludendo revocate per ripensamento Punto 1.4)
   const donazioniEffettive = donazioni && donazioni.length > 0 ? donazioni : loadDonazioni();
-  const donazioniAnno = donazioniEffettive.filter(d => d.anno === annoSelezionato);
+  const donazioniAnno = donazioniEffettive.filter(d => d.anno === annoSelezionato && d.stato !== 'annullata_ripensamento');
   const totaleDonazioni = donazioniAnno.reduce((sum, d) => sum + (d.importo || 0), 0);
   const totaleDonazioniDetraibili = donazioniAnno.filter(d => d.detraibileFiscale).reduce((sum, d) => sum + (d.importo || 0), 0);
 
-  // Soci in regola nell'anno
-  const sociTesseratiAnno = soci.filter(s => (s.quote || []).some(q => q.anno === annoSelezionato));
+  // Soci in regola nell'anno (inclusi soci Onorari esenti quota)
+  const sociTesseratiAnno = sociAttivi.filter(s => s.categoria === 'Onorario' || (s.quote || []).some(q => q.anno === annoSelezionato));
 
   // Metodi pagamento quote
   const quotePerMetodo: Record<string, number> = {};
@@ -77,15 +81,16 @@ export const GlobalBudgetPrintModal: React.FC<GlobalBudgetPrintModalProps> = ({
   // Eventi dell'anno
   const eventiAnno = eventi.filter(e => e.dataInizio.startsWith(annoSelezionato.toString()));
 
-  // Spese ed Entrate eventi aggregate
-  const speseFood = eventiAnno.reduce((sum, e) => sum + (e.speseConsuntivo?.food ?? Math.round((e.costiSostenuti || 0) * 0.5)), 0);
-  const speseIntr = eventiAnno.reduce((sum, e) => sum + (e.speseConsuntivo?.intrattenimento ?? Math.round((e.costiSostenuti || 0) * 0.25)), 0);
-  const speseAltre = eventiAnno.reduce((sum, e) => sum + (e.speseConsuntivo?.altreSpese ?? Math.round((e.costiSostenuti || 0) * 0.15)), 0);
-  const speseVarie = eventiAnno.reduce((sum, e) => sum + (e.speseConsuntivo?.varie ?? Math.round((e.costiSostenuti || 0) * 0.10)), 0);
-  const totaleSpeseEventi = speseFood + speseIntr + speseAltre + speseVarie;
+  // Spese ed Entrate eventi aggregate tramite il motore ufficiale di bilancio
+  const aggregatoEventi = aggregaEventiPerBilancio(eventiAnno);
+  const speseFood = aggregatoEventi.food;
+  const speseIntr = aggregatoEventi.intrattenimento;
+  const speseAltre = aggregatoEventi.altreSpese;
+  const speseVarie = aggregatoEventi.varie;
+  const totaleSpeseEventi = aggregatoEventi.costiCompetenzaProLoco;
 
-  const totaleEntrateEventi = eventiAnno.reduce((sum, e) => sum + (e.entrateRealizzate || 0), 0);
-  const totaleBudgetPreventivato = eventiAnno.reduce((sum, e) => sum + (e.budgetPrevisto || 0), 0);
+  const totaleEntrateEventi = aggregatoEventi.entrateCompetenzaProLoco;
+  const totaleBudgetPreventivato = aggregatoEventi.budgetPrevistoProLoco;
 
   // Bilancio Globale (Quote + Eventi + Donazioni da terzi)
   const totaleEntrateGenerali = totaleQuote + totaleEntrateEventi + totaleDonazioni;
@@ -351,8 +356,8 @@ export const GlobalBudgetPrintModal: React.FC<GlobalBudgetPrintModalProps> = ({
                     const sociCat = sociTesseratiAnno.filter(s => s.categoria === cat);
                     if (sociCat.length === 0) return null;
                     const totCat = sociCat.reduce((acc, s) => {
-                      const q = (s.quote || []).find(item => item.anno === annoSelezionato);
-                      return acc + (q?.importo || 0);
+                      const sommaSocio = (s.quote || []).filter(item => item.anno === annoSelezionato).reduce((sum, q) => sum + (q.importo || 0), 0);
+                      return acc + sommaSocio;
                     }, 0);
 
                     return (
@@ -453,18 +458,20 @@ export const GlobalBudgetPrintModal: React.FC<GlobalBudgetPrintModalProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {eventiAnno.map(e => {
-                  const cFood = e.speseConsuntivo?.food ?? Math.round((e.costiSostenuti || 0) * 0.5);
-                  const cIntr = e.speseConsuntivo?.intrattenimento ?? Math.round((e.costiSostenuti || 0) * 0.25);
-                  const cAltre = e.speseConsuntivo?.altreSpese ?? Math.round((e.costiSostenuti || 0) * 0.15);
-                  const cVarie = e.speseConsuntivo?.varie ?? Math.round((e.costiSostenuti || 0) * 0.10);
-                  const totCons = cFood + cIntr + cAltre + cVarie || e.costiSostenuti || 0;
-                  const margine = (e.entrateRealizzate || 0) - totCons;
+                  const econ = calcolaEconomiaEvento(e);
+                  const cFood = econ.food;
+                  const cIntr = econ.intrattenimento;
+                  const cAltre = econ.altreSpese;
+                  const cVarie = econ.varie;
+                  const totCons = econ.costiProLocoConsuntivo;
+                  const entrateComp = econ.entrateProLocoRealizzate;
+                  const margine = econ.margineNettoProLoco;
 
                   return (
                     <tr key={e.id} className="hover:bg-slate-50">
                       <td className="p-1.5 border border-slate-300">
                         <strong className="block text-slate-900">{e.titolo}</strong>
-                        <span className="text-[9px] text-slate-500 block">{e.categoria} • {e.luogo}</span>
+                        <span className="text-[9px] text-slate-500 block">{e.categoria} • {e.luogo} • {econ.etichettaTipo}</span>
                       </td>
                       <td className="p-1.5 border border-slate-300 text-center font-mono whitespace-nowrap">
                         {e.dataInizio}
@@ -477,7 +484,7 @@ export const GlobalBudgetPrintModal: React.FC<GlobalBudgetPrintModalProps> = ({
                         {(totCons || 0).toLocaleString('it-IT')} €
                       </td>
                       <td className="p-1.5 border border-slate-300 text-right font-mono font-bold text-emerald-800">
-                        {(e.entrateRealizzate || 0).toLocaleString('it-IT')} €
+                        {(entrateComp || 0).toLocaleString('it-IT')} €
                       </td>
                       <td className={`p-1.5 border border-slate-300 text-right font-mono font-bold ${
                         (margine || 0) >= 0 ? 'text-emerald-800' : 'text-rose-700'

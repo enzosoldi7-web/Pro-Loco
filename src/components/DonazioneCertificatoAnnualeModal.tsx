@@ -33,10 +33,12 @@ export const DonazioneCertificatoAnnualeModal: React.FC<DonazioneCertificatoAnnu
   const [annoFiscale, setAnnoFiscale] = useState<number>(annoSelezionato);
   const printRef = useRef<HTMLDivElement>(null);
 
-  // Lista di tutti i donatori dell'anno con almeno una donazione
+  // Lista di tutti i donatori dell'anno con almeno una donazione (escludendo revocate Punto 1.4)
+  const donazioniAttive = useMemo(() => donazioni.filter(d => d.stato !== 'annullata_ripensamento'), [donazioni]);
+
   const donatoriDellAnno = useMemo(() => {
     const mappa = new Map<string, { donatore: string; cf?: string; totale: number; conteggio: number }>();
-    donazioni
+    donazioniAttive
       .filter(d => d.anno === annoFiscale && d.tipoDonatore !== 'anonimo')
       .forEach(d => {
         const chiave = (d.codiceFiscalePartitaIva || d.donatore).trim().toUpperCase();
@@ -53,7 +55,7 @@ export const DonazioneCertificatoAnnualeModal: React.FC<DonazioneCertificatoAnnu
         record.conteggio += 1;
       });
     return Array.from(mappa.values()).sort((a, b) => a.donatore.localeCompare(b.donatore));
-  }, [donazioni, annoFiscale]);
+  }, [donazioniAttive, annoFiscale]);
 
   const [donatoreSelezionatoKey, setDonatoreSelezionatoKey] = useState<string>(() => {
     if (donatoreIniziale) {
@@ -69,13 +71,13 @@ export const DonazioneCertificatoAnnualeModal: React.FC<DonazioneCertificatoAnnu
   // Lista donazioni del donatore selezionato per l'anno fiscale
   const donazioniDelDonatore = useMemo(() => {
     if (!donatoreSelezionatoKey) return [];
-    return donazioni
+    return donazioniAttive
       .filter(d => {
         const chiave = (d.codiceFiscalePartitaIva || d.donatore).trim().toUpperCase();
         return d.anno === annoFiscale && chiave === donatoreSelezionatoKey;
       })
       .sort((a, b) => a.data.localeCompare(b.data));
-  }, [donazioni, annoFiscale, donatoreSelezionatoKey]);
+  }, [donazioniAttive, annoFiscale, donatoreSelezionatoKey]);
 
   const totaleErogato = useMemo(() => {
     return donazioniDelDonatore.reduce((acc, d) => acc + d.importo, 0);

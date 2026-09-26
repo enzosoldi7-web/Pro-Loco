@@ -138,12 +138,18 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
   const [filtroRicercaDonatore, setFiltroRicercaDonatore] = useState<string>('');
   const [confermaEliminaDonazioneId, setConfermaEliminaDonazioneId] = useState<string | null>(null);
 
-  // Sincronizzazione con donazioni esterne se fornite
+  // Sincronizzazione con donazioni esterne e anno selezionato nell'header
   useEffect(() => {
     if (donazioni) {
       setListaDonazioni(donazioni);
     }
   }, [donazioni]);
+
+  useEffect(() => {
+    setFiltroAnno(annoSelezionato);
+  }, [annoSelezionato]);
+
+  const sociAttivi = useMemo(() => soci.filter(s => !s.dataCancellazione), [soci]);
 
   // Lista anni disponibili
   const anniDisponibili = useMemo(() => {
@@ -153,7 +159,7 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
     anniSet.add(new Date().getFullYear() - 1);
     anniSet.add(new Date().getFullYear() - 2);
 
-    soci.forEach(s => {
+    sociAttivi.forEach(s => {
       s.quote?.forEach(q => anniSet.add(q.anno));
     });
 
@@ -163,15 +169,15 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
     });
 
     return Array.from(anniSet).sort((a, b) => b - a);
-  }, [soci, eventi, config.annoCorrente]);
+  }, [sociAttivi, eventi, config.annoCorrente]);
 
   // Sincronizza filtro anno con prop se necessario
   const annoAttivo = filtroAnno === 'tutti' ? null : filtroAnno;
 
-  // 1. ELABORAZIONE DATI TESSERAMENTI
+  // 1. ELABORAZIONE DATI TESSERAMENTI (escludendo soci cancellati)
   const quoteFiltrate = useMemo(() => {
     const tutteQuote: Array<{ quota: QuotaAssociativa; socio: Socio }> = [];
-    soci.forEach(s => {
+    sociAttivi.forEach(s => {
       (s.quote || []).forEach(q => {
         if (!annoAttivo || q.anno === annoAttivo) {
           tutteQuote.push({ quota: q, socio: s });
@@ -179,7 +185,7 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
       });
     });
     return tutteQuote.sort((a, b) => b.quota.dataPagamento.localeCompare(a.quota.dataPagamento));
-  }, [soci, annoAttivo]);
+  }, [sociAttivi, annoAttivo]);
 
   const totaleQuote = useMemo(() => {
     return quoteFiltrate.reduce((acc, item) => acc + (item.quota.importo || 0), 0);
@@ -187,14 +193,14 @@ export const GlobalBudgetSummary: React.FC<GlobalBudgetSummaryProps> = ({
 
   // Statistiche soci nell'anno
   const sociTesseratiNellAnno = useMemo(() => {
-    if (!annoAttivo) return soci.filter(s => (s.quote || []).length > 0);
-    return soci.filter(s => (s.quote || []).some(q => q.anno === annoAttivo));
-  }, [soci, annoAttivo]);
+    if (!annoAttivo) return sociAttivi.filter(s => s.categoria === 'Onorario' || (s.quote || []).length > 0);
+    return sociAttivi.filter(s => s.categoria === 'Onorario' || (s.quote || []).some(q => q.anno === annoAttivo));
+  }, [sociAttivi, annoAttivo]);
 
   const sociDaRinnovareNellAnno = useMemo(() => {
     if (!annoAttivo) return [];
-    return soci.filter(s => s.attivo && !(s.quote || []).some(q => q.anno === annoAttivo));
-  }, [soci, annoAttivo]);
+    return sociAttivi.filter(s => s.attivo && s.categoria !== 'Onorario' && !(s.quote || []).some(q => q.anno === annoAttivo));
+  }, [sociAttivi, annoAttivo]);
 
   // Ripartizione quote per categoria socio
   const quotePerCategoria = useMemo(() => {

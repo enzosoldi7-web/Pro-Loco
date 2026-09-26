@@ -18,9 +18,10 @@ export const DonazioneRegistroVidimabileModal: React.FC<DonazioneRegistroVidimab
 }) => {
   const printRef = useRef<HTMLDivElement>(null);
 
+  const donazioniAttive = donazioni.filter(d => d.stato !== 'annullata_ripensamento');
   const donazioniFiltrate = (annoSelezionato 
-    ? donazioni.filter(d => d.anno === annoSelezionato)
-    : donazioni
+    ? donazioniAttive.filter(d => d.anno === annoSelezionato)
+    : donazioniAttive
   ).sort((a, b) => a.data.localeCompare(b.data));
 
   const totaleComplessivo = donazioniFiltrate.reduce((acc, d) => acc + d.importo, 0);

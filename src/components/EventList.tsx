@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ProLocoEvento, Socio, ProLocoInfo, FiltriEventi, StandEvento } from '../types';
 import { 
   Calendar, 
@@ -42,9 +42,9 @@ import {
   SlidersHorizontal,
   UserCheck
 } from 'lucide-react';
-import { esportaEventiCSV, esportaPresenzeCSV, STAND_SIMULATI_DEFAULT } from '../storage';
+import { esportaEventiCSV, esportaPresenzeCSV, esportaTurniStandCSV, STAND_SIMULATI_DEFAULT } from '../storage';
 import { EventBudgetChart } from './EventBudgetChart';
-import { calcolaEconomiaEvento, getInfoTipoEvento } from '../utils/eventoHelpers';
+import { calcolaEconomiaEvento, getInfoTipoEvento, aggregaEventiPerBilancio } from '../utils/eventoHelpers';
 import { EventStandsModal } from './EventStandsModal';
 import { EventAttendanceModal } from './EventAttendanceModal';
 import { EventAttendancePrintModal } from './EventAttendancePrintModal';
@@ -85,11 +85,17 @@ export const EventList: React.FC<EventListProps> = ({
     ordinamento: 'data_asc'
   });
 
+  useEffect(() => {
+    setFiltri(prev => ({ ...prev, anno: annoSelezionato }));
+  }, [annoSelezionato]);
+
   const [mostraGraficoAnnuale, setMostraGraficoAnnuale] = useState<boolean>(false);
   const [eventoEspansoId, setEventoEspansoId] = useState<string | null>(null);
   const [standEspansoId, setStandEspansoId] = useState<string | null>(null);
+  const [turniStandEspansoId, setTurniStandEspansoId] = useState<string | null>(null);
   const [mostraComparazioneModelli, setMostraComparazioneModelli] = useState<boolean>(false);
   const [eventoPerModificaStand, setEventoPerModificaStand] = useState<ProLocoEvento | null>(null);
+  const [tabInizialeModificaStand, setTabInizialeModificaStand] = useState<'bilancio' | 'turni'>('bilancio');
   const [eventoPresenze, setEventoPresenze] = useState<ProLocoEvento | null>(null);
   const [eventoStampaPresenze, setEventoStampaPresenze] = useState<ProLocoEvento | null>(null);
   const [vistaSezione, setVistaSezione] = useState<'manifestazioni' | 'presenze'>('manifestazioni');
@@ -214,7 +220,7 @@ export const EventList: React.FC<EventListProps> = ({
     });
   }, [eventi, filtri]);
 
-  // Statistiche sul gruppo di eventi filtrato per anno, con dettaglio spese
+  // Statistiche sul gruppo di eventi filtrato per anno, sincronizzate con il motore ufficiale di bilancio
   const stats = useMemo(() => {
     const dellAnno = filtri.anno === 'tutti' 
       ? eventi 
@@ -224,57 +230,28 @@ export const EventList: React.FC<EventListProps> = ({
     const inCorso = dellAnno.filter(e => e.stato === 'in_corso').length;
     const conclusi = dellAnno.filter(e => e.stato === 'concluso').length;
 
-    const totaleEntrate = dellAnno.reduce((acc, e) => acc + (e.entrateRealizzate || 0), 0);
-    const totaleEntratePreviste = dellAnno.reduce((acc, e) => acc + (e.entratePreviste ?? e.budgetPrevisto ?? 0), 0);
-    const totaleCosti = dellAnno.reduce((acc, e) => acc + (e.costiSostenuti || 0), 0);
-    const totaleBudgetPrevisto = dellAnno.reduce((acc, e) => acc + (e.budgetPrevisto || 0), 0);
-    const saldoNetto = totaleEntrate - totaleCosti;
+    const aggregato = aggregaEventiPerBilancio(dellAnno);
+    const totaleEntrate = aggregato.entrateCompetenzaProLoco;
+    const totaleEntratePreviste = aggregato.entratePrevisteProLoco;
+    const totaleCosti = aggregato.costiCompetenzaProLoco;
+    const totaleBudgetPrevisto = aggregato.budgetPrevistoProLoco;
+    const saldoNetto = aggregato.margineCompetenzaProLoco;
 
-    // Aggregazione spese per le 4 categorie
     const speseConsuntivoAggregate = {
-      food: 0,
-      intrattenimento: 0,
-      altreSpese: 0,
-      varie: 0
+      food: aggregato.food,
+      intrattenimento: aggregato.intrattenimento,
+      altreSpese: aggregato.altreSpese,
+      varie: aggregato.varie
     };
 
     const spesePreventivoAggregate = {
-      food: 0,
-      intrattenimento: 0,
-      altreSpese: 0,
-      varie: 0
+      food: aggregato.foodPrev,
+      intrattenimento: aggregato.intrattenimentoPrev,
+      altreSpese: aggregato.altreSpesePrev,
+      varie: aggregato.variePrev
     };
 
-    dellAnno.forEach(e => {
-      // Consuntivo
-      const cFood = e.speseConsuntivo?.food ?? Math.round((e.costiSostenuti || 0) * 0.50);
-      const cIntr = e.speseConsuntivo?.intrattenimento ?? Math.round((e.costiSostenuti || 0) * 0.25);
-      const cAltre = e.speseConsuntivo?.altreSpese ?? Math.round((e.costiSostenuti || 0) * 0.15);
-      const cVarie = e.speseConsuntivo?.varie ?? Math.round((e.costiSostenuti || 0) * 0.10);
-
-      speseConsuntivoAggregate.food += cFood;
-      speseConsuntivoAggregate.intrattenimento += cIntr;
-      speseConsuntivoAggregate.altreSpese += cAltre;
-      speseConsuntivoAggregate.varie += cVarie;
-
-      // Preventivo
-      const pFood = e.spesePreventivo?.food ?? Math.round((e.budgetPrevisto || 0) * 0.45);
-      const pIntr = e.spesePreventivo?.intrattenimento ?? Math.round((e.budgetPrevisto || 0) * 0.25);
-      const pAltre = e.spesePreventivo?.altreSpese ?? Math.round((e.budgetPrevisto || 0) * 0.20);
-      const pVarie = e.spesePreventivo?.varie ?? Math.round((e.budgetPrevisto || 0) * 0.10);
-
-      spesePreventivoAggregate.food += pFood;
-      spesePreventivoAggregate.intrattenimento += pIntr;
-      spesePreventivoAggregate.altreSpese += pAltre;
-      spesePreventivoAggregate.varie += pVarie;
-    });
-
-    const volontariUnici = new Set<string>();
-    dellAnno.forEach(e => {
-      e.volontariIds?.forEach(id => volontariUnici.add(id));
-    });
-
-    const diffAssolutaBudget = Math.abs(totaleCosti - totaleBudgetPrevisto);
+    const diffAssolutaBudget = aggregato.differenzaCosti;
     const isRisparmioGlobale = totaleCosti <= totaleBudgetPrevisto;
 
     return {
@@ -291,7 +268,7 @@ export const EventList: React.FC<EventListProps> = ({
       saldoNetto,
       speseConsuntivoAggregate,
       spesePreventivoAggregate,
-      volontariMobilitati: volontariUnici.size
+      volontariMobilitati: aggregato.volontariUniciCount
     };
   }, [eventi, filtri.anno]);
 
@@ -400,6 +377,101 @@ export const EventList: React.FC<EventListProps> = ({
 
       {vistaSezione === 'manifestazioni' ? (
         <>
+          {/* ASSETTO ORGANIZZATIVO EVENTI SEZIONATO IN 5 STEP SEQUENZIALI */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-emerald-200/90 shadow-xs space-y-3.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <span className="px-2.5 py-1 rounded-full text-[10.5px] font-black uppercase tracking-wider bg-emerald-800 text-white">
+                  Punto 1.2 • Assetto Organizzativo Eventi a Step
+                </span>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">
+                    Inserimento e Gestione Manifestazioni in 5 Step Sequenziali
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Ogni evento segue una sequenza guidata: 1. Identità & Modello → 2. Bilancio 4 Voci → 3. Squadra Soci (da 1.1) → 4. Stand & Turni → 5. Permessi & Stampa.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onNuovoEvento}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-2xs transition cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Avvia Inserimento Evento in Sequenza (Step 1 → 5)</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+              <div
+                onClick={onNuovoEvento}
+                className="p-2.5 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200 transition cursor-pointer"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-emerald-700 text-white">Step 1</span>
+                  <span className="text-[10px] font-bold text-emerald-800">{stats.totale} eventi</span>
+                </div>
+                <div className="text-xs font-extrabold text-slate-900">1. Dati, Date & Modello</div>
+                <p className="text-[10px] text-slate-600 mt-0.5">Titolo, date, luogo, locandina e scelta modello (Nativo/Ibrido/Terzi).</p>
+              </div>
+
+              <div
+                onClick={() => setMostraComparazioneModelli(true)}
+                className="p-2.5 rounded-xl bg-teal-50/70 hover:bg-teal-100/70 border border-teal-200 transition cursor-pointer"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-teal-700 text-white">Step 2</span>
+                  <span className="text-[10px] font-mono font-bold text-teal-800">4 Voci Spesa</span>
+                </div>
+                <div className="text-xs font-extrabold text-slate-900">2. Quadro Economico</div>
+                <p className="text-[10px] text-slate-600 mt-0.5">Preventivo, Consuntivo e Differenza su Food, Musica, Logistica e Varie.</p>
+              </div>
+
+              <div
+                onClick={() => setVistaSezione('presenze')}
+                className="p-2.5 rounded-xl bg-sky-50/70 hover:bg-sky-100/70 border border-sky-200 transition cursor-pointer"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-sky-700 text-white">Step 3</span>
+                  <span className="text-[10px] font-bold text-sky-800">{stats.volontariMobilitati} soci</span>
+                </div>
+                <div className="text-xs font-extrabold text-slate-900">3. Squadra & Iscrizioni</div>
+                <p className="text-[10px] text-slate-600 mt-0.5">Convocazione soci volontari dall'Albo 1.1, iscrizioni e registro presenze.</p>
+              </div>
+
+              <div
+                onClick={() => {
+                  if (eventiFiltrati[0]) {
+                    setTabInizialeModificaStand('turni');
+                    setEventoPerModificaStand(eventiFiltrati[0]);
+                  }
+                }}
+                className="p-2.5 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/70 border border-indigo-200 transition cursor-pointer"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-indigo-700 text-white">Step 4</span>
+                  <span className="text-[10px] font-bold text-indigo-800">Turni Stand</span>
+                </div>
+                <div className="text-xs font-extrabold text-slate-900">4. Stand & Turni in Sequenza</div>
+                <p className="text-[10px] text-slate-600 mt-0.5">Numerazione stand #1..N, incassi/spese stand e assegnazione turni volontari.</p>
+              </div>
+
+              <div
+                onClick={() => onStampaProgrammaEventi && onStampaProgrammaEventi()}
+                className="p-2.5 rounded-xl bg-amber-50/70 hover:bg-amber-100/70 border border-amber-200 transition cursor-pointer"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-amber-600 text-white">Step 5</span>
+                  <span className="text-[10px] font-bold text-amber-900">PDF A4</span>
+                </div>
+                <div className="text-xs font-extrabold text-slate-900">5. Permessi & Stampa</div>
+                <p className="text-[10px] text-slate-600 mt-0.5">Checklist Comune, SIAE, Safety, HACCP e stampa scheda ufficiale evento.</p>
+              </div>
+            </div>
+          </div>
+
           {/* Banner Gestione Effettiva 3 Modelli Evento: Nativo, Ibrido, Gestione & Stand Numerati */}
       <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 rounded-2xl p-4 sm:p-5 text-white border border-teal-500/40 shadow-sm space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -900,6 +972,71 @@ export const EventList: React.FC<EventListProps> = ({
                 {/* Corpo Scheda Evento */}
                 <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                   
+                  {/* Barra Sequenziale Operativa a 5 Step per Singolo Evento */}
+                  <div className="bg-emerald-50/60 p-2 rounded-xl border border-emerald-200/80">
+                    <div className="flex items-center justify-between mb-1.5 px-0.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900">
+                        Sequenza Organizzativa Evento (5 Step)
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-700">
+                        Clicca uno step per operare in sequenza
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onModificaEvento(evento)}
+                        className="p-1.5 rounded-lg bg-white hover:bg-emerald-50 border border-emerald-200 text-left transition cursor-pointer"
+                        title="Step 1: Modifica Dati, Date, Luogo e Modello"
+                      >
+                        <span className="block text-[9px] font-black text-emerald-700 uppercase">Step 1</span>
+                        <span className="block text-[10px] font-bold text-slate-800 truncate">Dati & Date</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEventoEspansoId(eventoEspansoId === evento.id ? null : evento.id)}
+                        className="p-1.5 rounded-lg bg-white hover:bg-teal-50 border border-teal-200 text-left transition cursor-pointer"
+                        title="Step 2: Quadro Economico e 4 Voci di Spesa"
+                      >
+                        <span className="block text-[9px] font-black text-teal-700 uppercase">Step 2</span>
+                        <span className="block text-[10px] font-bold text-slate-800 truncate">Bilancio 4V</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTabInizialeModificaStand('bilancio');
+                          setEventoPerModificaStand(evento);
+                        }}
+                        className="p-1.5 rounded-lg bg-white hover:bg-amber-50 border border-amber-200 text-left transition cursor-pointer"
+                        title="Step 3: Configura Stand Numerati #1..N e Bilancio Stand"
+                      >
+                        <span className="block text-[9px] font-black text-amber-700 uppercase">Step 3</span>
+                        <span className="block text-[10px] font-bold text-slate-800 truncate">Stand #{(evento.standNumerati || STAND_SIMULATI_DEFAULT).length}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTabInizialeModificaStand('turni');
+                          setEventoPerModificaStand(evento);
+                        }}
+                        className="p-1.5 rounded-lg bg-white hover:bg-indigo-50 border border-indigo-200 text-left transition cursor-pointer"
+                        title="Step 4: Assegna Turni e Mansioni per Ogni Stand"
+                      >
+                        <span className="block text-[9px] font-black text-indigo-700 uppercase">Step 4</span>
+                        <span className="block text-[10px] font-bold text-slate-800 truncate">Turni Stand</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEventoPresenze(evento)}
+                        className="p-1.5 rounded-lg bg-white hover:bg-sky-50 border border-sky-200 text-left transition cursor-pointer"
+                        title="Step 5: Iscrizioni Soci, Appello Presenze e Stampa"
+                      >
+                        <span className="block text-[9px] font-black text-sky-700 uppercase">Step 5</span>
+                        <span className="block text-[10px] font-bold text-slate-800 truncate">Presenze</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Descrizione */}
                   {evento.descrizione && (
                     <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
@@ -976,24 +1113,33 @@ export const EventList: React.FC<EventListProps> = ({
                     </button>
                   </div>
 
-                  {/* Sezione Stand Numerati con Tipologia, Riferimento Food ed Economia Analitica */}
+                  {/* Sezione Stand Numerati con Tipologia, Riferimento Food, Turni/Assegnazioni ed Economia Analitica */}
                   {(() => {
                     const stands: StandEvento[] = evento.standNumerati && evento.standNumerati.length > 0
                       ? evento.standNumerati
                       : STAND_SIMULATI_DEFAULT;
                     const isStandEspanso = standEspansoId === evento.id;
+                    const isTurniEspanso = turniStandEspansoId === evento.id;
                     const foodStandsCount = stands.filter(s => s.riferimentoFood).length;
 
-                    // Calcolo totali analitici degli stand
+                    // Calcolo totali analitici degli stand + turni
                     let totSpPrev = 0;
                     let totSpCons = 0;
                     let totIncPrev = 0;
                     let totIncCons = 0;
-                    stands.forEach(s => {
+                    let totTurniAss = 0;
+                    let totTurniRich = 0;
+                    stands.forEach((s, idx) => {
+                      const def = STAND_SIMULATI_DEFAULT[idx];
                       totSpPrev += Number(s.spesaPreventivo) || 0;
                       totSpCons += Number(s.spesaConsuntivo) || 0;
                       totIncPrev += Number(s.incassoPrevisto) || 0;
                       totIncCons += Number(s.incassoConsuntivo) || 0;
+                      const turni = Array.isArray(s.turniAssegnazioni) && s.turniAssegnazioni.length > 0
+                        ? s.turniAssegnazioni
+                        : (def?.turniAssegnazioni || []);
+                      totTurniAss += turni.length;
+                      totTurniRich += Number(s.volontariRichiesti ?? def?.volontariRichiesti ?? 3);
                     });
                     const diffSp = totSpCons - totSpPrev;
                     const diffInc = totIncCons - totIncPrev;
@@ -1004,27 +1150,54 @@ export const EventList: React.FC<EventListProps> = ({
                         
                         {/* Header Box Stand */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200/80">
-                          <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                            <Store className="w-4 h-4 text-amber-600" />
-                            <span>Stand Numerati ({stands.length} Totali • {foodStandsCount} Food & Beverage)</span>
-                          </span>
+                          <div>
+                            <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                              <Store className="w-4 h-4 text-amber-600" />
+                              <span>Stand Numerati ({stands.length} Stand • {totTurniAss}/{totTurniRich} Turni Assegnati)</span>
+                            </span>
+                            <span className="text-[10px] text-slate-500 block mt-0.5">
+                              Gestione bilancio per stand, turni orari, mansioni e assegnazione volontari
+                            </span>
+                          </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => setEventoPerModificaStand(evento)}
+                              onClick={() => {
+                                setTabInizialeModificaStand('turni');
+                                setEventoPerModificaStand(evento);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] transition-colors cursor-pointer shadow-2xs"
+                              title="Gestisci i turni orari, le mansioni e le assegnazioni dei soci volontari per ogni stand"
+                            >
+                              <Users className="w-3 h-3 text-indigo-100" />
+                              <span>Turni & Assegnazioni</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTabInizialeModificaStand('bilancio');
+                                setEventoPerModificaStand(evento);
+                              }}
                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px] transition-colors cursor-pointer border border-amber-300 shadow-2xs"
                               title="Inserisci o modifica i dati degli stand (numerazione, preventivo, consuntivo e differenze)"
                             >
                               <SlidersHorizontal className="w-3 h-3 text-amber-700" />
-                              <span>Gestisci Stand & Cifre</span>
+                              <span>Stand & Cifre</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTurniStandEspansoId(isTurniEspanso ? null : evento.id)}
+                              className="text-[10.5px] font-bold text-indigo-700 hover:text-indigo-900 underline cursor-pointer ml-1"
+                            >
+                              {isTurniEspanso ? 'Chiudi Turni' : 'Quadro Turni'}
                             </button>
                             <button
                               type="button"
                               onClick={() => setStandEspansoId(isStandEspanso ? null : evento.id)}
-                              className="text-[10.5px] font-semibold text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
+                              className="text-[10.5px] font-semibold text-emerald-700 hover:text-emerald-900 underline cursor-pointer ml-1"
                             >
-                              {isStandEspanso ? 'Comprimi Tabella' : 'Tabella Analitica'}
+                              {isStandEspanso ? 'Comprimi Cifre' : 'Tabella Cifre'}
                             </button>
                           </div>
                         </div>
@@ -1066,14 +1239,18 @@ export const EventList: React.FC<EventListProps> = ({
                           </div>
                         </div>
 
-                        {/* Griglia chip veloci degli stand numerati */}
+                        {/* Griglia chip veloci degli stand numerati con indicatore Turni & Assegnazioni */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                          {stands.map(st => {
+                          {stands.map((st, idx) => {
+                            const def = STAND_SIMULATI_DEFAULT[idx];
                             const spP = Number(st.spesaPreventivo) || 0;
                             const spC = Number(st.spesaConsuntivo) || 0;
-                            const inP = Number(st.incassoPrevisto) || 0;
                             const inC = Number(st.incassoConsuntivo) || 0;
                             const diffS = spC - spP;
+                            const turniSt = Array.isArray(st.turniAssegnazioni) && st.turniAssegnazioni.length > 0
+                              ? st.turniAssegnazioni
+                              : (def?.turniAssegnazioni || []);
+                            const richSt = Number(st.volontariRichiesti ?? def?.volontariRichiesti ?? 3);
 
                             return (
                               <div
@@ -1095,9 +1272,23 @@ export const EventList: React.FC<EventListProps> = ({
                                       {st.nome}
                                     </span>
                                   </div>
-                                  <span className="text-[9px] text-slate-500 block truncate">
-                                    {st.riferimentoFood ? 'Food & Beverage' : 'Servizi / No-Food'}
-                                  </span>
+                                  <div className="flex items-center justify-between gap-1 mt-0.5">
+                                    <span className="text-[9px] text-slate-500 truncate">
+                                      Ref: {st.responsabile || '—'}
+                                    </span>
+                                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold shrink-0 ${
+                                      turniSt.length >= richSt
+                                        ? 'bg-indigo-100 text-indigo-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      Turni {turniSt.length}/{richSt}
+                                    </span>
+                                  </div>
+                                  {turniSt.length > 0 && (
+                                    <div className="text-[9px] text-indigo-900/80 truncate mt-0.5 font-medium">
+                                      👥 {turniSt.map(t => (t.nomeVolontario || t.nominativo || 'Volontario').split(' ')[0]).join(', ')}
+                                    </div>
+                                  )}
                                   <div className="flex items-center justify-between text-[9.5px] font-mono text-slate-600 pt-1 mt-0.5 border-t border-slate-200/60">
                                     <span>Sp: <strong>{spC}€</strong> <span className={diffS <= 0 ? 'text-emerald-700' : 'text-rose-600'}>({diffS <= 0 ? `${diffS}€` : `+${diffS}€`})</span></span>
                                     <span className="text-emerald-800 font-bold">Inc: {inC}€</span>
@@ -1107,6 +1298,96 @@ export const EventList: React.FC<EventListProps> = ({
                             );
                           })}
                         </div>
+
+                        {/* Vista Espansa Turni & Assegnazioni per ogni Stand */}
+                        {isTurniEspanso && (
+                          <div className="pt-2 border-t border-indigo-200 space-y-2 animate-in fade-in duration-150">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[10.5px] font-bold text-indigo-950 flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Quadro Turni e Assegnazioni Volontari per Singolo Stand</span>
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => esportaTurniStandCSV(evento, stands)}
+                                  className="text-[10px] font-bold text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded cursor-pointer inline-flex items-center gap-1"
+                                >
+                                  <FileSpreadsheet className="w-3 h-3" />
+                                  <span>Esporta Turni CSV</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTabInizialeModificaStand('turni');
+                                    setEventoPerModificaStand(evento);
+                                  }}
+                                  className="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-0.5 rounded cursor-pointer"
+                                >
+                                  + Modifica / Assegna Turni
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {stands.map((st, idx) => {
+                                const def = STAND_SIMULATI_DEFAULT[idx];
+                                const turniSt = Array.isArray(st.turniAssegnazioni) && st.turniAssegnazioni.length > 0
+                                  ? st.turniAssegnazioni
+                                  : (def?.turniAssegnazioni || []);
+                                const orarioSt = st.orarioAperturaStand || def?.orarioAperturaStand || '18:30 - 23:30';
+                                const richSt = Number(st.volontariRichiesti ?? def?.volontariRichiesti ?? 3);
+
+                                return (
+                                  <div key={st.id || st.numero} className="bg-white rounded-lg border border-indigo-100 p-2.5 space-y-1.5 shadow-2xs">
+                                    <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="px-1.5 py-0.5 rounded bg-slate-900 text-white font-mono font-bold text-[10px]">
+                                          #{st.numero}
+                                        </span>
+                                        <span className="font-bold text-[11px] text-slate-900 truncate max-w-[150px]">
+                                          {st.nome}
+                                        </span>
+                                      </div>
+                                      <span className="text-[9.5px] font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                                        🕒 {orarioSt} ({turniSt.length}/{richSt})
+                                      </span>
+                                    </div>
+
+                                    {turniSt.length === 0 ? (
+                                      <p className="text-[10px] text-slate-400 italic py-1">
+                                        Nessun volontario assegnato a questo stand.
+                                      </p>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        {turniSt.map(t => {
+                                          const nomeV = t.nomeVolontario || t.nominativo || 'Volontario';
+                                          const mansV = (t.mansione || 'Operatore').split(' / ')[0];
+                                          const orarV = t.orarioSpecifico || (t.orarioInizio && t.orarioFine ? `${t.orarioInizio}-${t.orarioFine}` : '') || (t.fasciaOraria || '').split(' ')[0];
+                                          return (
+                                            <div key={t.id} className="flex items-center justify-between text-[10px] bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                                              <div className="min-w-0 pr-1">
+                                                <span className="font-bold text-slate-900">{nomeV}</span>
+                                                <span className="text-slate-400 mx-1">•</span>
+                                                <span className="text-indigo-700 font-semibold">{mansV}</span>
+                                              </div>
+                                              <div className="flex items-center gap-1 shrink-0">
+                                                <span className="font-mono text-[9.5px] text-slate-600">
+                                                  {orarV}
+                                                </span>
+                                                <span className={`w-2 h-2 rounded-full ${t.confermato ? 'bg-emerald-500' : 'bg-amber-500'}`} title={t.confermato ? 'Confermato' : 'In attesa'} />
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Vista Espansa: Tabella Analitica Completa degli Stand */}
                         {isStandEspanso && (
@@ -2224,13 +2505,18 @@ export const EventList: React.FC<EventListProps> = ({
         </div>
       )}
 
-      {/* Modale Dedicata per Gestione & Inserimento Dati Stand Numerati */}
+      {/* Modale Dedicata per Gestione & Inserimento Dati Stand Numerati e Turni */}
       {eventoPerModificaStand && (
         <EventStandsModal
           evento={eventoPerModificaStand}
           soci={soci}
+          initialTab={tabInizialeModificaStand}
           onSalva={(eventoAggiornato) => {
-            onModificaEvento(eventoAggiornato);
+            if (onAggiornaEvento) {
+              onAggiornaEvento(eventoAggiornato);
+            } else {
+              onModificaEvento(eventoAggiornato);
+            }
             setEventoPerModificaStand(null);
           }}
           onClose={() => setEventoPerModificaStand(null)}

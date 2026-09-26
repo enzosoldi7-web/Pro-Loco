@@ -13,6 +13,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { esportaElementoInPDF } from '../utils/pdfExport';
+import { calcolaEconomiaEvento, aggregaEventiPerBilancio } from '../utils/eventoHelpers';
 
 interface EventsProgramPrintModalProps {
   eventi: ProLocoEvento[];
@@ -44,20 +45,24 @@ export const EventsProgramPrintModal: React.FC<EventsProgramPrintModalProps> = (
     setGenerandoPDF(false);
   };
 
-  // Filtro eventi dell'anno
+  // Filtro eventi dell'anno (sincronizzato su dataInizio)
   const eventiAnno = eventi.filter(e => {
-    const annoEvento = new Date(e.data).getFullYear();
+    const dStr = e.dataInizio || (e as any).data || '';
+    const annoEvento = parseInt(dStr.slice(0, 4), 10) || new Date(dStr).getFullYear();
     return annoEvento === annoSelezionato;
-  }).sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
-
-  // Statistiche del programma
-  const totaleEventi = eventiAnno.length;
-  const volontariCoinvolti = new Set<string>();
-  eventiAnno.forEach(e => {
-    e.volontariIds?.forEach(id => volontariCoinvolti.add(id));
+  }).sort((a, b) => {
+    const dA = a.dataInizio || (a as any).data || '';
+    const dB = b.dataInizio || (b as any).data || '';
+    return dA.localeCompare(dB);
   });
 
-  const totaleBudgetPrevisto = eventiAnno.reduce((sum, e) => sum + (e.budgetPrevisto || 0), 0);
+  // Statistiche del programma sincronizzate con il motore di bilancio
+  const totaleEventi = eventiAnno.length;
+  const riepilogoEventi = aggregaEventiPerBilancio(eventiAnno);
+  const totaleBudgetPrevisto = riepilogoEventi.budgetPrevistoProLoco;
+  const totaleCostiConsuntivo = riepilogoEventi.costiCompetenzaProLoco;
+  const totaleEntrateRealizzate = riepilogoEventi.entrateCompetenzaProLoco;
+  const margineNettoProgramma = riepilogoEventi.margineCompetenzaProLoco;
 
   const dataStampa = new Date().toLocaleDateString('it-IT', {
     day: '2-digit',
@@ -174,18 +179,27 @@ export const EventsProgramPrintModal: React.FC<EventsProgramPrintModalProps> = (
             </div>
 
             {/* Sintesi Programmazione */}
-            <div className="grid grid-cols-3 gap-3 bg-teal-50/60 border border-teal-200/80 p-4 rounded-xl text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-teal-50/60 border border-teal-200/80 p-4 rounded-xl text-xs">
               <div className="border-r border-teal-200/80 pr-2">
                 <span className="text-teal-700 block text-[11px] font-medium">Iniziative in Calendario</span>
                 <span className="font-bold text-base text-teal-950">{totaleEventi} manifestazioni</span>
+                <span className="text-[10px] text-teal-700 block">{riepilogoEventi.totaleStands} stand • {riepilogoEventi.totaleTurniAssegnati} turni</span>
               </div>
               <div className="border-r border-teal-200/80 pr-2">
                 <span className="text-teal-700 block text-[11px] font-medium">Volontari Operativi Mobilitati</span>
-                <span className="font-bold text-base text-teal-950">{volontariCoinvolti.size} soci volontari</span>
+                <span className="font-bold text-base text-teal-950">{riepilogoEventi.volontariUniciCount} soci volontari</span>
+              </div>
+              <div className="border-r border-teal-200/80 pr-2">
+                <span className="text-teal-700 block text-[11px] font-medium">Budget Prev. / Spese Cons.</span>
+                <span className="font-bold text-sm text-teal-950 font-mono">
+                  {totaleBudgetPrevisto.toLocaleString('it-IT')} € / {totaleCostiConsuntivo.toLocaleString('it-IT')} €
+                </span>
               </div>
               <div>
-                <span className="text-teal-700 block text-[11px] font-medium">Stima Budget Investito</span>
-                <span className="font-bold text-base text-teal-950">{totaleBudgetPrevisto.toFixed(2)} €</span>
+                <span className="text-teal-700 block text-[11px] font-medium">Incassi / Margine Pro Loco</span>
+                <span className={`font-bold text-sm font-mono ${margineNettoProgramma >= 0 ? 'text-emerald-800' : 'text-rose-700'}`}>
+                  {totaleEntrateRealizzate.toLocaleString('it-IT')} € ({margineNettoProgramma >= 0 ? '+' : ''}{margineNettoProgramma.toLocaleString('it-IT')} €)
+                </span>
               </div>
             </div>
 
@@ -198,12 +212,16 @@ export const EventsProgramPrintModal: React.FC<EventsProgramPrintModalProps> = (
               <div className="space-y-4">
                 {eventiAnno.map((evento, index) => {
                   const resp = soci.find(s => s.id === evento.responsabileId);
-                  const dataFormattata = new Date(evento.data).toLocaleDateString('it-IT', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                  });
+                  const econ = calcolaEconomiaEvento(evento);
+                  const dInizio = evento.dataInizio || (evento as any).data || '';
+                  const dataFormattata = dInizio
+                    ? new Date(dInizio).toLocaleDateString('it-IT', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric'
+                      })
+                    : 'Data da definire';
 
                   return (
                     <div 
@@ -218,6 +236,9 @@ export const EventsProgramPrintModal: React.FC<EventsProgramPrintModalProps> = (
                           <h3 className="text-sm font-bold text-slate-900">
                             {evento.titolo}
                           </h3>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            {econ.etichettaTipo}
+                          </span>
                         </div>
                         <div className="flex items-center gap-2 text-xs">
                           <span className="px-2.5 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700 text-[10.5px]">
@@ -253,11 +274,10 @@ export const EventsProgramPrintModal: React.FC<EventsProgramPrintModalProps> = (
                         </p>
                       )}
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 pt-1">
-                        <span>Volontari assegnati: <strong>{evento.volontariIds?.length || 0}</strong></span>
-                        {evento.budgetPrevisto ? (
-                          <span>Budget preventivo: <strong>{Number(evento.budgetPrevisto).toFixed(2)} €</strong></span>
-                        ) : null}
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 pt-1 border-t border-slate-100">
+                        <span>Volontari mobilitati: <strong>{econ.volontariUniciIds.length}</strong> ({econ.numeroStands} stand • {econ.numeroTurniAssegnati} turni)</span>
+                        <span>Preventivo: <strong>{econ.costiProLocoPreventivo.toLocaleString('it-IT')} €</strong> • Consuntivo: <strong>{econ.costiProLocoConsuntivo.toLocaleString('it-IT')} €</strong></span>
+                        <span>Incassi: <strong>{econ.entrateProLocoRealizzate.toLocaleString('it-IT')} €</strong> (<strong className={econ.margineNettoProLoco >= 0 ? 'text-emerald-700' : 'text-rose-700'}>{econ.margineNettoProLoco >= 0 ? '+' : ''}{econ.margineNettoProLoco.toLocaleString('it-IT')} €</strong>)</span>
                         <span>Stato: <strong className="uppercase">{evento.stato.replace('_', ' ')}</strong></span>
                       </div>
                     </div>

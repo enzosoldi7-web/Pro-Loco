@@ -146,6 +146,22 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
     }
   }, [socioAttivo]);
 
+  // Controllo automatico parametri URL per login diretto (da link inviato al socio)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tesseraUrl = params.get('tessera') || params.get('cf');
+    if (tesseraUrl && soci.length > 0) {
+      const trovato = soci.find(s => 
+        s.numeroTessera.toUpperCase() === tesseraUrl.toUpperCase() || 
+        s.codiceFiscale.toUpperCase() === tesseraUrl.toUpperCase()
+      );
+      if (trovato && socioIdAttivo !== trovato.id) {
+        setSocioIdAttivo(trovato.id);
+        saveSessioneSocioId(trovato.id);
+      }
+    }
+  }, [soci, socioIdAttivo]);
+
   // Gestione Login Socio
   const handleLogin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();

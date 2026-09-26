@@ -99,6 +99,7 @@ export function calcolaScadenzaQuota(anno: number, socio?: Socio, dataRiferiment
 export function getSociNonRinnovati(soci: Socio[], anno: number, config: ProLocoInfo): DettaglioSocioRinnovo[] {
   return soci
     .filter(s => {
+      if (s.dataCancellazione) return false;
       if (s.attivo === false) return false;
       if (s.categoria === 'Onorario') return false; // Onorari esenti
       const stato = getStatoQuotaSocio(s, anno);
@@ -223,3 +224,50 @@ export function compilaTemplatePromemoria(
     .replace(/\{TELEFONO\}/g, config.telefono || '')
     .replace(/\{NOME_PRESIDENTE\}/g, config.nomePresidente || 'Il Presidente');
 }
+
+export interface RiepilogoQuoteSoci {
+  totaleSociAttivi: number;
+  sociInRegolaCount: number;
+  sociDaRinnovareCount: number;
+  sociScadutiCount: number;
+  incassoTotaleAnno: number;
+  incassoPotenzialeMancante: number;
+}
+
+export function calcolaRiepilogoQuoteSoci(
+  soci: Socio[],
+  anno: number,
+  config: ProLocoInfo
+): RiepilogoQuoteSoci {
+  const sociAttivi = soci.filter(s => !s.dataCancellazione);
+  let sociInRegolaCount = 0;
+  let sociDaRinnovareCount = 0;
+  let sociScadutiCount = 0;
+  let incassoTotaleAnno = 0;
+
+  sociAttivi.forEach(s => {
+    const stato = getStatoQuotaSocio(s, anno);
+    if (stato === 'in_regola') sociInRegolaCount++;
+    else if (stato === 'da_rinnovare') sociDaRinnovareCount++;
+    else sociScadutiCount++;
+
+    (s.quote || []).forEach(q => {
+      if (q.anno === anno) {
+        incassoTotaleAnno += Number(q.importo) || 0;
+      }
+    });
+  });
+
+  const nonRinnovati = getSociNonRinnovati(sociAttivi, anno, config);
+  const incassoPotenzialeMancante = nonRinnovati.reduce((sum, d) => sum + d.importoDovuto, 0);
+
+  return {
+    totaleSociAttivi: sociAttivi.length,
+    sociInRegolaCount,
+    sociDaRinnovareCount,
+    sociScadutiCount,
+    incassoTotaleAnno,
+    incassoPotenzialeMancante
+  };
+}
+

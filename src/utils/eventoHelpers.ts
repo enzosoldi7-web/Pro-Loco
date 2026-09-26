@@ -19,12 +19,29 @@ export interface EconomiaEventoCalcolata {
   altreSpese: number;
   varie: number;
 
+  // Dettaglio analitico delle 4 voci preventivo lordo
+  foodPrev: number;
+  intrattenimentoPrev: number;
+  altreSpesePrev: number;
+  variePrev: number;
+
   // 2. GESTIONE ECONOMICA SPECIFICA: COMPETENZA PRO LOCO (IMPATTO DIRETTO SUL BILANCIO)
   costiProLocoPreventivo: number;
   costiProLocoConsuntivo: number;
   entrateProLocoPreviste: number;
   entrateProLocoRealizzate: number;
   margineNettoProLoco: number;
+
+  // Alias compatibilità per riepiloghi e modali
+  totaleCostiConsuntivo: number;
+  totaleEntrateConsuntivo: number;
+  avanzoDisavanzoConsuntivo: number;
+
+  // Stand e Turni operativi
+  numeroStands: number;
+  numeroTurniAssegnati: number;
+  numeroTurniConfermati: number;
+  volontariUniciIds: string[];
 
   // Dettagli specifici per Evento Ibrido
   partnerNome?: string;
@@ -168,6 +185,21 @@ export function calcolaEconomiaEvento(evento: ProLocoEvento): EconomiaEventoCalc
 
   const margineNettoProLoco = entrateProLocoRealizzate - costiProLocoConsuntivo;
 
+  // Stand, turni e volontari unici (includendo sia volontariIds che soci assegnati agli stand)
+  const stands = evento.standNumerati || [];
+  const volontariSet = new Set<string>(evento.volontariIds || []);
+  let numeroTurniAssegnati = 0;
+  let numeroTurniConfermati = 0;
+
+  stands.forEach(st => {
+    const turni = st.turniAssegnazioni || [];
+    numeroTurniAssegnati += turni.length;
+    numeroTurniConfermati += turni.filter(t => t.confermato).length;
+    turni.forEach(t => {
+      if (t.socioId) volontariSet.add(t.socioId);
+    });
+  });
+
   return {
     tipo,
     etichettaTipo: infoTipo.etichetta,
@@ -185,11 +217,25 @@ export function calcolaEconomiaEvento(evento: ProLocoEvento): EconomiaEventoCalc
     altreSpese,
     varie,
 
+    foodPrev,
+    intrattenimentoPrev: intrPrev,
+    altreSpesePrev: altrePrev,
+    variePrev,
+
     costiProLocoPreventivo,
     costiProLocoConsuntivo,
     entrateProLocoPreviste,
     entrateProLocoRealizzate,
     margineNettoProLoco,
+
+    totaleCostiConsuntivo: costiProLocoConsuntivo,
+    totaleEntrateConsuntivo: entrateProLocoRealizzate,
+    avanzoDisavanzoConsuntivo: margineNettoProLoco,
+
+    numeroStands: stands.length,
+    numeroTurniAssegnati,
+    numeroTurniConfermati,
+    volontariUniciIds: Array.from(volontariSet),
 
     partnerNome: evento.partnerIbridoNome,
     percSpeseProLoco,
@@ -221,7 +267,17 @@ export function aggregaEventiPerBilancio(eventi: ProLocoEvento[]) {
   let intrattenimentoTotale = 0;
   let altreSpeseTotale = 0;
   let varieTotale = 0;
+
+  let foodPrevTotale = 0;
+  let intrattenimentoPrevTotale = 0;
+  let altreSpesePrevTotale = 0;
+  let variePrevTotale = 0;
+
   let partecipantiStimati = 0;
+  let totaleStands = 0;
+  let totaleTurniAssegnati = 0;
+  let totaleTurniConfermati = 0;
+  const volontariUniciGlobali = new Set<string>();
 
   // Suddivisione per tipologia
   const nativi = { count: 0, costiLordo: 0, entrateLordo: 0, costiProLoco: 0, entrateProLoco: 0, margineProLoco: 0 };
@@ -229,6 +285,7 @@ export function aggregaEventiPerBilancio(eventi: ProLocoEvento[]) {
   const gestione = { count: 0, costiLordo: 0, entrateLordo: 0, costiProLoco: 0, entrateProLoco: 0, margineProLoco: 0, compensoTotale: 0 };
 
   eventi.forEach(e => {
+    if (e.stato === 'annullato') return;
     const calc = calcolaEconomiaEvento(e);
 
     budgetPrevistoTotale += calc.costiTotaliPreventivo;
@@ -245,7 +302,17 @@ export function aggregaEventiPerBilancio(eventi: ProLocoEvento[]) {
     intrattenimentoTotale += calc.intrattenimento;
     altreSpeseTotale += calc.altreSpese;
     varieTotale += calc.varie;
+
+    foodPrevTotale += calc.foodPrev;
+    intrattenimentoPrevTotale += calc.intrattenimentoPrev;
+    altreSpesePrevTotale += calc.altreSpesePrev;
+    variePrevTotale += calc.variePrev;
+
     partecipantiStimati += e.partecipantiStimati || 0;
+    totaleStands += calc.numeroStands;
+    totaleTurniAssegnati += calc.numeroTurniAssegnati;
+    totaleTurniConfermati += calc.numeroTurniConfermati;
+    calc.volontariUniciIds.forEach(id => volontariUniciGlobali.add(id));
 
     if (calc.tipo === 'nativo') {
       nativi.count++;
@@ -310,7 +377,17 @@ export function aggregaEventiPerBilancio(eventi: ProLocoEvento[]) {
     intrattenimento: intrattenimentoTotale,
     altreSpese: altreSpeseTotale,
     varie: varieTotale,
+
+    foodPrev: foodPrevTotale,
+    intrattenimentoPrev: intrattenimentoPrevTotale,
+    altreSpesePrev: altreSpesePrevTotale,
+    variePrev: variePrevTotale,
+
     partecipantiStimati,
+    totaleStands,
+    totaleTurniAssegnati,
+    totaleTurniConfermati,
+    volontariUniciCount: volontariUniciGlobali.size,
 
     eventiNativiCount: nativi.count,
     eventiIbridiCount: ibridi.count,

@@ -77,6 +77,10 @@ export const DonazioniTerziView: React.FC<DonazioniTerziViewProps> = ({
 }) => {
   const [sottoScheda, setSottoScheda] = useState<SottoScheda>('elenco');
   const [filtroAnno, setFiltroAnno] = useState<number | 'tutti'>(annoSelezionato);
+
+  useEffect(() => {
+    setFiltroAnno(annoSelezionato);
+  }, [annoSelezionato]);
   const [ricerca, setRicerca] = useState<string>('');
   const [filtroTipo, setFiltroTipo] = useState<'tutti' | TipoDonatore>('tutti');
   const [filtroSoloDetraibili, setFiltroSoloDetraibili] = useState<boolean>(false);

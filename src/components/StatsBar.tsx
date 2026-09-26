@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Socio, ProLocoInfo } from '../types';
 import { getStatoQuotaSocio } from '../storage';
-import { calcolaScadenzaQuota, getSociNonRinnovati } from '../utils/quoteHelpers';
+import { calcolaScadenzaQuota, getSociNonRinnovati, calcolaRiepilogoQuoteSoci } from '../utils/quoteHelpers';
 import { PromemoriaRinnovoModal } from './PromemoriaRinnovoModal';
 import { 
   Users, 
@@ -32,39 +32,26 @@ export const StatsBar: React.FC<StatsBarProps> = ({
   onFiltraDaRinnovare
 }) => {
   const [mostraModalPromemoria, setMostraModalPromemoria] = useState<boolean>(false);
-  const totaleSoci = soci.length;
-  
-  let inRegola = 0;
-  let daRinnovare = 0;
-  let scadute = 0;
-  let incassoAnno = 0;
-  let numeroQuoteIncassate = 0;
+  const sociAttivi = useMemo(() => soci.filter(s => !s.dataCancellazione), [soci]);
+  const riepilogoQuote = useMemo(
+    () => calcolaRiepilogoQuoteSoci(sociAttivi, annoSelezionato, config),
+    [sociAttivi, annoSelezionato, config]
+  );
 
-  soci.forEach(socio => {
-    const stato = getStatoQuotaSocio(socio, annoSelezionato);
-    if (stato === 'in_regola') inRegola++;
-    else if (stato === 'da_rinnovare') daRinnovare++;
-    else scadute++;
-
-    const quoteAnno = socio.quote?.filter(q => q.anno === annoSelezionato) || [];
-    quoteAnno.forEach(q => {
-      incassoAnno += Number(q.importo) || 0;
-      numeroQuoteIncassate++;
-    });
-  });
-
-  const percentualeInRegola = totaleSoci > 0 ? Math.round((inRegola / totaleSoci) * 100) : 0;
+  const totaleSoci = riepilogoQuote.totaleSociAttivi;
+  const inRegola = riepilogoQuote.sociInRegola;
+  const incassoAnno = riepilogoQuote.incassoEffettivoAnno;
+  const numeroQuoteIncassate = riepilogoQuote.numeroQuoteIncassate;
+  const percentualeInRegola = riepilogoQuote.percentualeRegolarita;
 
   // Calcolo avanzato soci non rinnovati, quote da incassare e scadenza
   const sociNonRinnovati = useMemo(() => {
-    return getSociNonRinnovati(soci, annoSelezionato, config);
-  }, [soci, annoSelezionato, config]);
+    return getSociNonRinnovati(sociAttivi, annoSelezionato, config);
+  }, [sociAttivi, annoSelezionato, config]);
 
   const totaleNonRinnovati = sociNonRinnovati.length;
 
-  const totaleQuoteDaIncassare = useMemo(() => {
-    return sociNonRinnovati.reduce((acc, curr) => acc + curr.importoDovuto, 0);
-  }, [sociNonRinnovati]);
+  const totaleQuoteDaIncassare = riepilogoQuote.importoResiduoDaIncassare;
 
   const scadenza = useMemo(() => {
     return calcolaScadenzaQuota(annoSelezionato);

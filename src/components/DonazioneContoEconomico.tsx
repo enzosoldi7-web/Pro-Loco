@@ -34,8 +34,8 @@ export const DonazioneContoEconomico: React.FC<DonazioneContoEconomicoProps> = (
 }) => {
   const [modalitaStampa, setModalitaStampa] = useState<boolean>(false);
 
-  // Filtro donazioni per l'esercizio selezionato
-  const donazioniAnno = donazioni.filter(d => d.anno === annoSelezionato);
+  // Filtro donazioni per l'esercizio selezionato (escludendo revocate per ripensamento Punto 1.4)
+  const donazioniAnno = donazioni.filter(d => d.anno === annoSelezionato && d.stato !== 'annullata_ripensamento');
 
   // 1. C.1 Proventi da raccolte pubbliche occasionali di fondi
   const proventiRaccoltePubbliche = donazioniAnno

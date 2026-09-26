@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProLocoInfo, Socio, ProLocoEvento, SitoWebConfig, DonazioneTerzi, CampagnaRaccoltaFondi, EdizioneGiornalino } from '../types';
+import { ProLocoInfo, Socio, ProLocoEvento, SitoWebConfig, DonazioneTerzi, CampagnaRaccoltaFondi, EdizioneGiornalino, ComunicazioneSocio } from '../types';
 import { 
   Building2, 
   Calendar, 
@@ -38,6 +38,7 @@ interface HeaderProps {
   soci: Socio[];
   eventi: ProLocoEvento[];
   donazioni?: DonazioneTerzi[];
+  cestinoCount?: number;
   sitoConfig?: SitoWebConfig;
   tabAttivo: 'soci' | 'eventi' | 'bilancio' | 'conto_terzi' | 'portale' | 'cestino';
   annoSelezionato: number;
@@ -49,7 +50,7 @@ interface HeaderProps {
   onNuovoEvento?: () => void;
   onApriImpostazioni: () => void;
   onApriApkModal: () => void;
-  onImportaBackup: (dati: { soci: Socio[]; config: ProLocoInfo; eventi?: ProLocoEvento[]; donazioni?: DonazioneTerzi[]; campagne?: CampagnaRaccoltaFondi[]; sitoConfig?: SitoWebConfig; archivioGiornalini?: EdizioneGiornalino[] }) => void;
+  onImportaBackup: (dati: { soci: Socio[]; config: ProLocoInfo; eventi?: ProLocoEvento[]; donazioni?: DonazioneTerzi[]; campagne?: CampagnaRaccoltaFondi[]; sitoConfig?: SitoWebConfig; archivioGiornalini?: EdizioneGiornalino[]; comunicazioni?: ComunicazioneSocio[] }) => void;
   onRipristinaDemo: () => void;
   onApriStampaBilancio?: () => void;
   onApriStampaLibroSoci?: () => void;
@@ -65,6 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
   soci,
   eventi,
   donazioni,
+  cestinoCount = 0,
   sitoConfig,
   tabAttivo,
   annoSelezionato,
@@ -120,7 +122,8 @@ export const Header: React.FC<HeaderProps> = ({
             donazioni: parsed.donazioni && Array.isArray(parsed.donazioni) ? parsed.donazioni : undefined,
             campagne: parsed.campagne && Array.isArray(parsed.campagne) ? parsed.campagne : undefined,
             sitoConfig: parsed.sitoConfig || undefined,
-            archivioGiornalini: parsed.archivioGiornalini || undefined
+            archivioGiornalini: parsed.archivioGiornalini || undefined,
+            comunicazioni: parsed.comunicazioni && Array.isArray(parsed.comunicazioni) ? parsed.comunicazioni : undefined
           });
           setMostraMenuBackup(false);
         } else {
@@ -228,7 +231,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                   <button
                     onClick={() => {
-                      esportaBackupJSON(soci, config, eventi, donazioni);
+                      esportaBackupJSON(soci, config, eventi, donazioni, undefined, sitoConfig);
                       setMostraMenuBackup(false);
                     }}
                     className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 cursor-pointer"
@@ -248,7 +251,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </button>
                   <button
                     onClick={() => {
-                      esportaBilancioCompletoCSV(soci, eventi, config, annoSelezionato);
+                      esportaBilancioCompletoCSV(soci, eventi, config, annoSelezionato, donazioni);
                       setMostraMenuBackup(false);
                     }}
                     className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 cursor-pointer"
@@ -376,20 +379,6 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Area Riservata Soci */}
-            {onVaiPortaleSoci && (
-              <button
-                id="btn-portale-soci-header"
-                type="button"
-                onClick={onVaiPortaleSoci}
-                title="Accedi al Portale Web Riservato dei Soci (Tessere, Quote, Ricevute, Avvisi)"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-950 bg-emerald-100 hover:bg-emerald-200/90 border border-emerald-300 rounded-xl transition-all duration-150 shadow-2xs cursor-pointer"
-              >
-                <KeyRound className="w-3.5 h-3.5 text-emerald-800" />
-                <span className="hidden sm:inline">Area Soci</span>
-              </button>
-            )}
-
             {/* Impostazioni Pro Loco */}
             <button
               id="btn-impostazioni-proloco"
@@ -471,7 +460,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${
               tabAttivo === 'soci' ? 'bg-emerald-700 text-white' : 'bg-slate-200/80 text-slate-700'
             }`}>
-              {soci.length}
+              {soci.filter(s => !s.dataCancellazione).length}
             </span>
           </button>
 
@@ -489,7 +478,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${
               tabAttivo === 'eventi' ? 'bg-emerald-700 text-white' : 'bg-slate-200/80 text-slate-700'
             }`}>
-              {eventi.length}
+              {eventi.filter(e => e.dataInizio.startsWith(annoSelezionato.toString())).length}
             </span>
           </button>
 
@@ -507,7 +496,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
               tabAttivo === 'bilancio' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
             }`}>
-              Quote + Eventi
+              Anno {annoSelezionato}
             </span>
           </button>
 
@@ -523,10 +512,10 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <HeartHandshake className="w-4 h-4 text-emerald-600" />
             <span>1.4 Donazioni & Erogazioni Liberali</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${
               tabAttivo === 'conto_terzi' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
             }`}>
-              Art. 83 CTS
+              {(donazioni || []).filter(d => d.anno === annoSelezionato && d.stato !== 'annullata_ripensamento').length}
             </span>
           </button>
 
@@ -542,10 +531,10 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Trash2 className="w-4 h-4 text-rose-600" />
             <span>1.5 Cestino & Audit Log</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${
               tabAttivo === 'cestino' ? 'bg-rose-700 text-white' : 'bg-rose-100 text-rose-800'
             }`}>
-              Punto 1.4
+              {cestinoCount > 0 ? cestinoCount : 'Audit'}
             </span>
           </button>
         </div>
