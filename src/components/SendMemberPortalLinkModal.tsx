@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Socio, ProLocoInfo } from '../types';
 import {
   getStatoQuotaSocio,
   saveSessioneSocioId,
   saveBloccoPortaleSocio,
+  setTesseraSbloccataInSessione,
   buildSyncedMemberPortalUrl,
   syncDatabaseToServer
 } from '../storage';
@@ -44,35 +45,72 @@ export const SendMemberPortalLinkModal: React.FC<SendMemberPortalLinkModalProps>
   onApriPortaleComeSocio
 }) => {
   const [copiato, setCopiato] = useState(false);
+  const [copiatoTestoEmail, setCopiatoTestoEmail] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [mostraQrIngrandito, setMostraQrIngrandito] = useState(false);
 
-  if (!socio) return null;
+  const pinSocio = socio?.pin && socio.pin.trim() ? socio.pin.trim() : '1234';
 
-  // Costruzione del Link univoco e sincronizzato per l'accesso diretto del socio al Portale Web (con blocco navigazione indietro e dati socio sincronizzati)
-  const pinSocio = socio.pin && socio.pin.trim() ? socio.pin.trim() : '1234';
-  const linkPortaleSocio = buildSyncedMemberPortalUrl(socio, config, annoSelezionato, false);
-  const linkQrCompatto = buildSyncedMemberPortalUrl(socio, config, annoSelezionato, true);
+  const linkPortaleSocio = useMemo(() => {
+    if (!socio) return '';
+    return buildSyncedMemberPortalUrl(socio, config, annoSelezionato, true);
+  }, [
+    socio?.id,
+    socio?.numeroTessera,
+    socio?.pin,
+    socio?.nome,
+    socio?.cognome,
+    socio?.codiceFiscale,
+    config.nome,
+    annoSelezionato
+  ]);
 
-  // Sincronizza immediatamente il database col server quando viene preparato il link per il socio
+  const linkQrCompatto = linkPortaleSocio;
+
+  // Sincronizza il database col server una sola volta all'apertura della modale per questo socio
   useEffect(() => {
+    if (!socio?.id) return;
     syncDatabaseToServer();
-  }, [socio, config, annoSelezionato]);
+  }, [socio?.id]);
+
+  // Generazione del QR Code per scansione fisica con smartphone
+  useEffect(() => {
+    if (!linkQrCompatto) return;
+    let cancelled = false;
+    QRCode.toDataURL(linkQrCompatto, {
+      width: 260,
+      margin: 1,
+      color: {
+        dark: '#064e3b',
+        light: '#ffffff'
+      }
+    })
+      .then(url => {
+        if (!cancelled) setQrCodeUrl(url);
+      })
+      .catch(err => console.error('Errore generazione QR Code Portale Socio:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [linkQrCompatto]);
+
+  if (!socio) return null;
 
   // Testo precompilato cordiale per comunicazioni (WhatsApp, Email, SMS) con Numero Tessera e PIN di sblocco
   const messaggioCondivisione = `Gentile ${socio.nome}, ecco il tuo link personale per accedere all'Area Riservata Soci della ${config.nome}:
+
 ${linkPortaleSocio}
 
 CREDENZIALI DI SBLOCCO AREA RISERVATA:
-• Numero Tessera: ${socio.numeroTessera}
-• PIN di Sblocco: ${pinSocio}
+- Numero Tessera: ${socio.numeroTessera}
+- PIN di Sblocco: ${pinSocio}
 
-Inserisci il tuo PIN abbinato al numero tessera per sbloccare l'area riservata e consultare:
-• La tua Tessera Digitale (N° ${socio.numeroTessera}) con QR Code
-• Lo stato del tesseramento e le scadenze delle quote
-• Lo storico dei pagamenti e le ricevute ufficiali
-• Le comunicazioni e gli avvisi riservati del Direttivo
-• Il calendario degli eventi con eventuali sconti o agevolazioni riservate ai soci.
+Inserisci il tuo PIN (${pinSocio}) abbinato al numero tessera (${socio.numeroTessera}) per sbloccare l'area riservata e consultare:
+- La tua Tessera Digitale (N. ${socio.numeroTessera}) con QR Code
+- Lo stato del tesseramento e le scadenze delle quote
+- Lo storico dei pagamenti e le ricevute ufficiali
+- Le comunicazioni e gli avvisi riservati del Direttivo
+- Il calendario degli eventi con eventuali sconti o agevolazioni riservate ai soci.
 
 Buona navigazione!`;
 
@@ -84,26 +122,11 @@ Buona navigazione!`;
     : `https://api.whatsapp.com/send?text=${encodeURIComponent(messaggioCondivisione)}`;
 
   // Mailto link
-  const oggettoEmail = `Accesso Portale Web dei Soci - ${config.nome} (Tessera N° ${socio.numeroTessera})`;
+  const oggettoEmail = `Accesso Portale Web dei Soci - ${config.nome} (Tessera N. ${socio.numeroTessera})`;
   const mailtoUrl = `mailto:${encodeURIComponent(socio.email || '')}?subject=${encodeURIComponent(oggettoEmail)}&body=${encodeURIComponent(messaggioCondivisione)}`;
 
   // SMS link
   const smsUrl = `sms:${socio.telefono || ''}?body=${encodeURIComponent(messaggioCondivisione)}`;
-
-  // Generazione del QR Code per scansione fisica con smartphone
-  useEffect(() => {
-    if (!linkQrCompatto) return;
-    QRCode.toDataURL(linkQrCompatto, {
-      width: 260,
-      margin: 1,
-      color: {
-        dark: '#064e3b',
-        light: '#ffffff'
-      }
-    })
-      .then(url => setQrCodeUrl(url))
-      .catch(err => console.error('Errore generazione QR Code Portale Socio:', err));
-  }, [linkQrCompatto]);
 
   const handleCopiaLink = () => {
     syncDatabaseToServer();
@@ -113,15 +136,24 @@ Buona navigazione!`;
     });
   };
 
-  const handleTestAccesso = () => {
-    // Sincronizza e richiede lo sblocco tramite combinazione Numero Tessera (nel link) + PIN
+  const handleCopiaTestoEmail = () => {
     syncDatabaseToServer();
-    saveSessioneSocioId(null);
+    navigator.clipboard.writeText(messaggioCondivisione).then(() => {
+      setCopiatoTestoEmail(true);
+      setTimeout(() => setCopiatoTestoEmail(false), 2500);
+    });
+  };
+
+  const handleTestAccesso = () => {
+    // Apre il Portale Web come questo Socio in modalità ferma e blindata, senza cronologia di navigazione né ritorno alla dashboard
+    syncDatabaseToServer();
+    saveSessioneSocioId(socio.id);
+    setTesseraSbloccataInSessione(socio.numeroTessera);
     saveBloccoPortaleSocio(true);
     try {
-      const urlRelativo = linkPortaleSocio.replace(window.location.origin, '');
-      window.history.replaceState({ portaleSocioBlindato: true }, '', urlRelativo);
-      window.history.pushState({ portaleSocioBlindato: true }, '', urlRelativo);
+      if (linkPortaleSocio) {
+        window.history.replaceState({ portaleSociBloccato: true }, document.title, linkPortaleSocio);
+      }
     } catch {
       // ignore history errors
     }
@@ -312,8 +344,18 @@ Buona navigazione!`;
 
           {/* Sezione Canali di Invio Diretto */}
           <div className="space-y-2">
-            <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Canali Rapidi di Invio al Socio:
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Canali Rapidi di Invio al Socio:
+              </div>
+              <button
+                type="button"
+                onClick={handleCopiaTestoEmail}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-800 hover:text-teal-950 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-lg border border-teal-200 transition-colors cursor-pointer"
+              >
+                {copiatoTestoEmail ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : <Copy className="w-3.5 h-3.5 text-teal-700" />}
+                <span>{copiatoTestoEmail ? 'Testo Email + PIN Copiato!' : 'Copia Testo Invito Email + PIN'}</span>
+              </button>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -323,6 +365,7 @@ Buona navigazione!`;
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => syncDatabaseToServer()}
                 className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
                 title={socio.telefono ? `Invia messaggio WhatsApp a ${socio.telefono}` : 'Condividi su WhatsApp'}
               >
@@ -333,6 +376,7 @@ Buona navigazione!`;
               {/* Email */}
               <a
                 href={mailtoUrl}
+                onClick={() => syncDatabaseToServer()}
                 className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-xs transition-colors"
                 title={socio.email ? `Invia email a ${socio.email}` : 'Invia tramite client email'}
               >
@@ -343,6 +387,7 @@ Buona navigazione!`;
               {/* SMS per dispositivi mobili */}
               <a
                 href={smsUrl}
+                onClick={() => syncDatabaseToServer()}
                 className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow-xs transition-colors"
                 title="Invia SMS"
               >

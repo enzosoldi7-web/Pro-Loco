@@ -1361,7 +1361,7 @@ export function loadProLocoConfig(): ProLocoInfo {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CONFIG);
     if (!raw) {
-      saveProLocoConfig(DEFAULT_PRO_LOCO);
+      localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(DEFAULT_PRO_LOCO));
       return DEFAULT_PRO_LOCO;
     }
     return JSON.parse(raw);
@@ -1384,7 +1384,7 @@ export function loadSitoWebConfig(): SitoWebConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_SITO_WEB);
     if (!raw) {
-      saveSitoWebConfig(DEFAULT_SITO_WEB_CONFIG);
+      localStorage.setItem(STORAGE_KEY_SITO_WEB, JSON.stringify(DEFAULT_SITO_WEB_CONFIG));
       return DEFAULT_SITO_WEB_CONFIG;
     }
     const parsed = JSON.parse(raw);
@@ -1603,12 +1603,12 @@ export function loadArchivioGiornalini(): EdizioneGiornalino[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_ARCHIVIO_GIORNALINI);
     if (raw === null) {
-      saveArchivioGiornalini(INITIAL_ARCHIVIO_GIORNALINI);
+      localStorage.setItem(STORAGE_KEY_ARCHIVIO_GIORNALINI, JSON.stringify(INITIAL_ARCHIVIO_GIORNALINI));
       return INITIAL_ARCHIVIO_GIORNALINI;
     }
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      saveArchivioGiornalini(INITIAL_ARCHIVIO_GIORNALINI);
+      localStorage.setItem(STORAGE_KEY_ARCHIVIO_GIORNALINI, JSON.stringify(INITIAL_ARCHIVIO_GIORNALINI));
       return INITIAL_ARCHIVIO_GIORNALINI;
     }
     return parsed;
@@ -1779,12 +1779,12 @@ export function loadSoci(): Socio[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_SOCI);
     if (raw === null) {
-      saveSoci(defaultConPin);
+      localStorage.setItem(STORAGE_KEY_SOCI, JSON.stringify(defaultConPin));
       return defaultConPin;
     }
     const parsed: Socio[] = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      saveSoci(defaultConPin);
+      localStorage.setItem(STORAGE_KEY_SOCI, JSON.stringify(defaultConPin));
       return defaultConPin;
     }
     if (parsed.length === 0) {
@@ -1938,12 +1938,12 @@ export function loadEventi(): ProLocoEvento[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_EVENTI);
     if (raw === null) {
-      saveEventi(INITIAL_EVENTI);
+      localStorage.setItem(STORAGE_KEY_EVENTI, JSON.stringify(INITIAL_EVENTI));
       return INITIAL_EVENTI;
     }
     const parsed: ProLocoEvento[] = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      saveEventi(INITIAL_EVENTI);
+      localStorage.setItem(STORAGE_KEY_EVENTI, JSON.stringify(INITIAL_EVENTI));
       return INITIAL_EVENTI;
     }
     if (parsed.length === 0) {
@@ -2387,12 +2387,12 @@ export function loadDonazioni(): DonazioneTerzi[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_DONAZIONI);
     if (raw === null) {
-      saveDonazioni(INITIAL_DONAZIONI);
+      localStorage.setItem(STORAGE_KEY_DONAZIONI, JSON.stringify(INITIAL_DONAZIONI));
       return INITIAL_DONAZIONI;
     }
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      saveDonazioni(INITIAL_DONAZIONI);
+      localStorage.setItem(STORAGE_KEY_DONAZIONI, JSON.stringify(INITIAL_DONAZIONI));
       return INITIAL_DONAZIONI;
     }
     return parsed;
@@ -2415,12 +2415,12 @@ export function loadCampagneFondi(): CampagnaRaccoltaFondi[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CAMPAGNE_DONAZIONI);
     if (raw === null) {
-      saveCampagneFondi(INITIAL_CAMPAGNE_FONDI);
+      localStorage.setItem(STORAGE_KEY_CAMPAGNE_DONAZIONI, JSON.stringify(INITIAL_CAMPAGNE_FONDI));
       return INITIAL_CAMPAGNE_FONDI;
     }
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      saveCampagneFondi(INITIAL_CAMPAGNE_FONDI);
+      localStorage.setItem(STORAGE_KEY_CAMPAGNE_DONAZIONI, JSON.stringify(INITIAL_CAMPAGNE_FONDI));
       return INITIAL_CAMPAGNE_FONDI;
     }
     return parsed;
@@ -3298,7 +3298,7 @@ export function loadComunicazioniSoci(): ComunicazioneSocio[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_COMUNICAZIONI_SOCI);
     if (raw === null) {
-      saveComunicazioniSoci(INITIAL_COMUNICAZIONI_SOCI);
+      localStorage.setItem(STORAGE_KEY_COMUNICAZIONI_SOCI, JSON.stringify(INITIAL_COMUNICAZIONI_SOCI));
       return INITIAL_COMUNICAZIONI_SOCI;
     }
     const parsed = JSON.parse(raw);
@@ -3339,6 +3339,31 @@ export function saveSessioneSocioId(socioId: string | null): void {
 }
 
 const STORAGE_KEY_BLOCCO_PORTALE_SOCIO = 'proloco_blocco_portale_socio_v1';
+const STORAGE_KEY_URL_SYNCED_SOCIO = 'proloco_url_synced_socio_v1';
+const STORAGE_KEY_TESSERA_SBLOCCATA = 'proloco_tessera_sbloccata_v1';
+
+export function isTesseraSbloccataInSessione(numeroTessera?: string | null): boolean {
+  try {
+    if (typeof window === 'undefined' || !numeroTessera) return false;
+    const saved = sessionStorage.getItem(STORAGE_KEY_TESSERA_SBLOCCATA);
+    return Boolean(saved && saved.trim().toUpperCase() === numeroTessera.trim().toUpperCase());
+  } catch {
+    return false;
+  }
+}
+
+export function setTesseraSbloccataInSessione(numeroTessera: string | null): void {
+  try {
+    if (typeof window === 'undefined') return;
+    if (numeroTessera && numeroTessera.trim()) {
+      sessionStorage.setItem(STORAGE_KEY_TESSERA_SBLOCCATA, numeroTessera.trim().toUpperCase());
+    } else {
+      sessionStorage.removeItem(STORAGE_KEY_TESSERA_SBLOCCATA);
+    }
+  } catch {
+    // ignore
+  }
+}
 
 export function loadBloccoPortaleSocio(): boolean {
   try {
@@ -3350,7 +3375,9 @@ export function loadBloccoPortaleSocio(): boolean {
         params.get('portale') === 'soci' ||
         Boolean(params.get('tessera')) ||
         Boolean(params.get('cf')) ||
-        Boolean(params.get('blocco_socio'));
+        Boolean(params.get('barcode')) ||
+        Boolean(params.get('blocco_socio')) ||
+        Boolean(params.get('sync_socio'));
       if (hasUrlPortalParams) {
         sessionStorage.setItem(STORAGE_KEY_BLOCCO_PORTALE_SOCIO, '1');
         return true;
@@ -3369,6 +3396,26 @@ export function saveBloccoPortaleSocio(bloccato: boolean): void {
       sessionStorage.setItem(STORAGE_KEY_BLOCCO_PORTALE_SOCIO, '1');
     } else {
       sessionStorage.removeItem(STORAGE_KEY_BLOCCO_PORTALE_SOCIO);
+      sessionStorage.removeItem(STORAGE_KEY_TESSERA_SBLOCCATA);
+      if (typeof window !== 'undefined' && window.location.search) {
+        const params = new URLSearchParams(window.location.search);
+        params.delete('area_soci');
+        params.delete('portale_soci');
+        params.delete('portale');
+        params.delete('tessera');
+        params.delete('cf');
+        params.delete('barcode');
+        params.delete('pin');
+        params.delete('pk');
+        params.delete('auto');
+        params.delete('n');
+        params.delete('c');
+        params.delete('blocco_socio');
+        params.delete('sync_socio');
+        const remaining = params.toString();
+        const cleanUrl = remaining ? `${window.location.pathname}?${remaining}` : window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+      }
     }
   } catch (err) {
     console.error('Errore nel salvataggio del blocco portale socio:', err);
@@ -3417,9 +3464,9 @@ export interface PortalSyncPayload {
 }
 
 /**
- * Costruisce il link completo e sincronizzato per il Portale Web dei Soci,
- * includendo il record aggiornato del socio (con PIN, numero tessera, quote e anagrafica)
- * così che i dati coincidano al 100% tra Database, Link inviato e Sito Pubblicato.
+ * Costruisce il link completo, compatto e deterministico per il Portale Web dei Soci,
+ * posizionando Numero Tessera e Token PIN (`pk`) all'inizio dell'URL così da non essere
+ * mai troncati da client Email (mailto:, Gmail, Outlook, Libero) o SMS/WhatsApp.
  */
 export function buildSyncedMemberPortalUrl(
   socio: Socio,
@@ -3430,55 +3477,58 @@ export function buildSyncedMemberPortalUrl(
   if (typeof window === 'undefined') return '';
   const baseUrl = window.location.origin + window.location.pathname;
   const pinEffettivo = socio.pin && socio.pin.trim() ? socio.pin.trim() : '1234';
+  const pinToken = toBase64Url(pinEffettivo);
 
-  // Escludiamo solo foto base64 pesanti dal parametro URL per mantenere il link snello
-  const fotoLeggera =
-    socio.foto && !socio.foto.startsWith('data:') && socio.foto.length < 220
-      ? socio.foto
-      : undefined;
-
+  // Manteniamo il payload compatto e 100% deterministico (senza Date.now) per evitare loop di re-render
   const socioPerLink: Socio = {
-    ...socio,
+    id: socio.id,
+    numeroTessera: (socio.numeroTessera || '').trim().toUpperCase(),
     pin: pinEffettivo,
-    foto: perQrCompatto ? undefined : fotoLeggera,
-    quote: (socio.quote || []).slice(0, perQrCompatto ? 3 : 20)
+    nome: socio.nome || '',
+    cognome: socio.cognome || '',
+    codiceFiscale: socio.codiceFiscale || '',
+    dataNascita: socio.dataNascita || '',
+    luogoNascita: socio.luogoNascita || '',
+    indirizzo: perQrCompatto ? '' : (socio.indirizzo || ''),
+    cap: socio.cap || config.cap || '',
+    citta: socio.citta || config.comune || '',
+    provincia: socio.provincia || config.provincia || '',
+    telefono: socio.telefono || '',
+    email: socio.email || '',
+    categoria: socio.categoria || 'Ordinario',
+    ruoloDirettivo: socio.ruoloDirettivo || 'Nessuno',
+    dataIscrizione: socio.dataIscrizione || '2026-01-01',
+    attivo: socio.attivo !== false,
+    consensoPrivacy: socio.consensoPrivacy !== false,
+    quote: (socio.quote || []).slice(0, perQrCompatto ? 2 : 5)
   };
 
   const payload: PortalSyncPayload = {
     socio: socioPerLink,
     anno: annoSelezionato,
-    config: perQrCompatto
-      ? {
-          nome: config.nome,
-          comune: config.comune,
-          provincia: config.provincia,
-          codiceFiscale: config.codiceFiscale,
-          telefono: config.telefono,
-          email: config.email
-        }
-      : {
-          nome: config.nome,
-          comune: config.comune,
-          provincia: config.provincia,
-          codiceFiscale: config.codiceFiscale,
-          partitaIva: config.partitaIva,
-          indirizzo: config.indirizzo,
-          cap: config.cap,
-          telefono: config.telefono,
-          email: config.email,
-          nomePresidente: config.nomePresidente,
-          annoCorrente: config.annoCorrente,
-          quotaStandardOrdinario: config.quotaStandardOrdinario,
-          quotaStandardSostenitore: config.quotaStandardSostenitore,
-          quotaStandardGiovane: config.quotaStandardGiovane
-        },
-    ts: Date.now()
+    config: {
+      nome: config.nome,
+      comune: config.comune,
+      provincia: config.provincia,
+      codiceFiscale: config.codiceFiscale,
+      telefono: config.telefono,
+      email: config.email
+    }
   };
 
   const encoded = toBase64Url(JSON.stringify(payload));
   const params = new URLSearchParams();
+  // Parametri prioritari corti in testa all'URL (mai troncabili dai client email)
   params.set('area_soci', '1');
-  params.set('tessera', socio.numeroTessera);
+  params.set('tessera', (socio.numeroTessera || '').trim().toUpperCase());
+  if (pinToken) {
+    params.set('pk', pinToken);
+  }
+  params.set('n', (socio.nome || '').trim());
+  params.set('c', (socio.cognome || '').trim());
+  if (socio.codiceFiscale) {
+    params.set('cf', socio.codiceFiscale.trim().toUpperCase());
+  }
   params.set('blocco_socio', '1');
   if (encoded) {
     params.set('sync_socio', encoded);
@@ -3487,8 +3537,41 @@ export function buildSyncedMemberPortalUrl(
 }
 
 /**
- * Decodifica un eventuale payload `sync_socio` presente nell'URL o in una stringa scansionata da QR/Barcode
- * e aggiorna immediatamente il database locale affinché i dati coincidano al 100% col database.
+ * Estrae il PIN atteso dai parametri dell'URL (`pk` codificato o `pin` diretto) se presente.
+ */
+export function getPinFromUrlParams(rawUrlOrSearch?: string): string | null {
+  try {
+    const searchStr =
+      rawUrlOrSearch !== undefined
+        ? rawUrlOrSearch.includes('?')
+          ? rawUrlOrSearch.split('?')[1]
+          : rawUrlOrSearch
+        : typeof window !== 'undefined'
+        ? window.location.search
+        : '';
+    if (!searchStr) return null;
+    const params = new URLSearchParams(searchStr);
+    const directPin = params.get('pin');
+    if (directPin && directPin.trim()) {
+      return directPin.trim();
+    }
+    const pk = params.get('pk');
+    if (pk && pk.trim()) {
+      const decoded = fromBase64Url(pk.trim());
+      if (decoded && decoded.trim()) {
+        return decoded.trim();
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Decodifica un eventuale payload `sync_socio` (o i parametri rapidi `tessera` + `pk` + `n` + `c`)
+ * presenti nell'URL dell'invito email/WhatsApp o in una stringa scansionata da QR/Barcode
+ * e aggiorna immediatamente il database locale affinché i dati e il PIN coincidano al 100%.
  */
 export function applyUrlPortalSync(rawUrlOrSearch?: string): {
   socioSincronizzato: Socio | null;
@@ -3506,44 +3589,141 @@ export function applyUrlPortalSync(rawUrlOrSearch?: string): {
         : '';
 
     if (!searchStr) {
+      // Se c'è un socio precedentemente sincronizzato in questa sessione, mantienilo nel database locale
+      if (typeof window !== 'undefined') {
+        const cachedRaw = sessionStorage.getItem(STORAGE_KEY_URL_SYNCED_SOCIO);
+        if (cachedRaw) {
+          try {
+            const cachedSocio = JSON.parse(cachedRaw) as Socio;
+            if (cachedSocio && cachedSocio.numeroTessera) {
+              const sociAttuali = loadSoci();
+              const exists = sociAttuali.some(
+                s => s.id === cachedSocio.id || s.numeroTessera.trim().toUpperCase() === cachedSocio.numeroTessera.trim().toUpperCase()
+              );
+              if (!exists) {
+                localStorage.setItem(STORAGE_KEY_SOCI, JSON.stringify([cachedSocio, ...sociAttuali]));
+              }
+              return { socioSincronizzato: cachedSocio, configSincronizzata: null, annoSincronizzato: null };
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
       return { socioSincronizzato: null, configSincronizzata: null, annoSincronizzato: null };
     }
 
     const params = new URLSearchParams(searchStr);
     const encoded = params.get('sync_socio');
-    if (!encoded) {
-      return { socioSincronizzato: null, configSincronizzata: null, annoSincronizzato: null };
+    const pinFromUrl = getPinFromUrlParams(searchStr);
+    const tesseraParam = (params.get('tessera') || '').trim().toUpperCase();
+
+    let parsed: PortalSyncPayload | null = null;
+    if (encoded) {
+      const jsonStr = fromBase64Url(encoded.trim());
+      if (jsonStr) {
+        try {
+          parsed = JSON.parse(jsonStr) as PortalSyncPayload;
+        } catch {
+          parsed = null;
+        }
+      }
     }
 
-    const jsonStr = fromBase64Url(encoded);
-    if (!jsonStr) {
-      return { socioSincronizzato: null, configSincronizzata: null, annoSincronizzato: null };
-    }
-
-    const parsed = JSON.parse(jsonStr) as PortalSyncPayload;
-    if (!parsed || !parsed.socio || !parsed.socio.numeroTessera) {
-      return { socioSincronizzato: null, configSincronizzata: null, annoSincronizzato: null };
-    }
-
-    const socioIncoming: Socio = {
-      ...parsed.socio,
-      pin: parsed.socio.pin && parsed.socio.pin.trim() ? parsed.socio.pin.trim() : '1234'
-    };
-
-    // Sincronizza il socio nell'elenco soci locale preservando l'eventuale fototessera già presente
     const sociAttuali = loadSoci();
+    let socioIncoming: Socio | null = null;
+
+    if (parsed && parsed.socio && parsed.socio.numeroTessera) {
+      const pinRisolto =
+        (pinFromUrl && pinFromUrl.trim()) ||
+        (parsed.socio.pin && parsed.socio.pin.trim()) ||
+        '1234';
+      socioIncoming = {
+        ...parsed.socio,
+        numeroTessera: parsed.socio.numeroTessera.trim().toUpperCase(),
+        pin: pinRisolto
+      };
+    } else if (tesseraParam) {
+      // Fallback di sicurezza se il client email ha troncato la fine di sync_socio:
+      // ricostruisce o aggiorna il socio dai parametri corti in testa all'URL (tessera, pk, n, c, cf)
+      const esistente = sociAttuali.find(
+        s => s.numeroTessera.trim().toUpperCase() === tesseraParam
+      );
+      const pinRisolto =
+        (pinFromUrl && pinFromUrl.trim()) ||
+        (esistente?.pin && esistente.pin.trim()) ||
+        '1234';
+
+      if (esistente) {
+        socioIncoming = {
+          ...esistente,
+          pin: pinRisolto,
+          nome: params.get('n')?.trim() || esistente.nome,
+          cognome: params.get('c')?.trim() || esistente.cognome,
+          codiceFiscale: params.get('cf')?.trim().toUpperCase() || esistente.codiceFiscale
+        };
+      } else if (params.get('n') || params.get('c') || pinFromUrl) {
+        const cfg = loadProLocoConfig();
+        const annoCorr = new Date().getFullYear();
+        socioIncoming = {
+          id: `socio-url-${tesseraParam}`,
+          numeroTessera: tesseraParam,
+          pin: pinRisolto,
+          nome: params.get('n')?.trim() || 'Socio',
+          cognome: params.get('c')?.trim() || tesseraParam,
+          codiceFiscale: params.get('cf')?.trim().toUpperCase() || '',
+          dataNascita: '',
+          luogoNascita: '',
+          indirizzo: '',
+          cap: cfg.cap || '',
+          citta: cfg.comune || '',
+          provincia: cfg.provincia || '',
+          telefono: '',
+          email: '',
+          categoria: 'Ordinario',
+          ruoloDirettivo: 'Nessuno',
+          dataIscrizione: `${annoCorr}-01-01`,
+          attivo: true,
+          consensoPrivacy: true,
+          quote: [
+            {
+              id: `quota-url-${tesseraParam}-${annoCorr}`,
+              socioId: `socio-url-${tesseraParam}`,
+              anno: annoCorr,
+              importo: cfg.quotaStandardOrdinario || 15,
+              dataPagamento: new Date().toISOString().slice(0, 10),
+              dataScadenza: `${annoCorr}-12-31`,
+              metodo: 'Contanti',
+              ricevutaNumero: `REC-${annoCorr}/001`
+            }
+          ]
+        };
+      }
+    }
+
+    if (!socioIncoming) {
+      return { socioSincronizzato: null, configSincronizzata: null, annoSincronizzato: null };
+    }
+
+    // Sincronizza il socio nell'elenco soci locale preservando l'eventuale fototessera o quote complete già presenti
     const targetTesseraUpper = socioIncoming.numeroTessera.trim().toUpperCase();
     const idxEsistente = sociAttuali.findIndex(
-      s => s.id === socioIncoming.id || s.numeroTessera.trim().toUpperCase() === targetTesseraUpper
+      s => s.id === socioIncoming!.id || s.numeroTessera.trim().toUpperCase() === targetTesseraUpper
     );
 
     let socioFinale: Socio = socioIncoming;
     let nuovaListaSoci: Socio[];
     if (idxEsistente >= 0) {
+      const vecchio = sociAttuali[idxEsistente];
       socioFinale = {
-        ...sociAttuali[idxEsistente],
+        ...vecchio,
         ...socioIncoming,
-        foto: socioIncoming.foto || sociAttuali[idxEsistente].foto
+        pin: socioIncoming.pin || vecchio.pin || '1234',
+        foto: socioIncoming.foto || vecchio.foto,
+        quote:
+          socioIncoming.quote && socioIncoming.quote.length >= (vecchio.quote?.length || 0)
+            ? socioIncoming.quote
+            : vecchio.quote
       };
       nuovaListaSoci = sociAttuali.map((s, i) => (i === idxEsistente ? socioFinale : s));
     } else {
@@ -3551,9 +3731,16 @@ export function applyUrlPortalSync(rawUrlOrSearch?: string): {
     }
 
     localStorage.setItem(STORAGE_KEY_SOCI, JSON.stringify(nuovaListaSoci));
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(STORAGE_KEY_URL_SYNCED_SOCIO, JSON.stringify(socioFinale));
+      } catch {
+        // ignore
+      }
+    }
 
     let configFinale: ProLocoInfo | null = null;
-    if (parsed.config && parsed.config.nome) {
+    if (parsed?.config && parsed.config.nome) {
       const cfgAttuale = loadProLocoConfig();
       configFinale = {
         ...cfgAttuale,
@@ -3565,7 +3752,7 @@ export function applyUrlPortalSync(rawUrlOrSearch?: string): {
     return {
       socioSincronizzato: socioFinale,
       configSincronizzata: configFinale,
-      annoSincronizzato: parsed.anno || null
+      annoSincronizzato: parsed?.anno || null
     };
   } catch (err) {
     console.error('Errore decodifica payload sync_socio:', err);
@@ -3573,9 +3760,12 @@ export function applyUrlPortalSync(rawUrlOrSearch?: string): {
   }
 }
 
+let lastLocalWriteAt = 0;
+
 export function syncDatabaseToServer(partial?: Record<string, unknown>): void {
   if (typeof window === 'undefined') return;
   try {
+    lastLocalWriteAt = Date.now();
     const payload = partial || {
       azzerato: false,
       soci: loadSoci(),
@@ -3605,6 +3795,8 @@ export function syncDatabaseToServer(partial?: Record<string, unknown>): void {
 export function resetDatabaseOnServer(extra?: Record<string, unknown>): void {
   if (typeof window === 'undefined') return;
   try {
+    lastLocalWriteAt = Date.now();
+    sessionStorage.removeItem(STORAGE_KEY_URL_SYNCED_SOCIO);
     fetch('/api/db/reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3636,9 +3828,14 @@ export interface ServerDatabaseSnapshot {
 export async function fetchDatabaseFromServer(): Promise<ServerDatabaseSnapshot | null> {
   if (typeof window === 'undefined') return null;
   try {
+    const requestStartedAt = Date.now();
     const res = await fetch('/api/db', { cache: 'no-store' });
     if (!res.ok) return null;
     const data = await res.json();
+    // Se durante la richiesta di rete l'utente ha salvato modifiche locali più recenti, ignora la risposta obsoleta
+    if (lastLocalWriteAt > requestStartedAt) {
+      return null;
+    }
     if (!data || !data.db || typeof data.db !== 'object') return null;
     const db = data.db as ServerDatabaseSnapshot;
 
@@ -3646,6 +3843,11 @@ export async function fetchDatabaseFromServer(): Promise<ServerDatabaseSnapshot 
     if (db.soci === undefined && db.azzerato === undefined) {
       syncDatabaseToServer();
       return null;
+    }
+
+    // Se il database sul server è stato azzerato, pulisce anche la cache di sessione
+    if (db.azzerato === true) {
+      sessionStorage.removeItem(STORAGE_KEY_URL_SYNCED_SOCIO);
     }
 
     // Sincronizza il localStorage locale con i dati autorevoli del server
@@ -3683,8 +3885,10 @@ export async function fetchDatabaseFromServer(): Promise<ServerDatabaseSnapshot 
       localStorage.setItem(STORAGE_KEY_GIORNALINO, JSON.stringify(db.giornalinoConfig));
     }
 
-    // Applica eventuale payload sync_socio nell'URL sopra ai dati del server
-    applyUrlPortalSync();
+    // Applica eventuale payload sync_socio nell'URL sopra ai dati del server (solo se il database non è appena stato azzerato)
+    if (db.azzerato !== true) {
+      applyUrlPortalSync();
+    }
 
     return db;
   } catch {

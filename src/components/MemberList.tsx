@@ -494,9 +494,14 @@ export const MemberList: React.FC<MemberListProps> = ({
                       {/* Numero Tessera */}
                       <td className="py-3 px-4 font-mono font-bold text-emerald-800 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
-                          <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200/80 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={() => onVisualizzaTessera(socio)}
+                            title="Apri Tessera Digitale del Socio"
+                            className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 text-[11px] font-mono font-bold text-emerald-800 transition-colors cursor-pointer"
+                          >
                             {socio.numeroTessera}
-                          </span>
+                          </button>
                           {onInviaLinkPortale && (
                             <button
                               type="button"
@@ -797,6 +802,17 @@ export const MemberList: React.FC<MemberListProps> = ({
                     <CreditCard className="w-3.5 h-3.5" />
                     <span>Tessera</span>
                   </button>
+
+                  {onInviaLinkPortale && (
+                    <button
+                      type="button"
+                      onClick={() => onInviaLinkPortale(socio)}
+                      title={`Invia link Portale Web a ${socio.nome} ${socio.cognome}`}
+                      className="p-1.5 text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  )}
 
                   {/* Scheda Socio A4 / PDF */}
                   {onStampaSchedaSocio && (

@@ -52,6 +52,7 @@ import {
   saveSessioneSocioId,
   loadBloccoPortaleSocio,
   saveBloccoPortaleSocio,
+  isTesseraSbloccataInSessione,
   azzeraDatabase,
   getEmptySitoWebConfig,
   getEmptyGiornalinoConfig,
@@ -140,41 +141,58 @@ export default function App() {
   const [mostraStampaLibroSoci, setMostraStampaLibroSoci] = useState<boolean>(false);
   const [mostraStampaProgrammaEventi, setMostraStampaProgrammaEventi] = useState<boolean>(false);
 
-  // Sincronizzazione continua tra Database Server (/api/db), schede aperte (storage event) e Link Portale Soci
+  // Sincronizzazione continua automatica ogni 3 secondi tra Database Server (/api/db), schede aperte (storage event) e Link Portale Soci
   useEffect(() => {
     let active = true;
+    let isSyncing = false;
+
+    const aggiornaStatiSeCambiati = (configOverride?: ProLocoInfo | null) => {
+      const nuoviSoci = loadSoci();
+      const nuovaConfig = configOverride || loadProLocoConfig();
+      const nuoviEventi = loadEventi();
+      const nuoveDonazioni = loadDonazioni();
+      const nuovoCestino = loadCestino();
+      const nuovaSitoConfig = loadSitoWebConfig();
+      const nuovoArchivio = loadArchivioGiornalini();
+      const nuovaGiornalinoConfig = loadGiornalinoConfig();
+      const nuovoGiornalinoId = loadGiornalinoAttivoId();
+
+      setSoci(prev => (JSON.stringify(prev) === JSON.stringify(nuoviSoci) ? prev : nuoviSoci));
+      setConfig(prev => (JSON.stringify(prev) === JSON.stringify(nuovaConfig) ? prev : nuovaConfig));
+      setEventi(prev => (JSON.stringify(prev) === JSON.stringify(nuoviEventi) ? prev : nuoviEventi));
+      setDonazioni(prev => (JSON.stringify(prev) === JSON.stringify(nuoveDonazioni) ? prev : nuoveDonazioni));
+      setCestino(prev => (JSON.stringify(prev) === JSON.stringify(nuovoCestino) ? prev : nuovoCestino));
+      setSitoConfig(prev => (JSON.stringify(prev) === JSON.stringify(nuovaSitoConfig) ? prev : nuovaSitoConfig));
+      setArchivioGiornalini(prev => (JSON.stringify(prev) === JSON.stringify(nuovoArchivio) ? prev : nuovoArchivio));
+      setGiornalinoConfig(prev => (JSON.stringify(prev) === JSON.stringify(nuovaGiornalinoConfig) ? prev : nuovaGiornalinoConfig));
+      setGiornalinoAttivoId(prev => (prev === nuovoGiornalinoId ? prev : nuovoGiornalinoId));
+    };
 
     const sincronizzaDalServer = async () => {
-      const db = await fetchDatabaseFromServer();
-      if (!active || !db) return;
-
-      // Riapplica l'eventuale payload URL sync_socio sopra i dati del server così il link ha sempre il socio esatto
-      const urlSync = applyUrlPortalSync();
-
-      setSoci(loadSoci());
-      setConfig(urlSync.configSincronizzata || loadProLocoConfig());
-      setEventi(loadEventi());
-      setDonazioni(loadDonazioni());
-      setCestino(loadCestino());
-      setSitoConfig(loadSitoWebConfig());
-      setArchivioGiornalini(loadArchivioGiornalini());
-      setGiornalinoConfig(loadGiornalinoConfig());
-      setGiornalinoAttivoId(loadGiornalinoAttivoId());
+      if (isSyncing || !active) return;
+      isSyncing = true;
+      try {
+        const db = await fetchDatabaseFromServer();
+        if (!active) return;
+        if (db) {
+          const urlSync = db.azzerato === true ? { configSincronizzata: null } : applyUrlPortalSync();
+          aggiornaStatiSeCambiati(urlSync.configSincronizzata);
+        } else {
+          aggiornaStatiSeCambiati();
+        }
+      } finally {
+        isSyncing = false;
+      }
     };
 
     sincronizzaDalServer();
 
+    // Aggiornamento continuo automatico ogni 3 secondi (3000 ms)
+    const intervalId = window.setInterval(sincronizzaDalServer, 3000);
+
     const handleStorageChange = () => {
       if (!active) return;
-      setSoci(loadSoci());
-      setConfig(loadProLocoConfig());
-      setEventi(loadEventi());
-      setDonazioni(loadDonazioni());
-      setCestino(loadCestino());
-      setSitoConfig(loadSitoWebConfig());
-      setArchivioGiornalini(loadArchivioGiornalini());
-      setGiornalinoConfig(loadGiornalinoConfig());
-      setGiornalinoAttivoId(loadGiornalinoAttivoId());
+      aggiornaStatiSeCambiati();
     };
 
     const handleWindowFocus = () => {
@@ -186,13 +204,18 @@ export default function App() {
 
     return () => {
       active = false;
+      window.clearInterval(intervalId);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('focus', handleWindowFocus);
     };
   }, []);
 
-  // Controllo parametri URL (per link della tessera, lettura barcode/QR Code o accesso al Portale Soci: blocco totale senza ritorno indietro)
+  // Controllo parametri URL all'apertura (per link della tessera, lettura barcode/QR Code o accesso al Portale Soci: blocco totale senza ritorno indietro)
   useEffect(() => {
+    const urlSync = applyUrlPortalSync();
+    if (urlSync.socioSincronizzato) {
+      setSoci(loadSoci());
+    }
     const params = new URLSearchParams(window.location.search);
     const isAreaSoci =
       Boolean(params.get('area_soci')) ||
@@ -205,23 +228,13 @@ export default function App() {
     if (isAreaSoci || tesseraParam || loadBloccoPortaleSocio()) {
       saveBloccoPortaleSocio(true);
       setPaginaAttiva('portale_soci');
-      if (tesseraParam && soci.length > 0) {
-        const query = tesseraParam.trim().toUpperCase();
-        const pinParam = (params.get('pin') || '').trim();
-        const trovato = soci.find(
-          s =>
-            s.numeroTessera.trim().toUpperCase() === query ||
-            s.codiceFiscale.trim().toUpperCase() === query
-        );
-        if (trovato && pinParam && (trovato.pin || '1234').trim() === pinParam) {
-          saveSessioneSocioId(trovato.id);
-        } else if (tesseraParam) {
-          // Richiede sempre lo sblocco tramite combinazione Numero Tessera + PIN
-          saveSessioneSocioId(null);
-        }
+      const pinParam = (params.get('pin') || '').trim();
+      if (tesseraParam && !pinParam && !isTesseraSbloccataInSessione(tesseraParam)) {
+        // All'apertura iniziale del link richiede lo sblocco tramite combinazione Numero Tessera + PIN
+        saveSessioneSocioId(null);
       }
     }
-  }, [soci]);
+  }, []);
 
   // Handler salvataggio socio (creazione o modifica)
   const handleSalvaSocio = (socioAggiornato: Socio) => {
@@ -781,7 +794,14 @@ export default function App() {
           annoSelezionato={annoSelezionato}
           onAggiornaSocio={handleSalvaSocio}
           onAggiornaEvento={handleSalvaEvento}
-          onTornaAlSito={() => {}}
+          onTornaAlSito={() => {
+            saveBloccoPortaleSocio(false);
+            setPaginaAttiva('sitoweb');
+          }}
+          onVaiAlGestionale={() => {
+            saveBloccoPortaleSocio(false);
+            setPaginaAttiva('dashboard');
+          }}
         />
         <FullscreenFloatingControls
           isFullscreen={isFullscreen}
@@ -1083,6 +1103,7 @@ export default function App() {
             setSocioSchedaStampa(soci.find(s => s.id === socio.id) || socio);
           }}
           onInviaLinkPortale={(socio) => {
+            setSocioTessera(null);
             setSocioLinkPortale(soci.find(s => s.id === socio.id) || socio);
           }}
         />

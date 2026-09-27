@@ -1,22 +1,30 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_DIR = path.join(__dirname, '.data');
-const DB_FILE = path.join(DATA_DIR, 'proloco_db.json');
+let DATA_DIR = path.join(__dirname, '.data');
+let DB_FILE = path.join(DATA_DIR, 'proloco_db.json');
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch {
+    DATA_DIR = path.join(os.tmpdir(), 'proloco_data');
+    DB_FILE = path.join(DATA_DIR, 'proloco_db.json');
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
   }
 }
 
-function readDbFromDisk(): Record<string, unknown> | null {
+function readDbFromDisk() {
   try {
     ensureDataDir();
     if (!fs.existsSync(DB_FILE)) {
@@ -30,7 +38,7 @@ function readDbFromDisk(): Record<string, unknown> | null {
   }
 }
 
-function writeDbToDisk(data: Record<string, unknown>): void {
+function writeDbToDisk(data) {
   try {
     ensureDataDir();
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
@@ -41,7 +49,7 @@ function writeDbToDisk(data: Record<string, unknown>): void {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json({ limit: '25mb' }));
 
@@ -87,22 +95,29 @@ async function startServer() {
     res.json({ ok: true, db: resetState });
   });
 
-  if (process.env.NODE_ENV !== 'production') {
+  const distPath = path.join(__dirname, 'dist');
+  const hasBuiltDist = fs.existsSync(path.join(distPath, 'index.html'));
+  const isProduction =
+    process.env.NODE_ENV === 'production' ||
+    (process.env.NODE_ENV !== 'development' && hasBuiltDist);
+
+  if (!isProduction) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(__dirname, 'dist');
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, { index: false }));
     app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server Pro Loco avviato su http://0.0.0.0:${PORT}`);
+    console.log(`Server Pro Loco avviato su http://0.0.0.0:${PORT} (${isProduction ? 'production' : 'development'})`);
   });
 }
 

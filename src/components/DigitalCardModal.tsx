@@ -61,6 +61,7 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
 
   useEffect(() => {
     if (!socio) return;
+    let cancelled = false;
     syncDatabaseToServer();
     
     const portalLink = buildSyncedMemberPortalUrl(socio, config, annoSelezionato, true);
@@ -73,9 +74,15 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
         light: '#ffffff'
       }
     })
-      .then(url => setQrDataUrl(url))
+      .then(url => {
+        if (!cancelled) setQrDataUrl(url);
+      })
       .catch(err => console.error('Errore generazione QR Code:', err));
-  }, [socio, config, annoSelezionato]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [socio?.id, socio?.numeroTessera, socio?.pin, config.nome, annoSelezionato]);
 
   if (!socio) return null;
 

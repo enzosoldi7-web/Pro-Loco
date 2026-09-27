@@ -17,8 +17,11 @@ import {
   loadSessioneSocioId,
   saveSessioneSocioId,
   saveBloccoPortaleSocio,
+  isTesseraSbloccataInSessione,
+  setTesseraSbloccataInSessione,
   loadSoci,
   applyUrlPortalSync,
+  getPinFromUrlParams,
   fetchDatabaseFromServer,
   buildSyncedMemberPortalUrl
 } from '../storage';
@@ -61,7 +64,9 @@ import {
   Check,
   Percent,
   Megaphone,
-  UserCheck
+  UserCheck,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface MemberPortalViewProps {
@@ -90,8 +95,8 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
     const params = new URLSearchParams(window.location.search);
     const tesseraUrl = params.get('tessera') || params.get('cf') || params.get('barcode');
     const pinUrl = params.get('pin');
-    // Se il socio apre il link con il numero tessera ma non ha ancora inserito il PIN, richiede lo sblocco con PIN
-    if (tesseraUrl && !pinUrl) {
+    // Se il socio apre il link con il numero tessera ma non ha ancora sbloccato con il PIN in questa sessione
+    if (tesseraUrl && !pinUrl && !isTesseraSbloccataInSessione(tesseraUrl)) {
       return null;
     }
     return loadSessioneSocioId();
@@ -103,6 +108,7 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
     return (params.get('tessera') || params.get('cf') || params.get('barcode') || '').trim().toUpperCase();
   });
   const [inputPin, setInputPin] = useState<string>('');
+  const [mostraPin, setMostraPin] = useState<boolean>(false);
   const [erroreLogin, setErroreLogin] = useState<string | null>(null);
   
   // Tab attiva nel portale del socio
@@ -136,101 +142,88 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
     return daStorage || null;
   }, [socioIdAttivo, soci]);
 
-  // Sincronizzazione automatica comunicazioni e dati dal server/storage quando si apre il Portale Soci
+  // Sincronizzazione automatica continua ogni 3 secondi per comunicazioni e dati dal server/storage nel Portale Soci
   useEffect(() => {
     let mounted = true;
-    applyUrlPortalSync();
-    setComunicazioni(loadComunicazioniSoci());
-
-    fetchDatabaseFromServer().then(db => {
-      if (!mounted || !db) return;
-      applyUrlPortalSync();
-      setComunicazioni(loadComunicazioniSoci());
-    });
-
-    const onStorage = () => {
+    const aggiornaComunicazioni = () => {
       if (!mounted) return;
-      setComunicazioni(loadComunicazioniSoci());
+      const nuoveCom = loadComunicazioniSoci();
+      setComunicazioni(prev => (JSON.stringify(prev) === JSON.stringify(nuoveCom) ? prev : nuoveCom));
     };
-    window.addEventListener('storage', onStorage);
+
+    applyUrlPortalSync();
+    aggiornaComunicazioni();
+
+    const syncCycle = () => {
+      if (!mounted) return;
+      fetchDatabaseFromServer().then(db => {
+        if (!mounted) return;
+        if (db && db.azzerato !== true) {
+          applyUrlPortalSync();
+        }
+        aggiornaComunicazioni();
+      });
+    };
+
+    syncCycle();
+    const intervalId = window.setInterval(syncCycle, 3000);
+
+    window.addEventListener('storage', aggiornaComunicazioni);
     return () => {
       mounted = false;
-      window.removeEventListener('storage', onStorage);
+      window.clearInterval(intervalId);
+      window.removeEventListener('storage', aggiornaComunicazioni);
     };
-  }, [soci]);
+  }, []);
 
   // Genera QR code se socio loggato (con link diretto blindato e sincronizzato al portale socio)
   useEffect(() => {
-    if (socioAttivo) {
-      const linkBlindato = buildSyncedMemberPortalUrl(socioAttivo, config, annoSelezionato, true);
-      QRCode.toDataURL(linkBlindato, {
-        width: 180,
-        margin: 1,
-        color: { dark: '#064e3b', light: '#ffffff' }
+    if (!socioAttivo) return;
+    let cancelled = false;
+    const linkBlindato = buildSyncedMemberPortalUrl(socioAttivo, config, annoSelezionato, true);
+    QRCode.toDataURL(linkBlindato, {
+      width: 180,
+      margin: 1,
+      color: { dark: '#064e3b', light: '#ffffff' }
+    })
+      .then(url => {
+        if (!cancelled) setQrCodeDataUrl(url);
       })
-      .then(url => setQrCodeDataUrl(url))
       .catch(err => console.error('Errore generazione QR:', err));
-    }
-  }, [socioAttivo, config, annoSelezionato]);
+    return () => {
+      cancelled = true;
+    };
+  }, [socioAttivo?.id, socioAttivo?.numeroTessera, socioAttivo?.pin, config.nome, annoSelezionato]);
 
-  // Blocco totale navigazione indietro (History Trap + Tastiera + URL Blindato)
+  // Blocco permanente sul Portale Web dei Soci senza cronologia di navigazione indietro né ritorno alla dashboard
   useEffect(() => {
     saveBloccoPortaleSocio(true);
-
-    const costruisciUrlBlindato = () => {
-      const params = new URLSearchParams(window.location.search);
-      params.set('area_soci', '1');
-      params.set('blocco_socio', '1');
-      if (socioAttivo?.numeroTessera) {
-        params.set('tessera', socioAttivo.numeroTessera);
-      }
-      return `${window.location.pathname}?${params.toString()}`;
-    };
-
     try {
-      const targetUrl = costruisciUrlBlindato();
-      window.history.replaceState({ portaleSocioBlindato: true }, '', targetUrl);
-      for (let i = 0; i < 5; i++) {
-        window.history.pushState({ portaleSocioBlindato: true, step: i }, '', targetUrl);
+      const params = new URLSearchParams(window.location.search);
+      if (!params.get('area_soci')) {
+        params.set('area_soci', '1');
+        params.set('blocco_socio', '1');
       }
+      const lockedUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({ portaleSociBloccato: true }, document.title, lockedUrl);
+      window.history.pushState({ portaleSociBloccato: true }, document.title, lockedUrl);
+
+      const handlePopState = () => {
+        try {
+          window.history.pushState({ portaleSociBloccato: true }, document.title, window.location.href);
+        } catch {
+          // ignore
+        }
+      };
+
+      window.addEventListener('popstate', handlePopState);
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+      };
     } catch {
-      // ignore history errors
+      return undefined;
     }
-
-    const handlePopState = (e: PopStateEvent) => {
-      e.preventDefault();
-      try {
-        const targetUrl = costruisciUrlBlindato();
-        window.history.pushState({ portaleSocioBlindato: true }, '', targetUrl);
-      } catch {
-        // ignore
-      }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
-
-      if (
-        (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) ||
-        (e.metaKey && (e.key === '[' || e.key === ']' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) ||
-        e.key === 'BrowserBack' ||
-        e.key === 'BrowserForward' ||
-        (!isInput && e.key === 'Backspace')
-      ) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    window.addEventListener('keydown', handleKeyDown, { capture: true });
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('keydown', handleKeyDown, { capture: true });
-    };
-  }, [socioAttivo]);
+  }, []);
 
   // Prepara campi per modifica recapiti
   useEffect(() => {
@@ -241,21 +234,38 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
     }
   }, [socioAttivo]);
 
-  // Funzione universale per interpretare codice tessera, CF, URL o JSON letto da lettore Barcode / QR
+  // Funzione universale per interpretare codice tessera, CF, URL o JSON letto da lettore Barcode / QR / Link Email
   const trovaSocioDaCodiceOBarcode = (rawInput: string): Socio | undefined => {
     const pulito = rawInput.trim();
     if (!pulito) return undefined;
 
-    // Se l'input o l'URL contiene il payload sync_socio, applicalo subito
-    if (pulito.includes('sync_socio=')) {
+    // Sincronizza sempre eventuali parametri presenti nell'URL corrente dell'invito email
+    const currentUrlSync = applyUrlPortalSync();
+
+    // Se l'input stesso contiene il payload sync_socio o pk, applicalo subito
+    if (pulito.includes('sync_socio=') || pulito.includes('pk=')) {
       const syncRes = applyUrlPortalSync(pulito);
       if (syncRes.socioSincronizzato) {
         return syncRes.socioSincronizzato;
       }
     }
 
-    // Uniamo i soci nello stato con quelli eventualmente appena sincronizzati in storage
-    const elencoSoci = soci.length > 0 ? soci : loadSoci();
+    // Combina i soci dal database locale aggiornato, dal link sincronizzato e dallo stato React
+    const sociFreschi = loadSoci();
+    const elencoSoci: Socio[] = [];
+    if (currentUrlSync.socioSincronizzato) {
+      elencoSoci.push(currentUrlSync.socioSincronizzato);
+    }
+    sociFreschi.forEach(s => {
+      if (!elencoSoci.some(e => e.id === s.id || e.numeroTessera.trim().toUpperCase() === s.numeroTessera.trim().toUpperCase())) {
+        elencoSoci.push(s);
+      }
+    });
+    soci.forEach(s => {
+      if (!elencoSoci.some(e => e.id === s.id || e.numeroTessera.trim().toUpperCase() === s.numeroTessera.trim().toUpperCase())) {
+        elencoSoci.push(s);
+      }
+    });
 
     // 1. Se il barcode/QR contiene un URL con ?tessera=... o ?cf=...
     if (pulito.includes('tessera=') || pulito.includes('cf=')) {
@@ -265,17 +275,11 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
         const t = p.get('tessera') || p.get('cf');
         if (t) {
           const upperT = t.trim().toUpperCase();
-          const matchUrl =
-            elencoSoci.find(
-              s =>
-                s.numeroTessera.trim().toUpperCase() === upperT ||
-                s.codiceFiscale.trim().toUpperCase() === upperT
-            ) ||
-            loadSoci().find(
-              s =>
-                s.numeroTessera.trim().toUpperCase() === upperT ||
-                s.codiceFiscale.trim().toUpperCase() === upperT
-            );
+          const matchUrl = elencoSoci.find(
+            s =>
+              s.numeroTessera.trim().toUpperCase() === upperT ||
+              s.codiceFiscale.trim().toUpperCase() === upperT
+          );
           if (matchUrl) return matchUrl;
         }
       } catch {
@@ -303,19 +307,11 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
 
     // 3. Ricerca diretta esatta per Numero Tessera, Codice Fiscale o Email
     const query = pulito.toUpperCase();
-    return (
-      elencoSoci.find(
-        s =>
-          s.numeroTessera.trim().toUpperCase() === query ||
-          s.codiceFiscale.trim().toUpperCase() === query ||
-          (s.email && s.email.trim().toUpperCase() === query)
-      ) ||
-      loadSoci().find(
-        s =>
-          s.numeroTessera.trim().toUpperCase() === query ||
-          s.codiceFiscale.trim().toUpperCase() === query ||
-          (s.email && s.email.trim().toUpperCase() === query)
-      )
+    return elencoSoci.find(
+      s =>
+        s.numeroTessera.trim().toUpperCase() === query ||
+        (s.codiceFiscale && s.codiceFiscale.trim().toUpperCase() === query) ||
+        (s.email && s.email.trim().toUpperCase() === query)
     );
   };
 
@@ -328,33 +324,35 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
       params.get('cf') ||
       params.get('barcode') ||
       urlSync.socioSincronizzato?.numeroTessera;
-    const pinUrl = params.get('pin');
+    const pinEsplicitoUrl = params.get('pin');
 
     if (tesseraUrl) {
       const trovato = urlSync.socioSincronizzato || trovaSocioDaCodiceOBarcode(tesseraUrl);
       if (trovato) {
-        setInputIdentificativo(trovato.numeroTessera);
-        if (pinUrl) {
-          const pinAtteso = (trovato.pin || '1234').trim();
-          if (pinUrl.trim() === pinAtteso) {
+        setInputIdentificativo(prev => prev || trovato.numeroTessera);
+        if (pinEsplicitoUrl && !socioIdAttivo) {
+          const pinAtteso = (trovato.pin || getPinFromUrlParams() || '1234').trim();
+          if (pinEsplicitoUrl.trim().toUpperCase() === pinAtteso.toUpperCase()) {
             setSocioIdAttivo(trovato.id);
             saveSessioneSocioId(trovato.id);
+            setTesseraSbloccataInSessione(trovato.numeroTessera);
             saveBloccoPortaleSocio(true);
             setErroreLogin(null);
           } else {
             setSocioIdAttivo(null);
             saveSessioneSocioId(null);
+            setTesseraSbloccataInSessione(null);
             setErroreLogin('Errore di sblocco: il Numero della Tessera e il PIN non corrispondono. Verifica il PIN e riprova.');
           }
         }
       } else {
-        setInputIdentificativo(tesseraUrl.trim().toUpperCase());
+        setInputIdentificativo(prev => prev || tesseraUrl.trim().toUpperCase());
       }
     }
   }, [soci]);
 
-  // Gestione Sblocco Area Riservata Soci: verifica combinazione tra Numero Tessera e PIN personale registrato in Anagrafe
-  const handleLogin = (e?: React.FormEvent) => {
+  // Gestione Sblocco Area Riservata Soci: verifica combinazione tra Numero Tessera e PIN personale registrato in Anagrafe o nell'invito Email
+  const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErroreLogin(null);
 
@@ -371,17 +369,65 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
       return;
     }
 
-    const trovato = trovaSocioDaCodiceOBarcode(query);
-    const pinValido = trovato ? (trovato.pin || '1234').trim() : '';
+    const verificaCredenziali = (): Socio | null => {
+      const urlSync = applyUrlPortalSync();
+      const trovato = trovaSocioDaCodiceOBarcode(query);
+      if (!trovato) return null;
 
-    if (!trovato || pinInserito !== pinValido) {
-      setErroreLogin('Accesso negato: il Numero della Tessera e il PIN inseriti non corrispondono. Verifica i dati comunicati dalla segreteria e riprova.');
+      const pinsValidi = new Set<string>();
+      if (trovato.pin && trovato.pin.trim()) {
+        pinsValidi.add(trovato.pin.trim().toUpperCase());
+      } else {
+        pinsValidi.add('1234');
+      }
+
+      // Aggiunge eventuale PIN sincronizzato nel link di invito email per questa tessera
+      if (
+        urlSync.socioSincronizzato &&
+        urlSync.socioSincronizzato.numeroTessera.trim().toUpperCase() === trovato.numeroTessera.trim().toUpperCase() &&
+        urlSync.socioSincronizzato.pin
+      ) {
+        pinsValidi.add(urlSync.socioSincronizzato.pin.trim().toUpperCase());
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const tesseraInUrl = (params.get('tessera') || '').trim().toUpperCase();
+      const pinDaUrl = getPinFromUrlParams();
+      if (pinDaUrl && (!tesseraInUrl || tesseraInUrl === trovato.numeroTessera.trim().toUpperCase())) {
+        pinsValidi.add(pinDaUrl.trim().toUpperCase());
+      }
+
+      // Controlla anche nel database locale aggiornato
+      const daStorage = loadSoci().find(
+        s => s.numeroTessera.trim().toUpperCase() === trovato.numeroTessera.trim().toUpperCase()
+      );
+      if (daStorage?.pin && daStorage.pin.trim()) {
+        pinsValidi.add(daStorage.pin.trim().toUpperCase());
+      }
+
+      if (pinsValidi.has(pinInserito.toUpperCase())) {
+        return daStorage || trovato;
+      }
+      return null;
+    };
+
+    let socioAutenticato = verificaCredenziali();
+
+    // Se non trovato o PIN aggiornato di recente sul gestionale, sincronizza dal database server e riprova
+    if (!socioAutenticato) {
+      await fetchDatabaseFromServer();
+      socioAutenticato = verificaCredenziali();
+    }
+
+    if (!socioAutenticato) {
+      setErroreLogin('Accesso negato: il Numero della Tessera e il PIN inseriti non corrispondono. Verifica il PIN ricevuto nell\'invito email e riprova.');
       return;
     }
 
     // Combinazione Numero Tessera + PIN verificata con successo: sblocca l'Area Riservata Soci
-    setSocioIdAttivo(trovato.id);
-    saveSessioneSocioId(trovato.id);
+    setSocioIdAttivo(socioAutenticato.id);
+    saveSessioneSocioId(socioAutenticato.id);
+    setTesseraSbloccataInSessione(socioAutenticato.numeroTessera);
     saveBloccoPortaleSocio(true);
     setInputPin('');
   };
@@ -390,6 +436,7 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
   const handleLoginRapido = (socioTarget: Socio) => {
     setSocioIdAttivo(socioTarget.id);
     saveSessioneSocioId(socioTarget.id);
+    setTesseraSbloccataInSessione(socioTarget.numeroTessera);
     setErroreLogin(null);
   };
 
@@ -397,6 +444,7 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
   const handleLogout = () => {
     setSocioIdAttivo(null);
     saveSessioneSocioId(null);
+    setTesseraSbloccataInSessione(null);
     setInModificaRecapiti(false);
   };
 
@@ -540,9 +588,11 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
               </div>
             </div>
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl">
-              <Lock className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Accesso Diretto Blindato Socio</span>
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl select-none">
+                <Lock className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Area Riservata Soci</span>
+              </div>
             </div>
           </div>
         </header>
@@ -619,14 +669,22 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
                 <div className="relative">
                   <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
                   <input
-                    type="password"
+                    type={mostraPin ? 'text' : 'password'}
                     required
                     autoFocus={Boolean(inputIdentificativo)}
                     value={inputPin}
                     onChange={(e) => setInputPin(e.target.value)}
-                    placeholder="Inserisci il PIN personale associato alla tessera"
-                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50/80 border border-stone-200 rounded-xl text-xs font-mono font-bold text-stone-900 placeholder:text-stone-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 transition"
+                    placeholder="Inserisci il PIN ricevuto nell'email"
+                    className="w-full pl-9 pr-10 py-2.5 bg-stone-50/80 border border-stone-200 rounded-xl text-xs font-mono font-bold text-stone-900 placeholder:text-stone-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 transition"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setMostraPin(!mostraPin)}
+                    title={mostraPin ? 'Nascondi PIN' : 'Mostra PIN'}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 rounded-md transition-colors cursor-pointer"
+                  >
+                    {mostraPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
                 <span className="text-[10.5px] text-stone-400 mt-1 block">
                   L&apos;accesso viene concesso solo se Numero Tessera e PIN corrispondono.
@@ -706,14 +764,23 @@ export const MemberPortalView: React.FC<MemberPortalViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-center">
+          <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
             <div
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl select-none"
-              title="Accesso personale blindato tramite Tessera / Barcode"
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl select-none"
+              title="Accesso personale protetto tramite Tessera e PIN"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
               <span>Area Socio Protetta • {config.nome}</span>
             </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-stone-700 bg-white hover:bg-stone-100 border border-stone-200 rounded-xl transition cursor-pointer shadow-2xs"
+              title="Chiudi sessione socio o cambia numero tessera"
+            >
+              <LogOut className="w-3.5 h-3.5 text-stone-600" />
+              <span>Cambia Socio / Esci</span>
+            </button>
           </div>
 
         </div>
