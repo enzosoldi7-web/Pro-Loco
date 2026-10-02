@@ -430,9 +430,9 @@ export const EventModal: React.FC<EventModalProps> = ({
 
   const STEPS_EVENTO = [
     { num: 1 as const, titolo: '1. Dati, Date & Modello', desc: 'Titolo, date, luogo, locandina e modello (Nativo/Ibrido/Terzi)' },
-    { num: 2 as const, titolo: '2. Quadro Economico', desc: '4 Voci di spesa, entrate e ripartizione bilancio' },
-    { num: 3 as const, titolo: '3. Squadra & Iscrizioni', desc: 'Coordinatore, volontari da Albo 1.1 e capienza soci' },
-    { num: 4 as const, titolo: '4. Stand & Turni in Sequenza', desc: 'Stand numerati #1..N, costi/incassi e turni per stand' },
+    { num: 2 as const, titolo: '2. Squadra & Iscrizioni', desc: 'Coordinatore, volontari da Albo 1.1 e capienza soci' },
+    { num: 3 as const, titolo: '3. Stand & Turni', desc: 'Stand numerati #1..N, costi/incassi e turni per stand' },
+    { num: 4 as const, titolo: '4. Quadro Economico', desc: '4 Voci di spesa, entrate e ripartizione bilancio' },
     { num: 5 as const, titolo: '5. Permessi & Conferma', desc: 'Comune, SIAE, Safety, HACCP e riepilogo finale' },
   ];
 
@@ -643,7 +643,7 @@ export const EventModal: React.FC<EventModalProps> = ({
                     if (modalitaSequenziale) {
                       handleVaiAStep(st.num);
                     } else {
-                      const ids = ['sezione-dati-evento', 'sezione-economia-evento', 'sezione-staff-evento', 'sezione-stand-evento', 'sezione-permessi-evento'];
+                      const ids = ['sezione-dati-evento', 'sezione-staff-evento', 'sezione-stand-evento', 'sezione-economia-evento', 'sezione-permessi-evento'];
                       document.getElementById(ids[st.num - 1])?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }
                   }}
@@ -688,14 +688,14 @@ export const EventModal: React.FC<EventModalProps> = ({
         {/* Form dati evento con scorrimento interno e footer fisso */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden min-h-0 text-xs text-slate-700">
           
-          <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-6">
+          <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 flex flex-col gap-6">
           
             {/* STEP 1: Dati Essenziali, Date, Locandina & Scelta Modello Organizzativo */}
-            <div className={modalitaSequenziale && stepAttivo !== 1 ? 'hidden' : 'space-y-5'}>
+            <div className={modalitaSequenziale && stepAttivo !== 1 ? 'hidden' : 'order-1 space-y-5'}>
               <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-200/70 px-2 py-0.5 rounded">
-                    Step 1 di 5 • Identità & Assetto Evento
+                    Step 1 di 5 • Dati, Date & Modello
                   </span>
                   <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 mt-1">
                     Inserimento Anagrafica Manifestazione, Date, Luogo e Modello Organizzativo
@@ -918,13 +918,16 @@ export const EventModal: React.FC<EventModalProps> = ({
           </div>
           </div>
 
-          {/* STEP 2: Economia Evento (Bilancio Preventivo & Consuntivo Analitico) */}
-          <div id="sezione-economia-evento" className={`${modalitaSequenziale && stepAttivo !== 2 ? 'hidden' : ''} bg-slate-50/80 p-4 rounded-xl border border-slate-200 space-y-4 scroll-mt-2`}>
+          {/* STEP 4: Quadro Economico (Bilancio Preventivo & Consuntivo Analitico) */}
+          <div id="sezione-economia-evento" className={`${modalitaSequenziale && stepAttivo !== 4 ? 'hidden' : 'order-4'} bg-slate-50/80 p-4 rounded-xl border border-slate-200 space-y-4 scroll-mt-2`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
               <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-teal-800 bg-teal-100 px-2 py-0.5 rounded inline-block mb-1">
+                  Step 4 di 5 • Quadro Economico
+                </span>
                 <h4 className="font-bold text-slate-900 flex items-center gap-1.5 text-xs sm:text-sm">
                   <Euro className="w-4 h-4 text-emerald-700" />
-                  <span>Bilancio Economico Preventivo & Consuntivo</span>
+                  <span>Quadro Economico Preventivo & Consuntivo</span>
                 </h4>
                 <p className="text-[11px] text-slate-500">
                   Gestione analitica delle spese (Food, Intrattenimento, Altre, Varie), somme automatiche e scostamenti
@@ -1538,9 +1541,14 @@ export const EventModal: React.FC<EventModalProps> = ({
 
           </div>
 
-          {/* STEP 3: Volontari & Responsabile (Collegamento con Anagrafica Soci 1.1) + Iscrizioni Soci */}
-          <div className={modalitaSequenziale && stepAttivo !== 3 ? 'hidden' : 'space-y-4'}>
+          {/* STEP 2: Squadra & Iscrizioni (Collegamento con Anagrafica Soci 1.1 + Iscrizioni Soci) */}
+          <div className={modalitaSequenziale && stepAttivo !== 2 ? 'hidden' : 'order-2 space-y-4'}>
           <div id="sezione-staff-evento" className="border border-slate-200 p-3.5 rounded-xl bg-slate-50/50 scroll-mt-2">
+            <div className="mb-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-blue-800 bg-blue-100 px-2 py-0.5 rounded inline-block mb-1">
+                Step 2 di 5 • Squadra & Iscrizioni
+              </span>
+            </div>
             <h4 className="font-bold text-slate-900 mb-2 flex items-center justify-between text-xs">
               <span className="flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-blue-700" />
@@ -1687,15 +1695,18 @@ export const EventModal: React.FC<EventModalProps> = ({
           </div>
           </div>
 
-          {/* STEP 4: Stand Numerati, Bilancio Stand & Turni/Assegnazioni in Sequenza */}
-          <div id="sezione-stand-evento" className={`${modalitaSequenziale && stepAttivo !== 4 ? 'hidden' : ''} border border-slate-200 p-3.5 sm:p-4 rounded-xl bg-slate-50/80 space-y-3.5 scroll-mt-2`}>
+          {/* STEP 3: Stand & Turni (Stand Numerati, Bilancio Stand & Turni/Assegnazioni) */}
+          <div id="sezione-stand-evento" className={`${modalitaSequenziale && stepAttivo !== 3 ? 'hidden' : 'order-3'} border border-slate-200 p-3.5 sm:p-4 rounded-xl bg-slate-50/80 space-y-3.5 scroll-mt-2`}>
             
             {/* Intestazione Sezione Stand */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-200">
               <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded inline-block mb-1">
+                  Step 3 di 5 • Stand & Turni
+                </span>
                 <h4 className="font-bold text-slate-900 flex items-center gap-1.5 text-xs sm:text-sm">
                   <Store className="w-4 h-4 text-amber-600" />
-                  <span>Stand Numerati: Inserimento Preventivo, Consuntivo e Differenza</span>
+                  <span>Stand & Turni: Numerazione, Preventivo/Consuntivo e Turni Volontari</span>
                 </h4>
                 <p className="text-[11px] text-slate-500">
                   Definisci i numeri di stand in base alle esigenze e registra le voci economiche analitiche.
@@ -2172,9 +2183,12 @@ export const EventModal: React.FC<EventModalProps> = ({
 
           </div>
 
-          {/* STEP 5: Conformità, Burocrazia Pro Loco & Riepilogo Sequenziale Finale */}
-          <div className={modalitaSequenziale && stepAttivo !== 5 ? 'hidden' : 'space-y-4'}>
+          {/* STEP 5: Permessi & Conferma */}
+          <div className={modalitaSequenziale && stepAttivo !== 5 ? 'hidden' : 'order-5 space-y-4'}>
           <div id="sezione-permessi-evento" className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 scroll-mt-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded inline-block mb-1.5">
+              Step 5 di 5 • Permessi & Conferma
+            </span>
             <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs">
               <ShieldCheck className="w-4 h-4 text-amber-700" />
               <span>Pratiche Autorizzative & Burocrazia Obbligatoria</span>
@@ -2264,29 +2278,29 @@ export const EventModal: React.FC<EventModalProps> = ({
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px]">
               <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 1 • Evento</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 1 • Dati & Modello</span>
                 <span className="font-bold text-slate-900 truncate block">{titolo || 'Da compilare'}</span>
                 <span className="text-[10px] text-emerald-700 font-medium">{dataInizio} • {luogo}</span>
               </div>
               <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 2 • Bilancio</span>
-                <span className="font-bold text-slate-900 font-mono block">Costi: €{totalePreventivo.toLocaleString('it-IT')}</span>
-                <span className="text-[10px] text-emerald-700 font-mono">Ricavi: €{entratePreviste.toLocaleString('it-IT')}</span>
-              </div>
-              <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 3 • Squadra</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 2 • Squadra & Iscr.</span>
                 <span className="font-bold text-slate-900 block">{volontariIds.length} Soci Volontari</span>
                 <span className="text-[10px] text-emerald-700">{iscrizioniAperte ? `Iscrizioni aperte (${postiMassimi} posti)` : 'Iscrizioni chiuse'}</span>
               </div>
               <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 4 • Stand & Turni</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 3 • Stand & Turni</span>
                 <span className="font-bold text-slate-900 block">{standNumerati.length} Stand Attivi</span>
                 <span className="text-[10px] text-indigo-700 font-semibold">
                   {standNumerati.reduce((acc, s) => acc + (s.turniAssegnazioni?.length || 0), 0)} turni assegnati
                 </span>
               </div>
               <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 5 • Permessi</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 4 • Quadro Economico</span>
+                <span className="font-bold text-slate-900 font-mono block">Costi: €{totalePreventivo.toLocaleString('it-IT')}</span>
+                <span className="text-[10px] text-emerald-700 font-mono">Ricavi: €{entratePreviste.toLocaleString('it-IT')}</span>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Step 5 • Permessi & Conf.</span>
                 <span className="font-bold text-slate-900 block">
                   {[permessoComunale, licenzaSIAE, pianoSicurezzaSafety, aslHaccp].filter(Boolean).length}/4 Autorizzazioni
                 </span>

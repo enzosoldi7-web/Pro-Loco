@@ -155,59 +155,115 @@ export const EventPrintModal: React.FC<EventPrintModalProps> = ({
             </div>
           </div>
 
-          {/* Descrizione e programma */}
+          {/* 1. Descrizione e programma */}
           <div>
             <h3 className="font-bold text-slate-900 border-b border-slate-200 pb-1 mb-2 text-xs uppercase tracking-wide">
-              Descrizione & Programma
+              1. Dati, Date, Modello & Programma
             </h3>
             <p className="text-slate-700 text-xs leading-relaxed whitespace-pre-line bg-white">
               {evento.descrizione || 'Nessuna descrizione inserita.'}
             </p>
           </div>
 
-          {/* Tabella Dati Operativi, Permessi e Bilancio Analitico */}
-          <div className="space-y-4">
+          {/* 2. Squadra Operativa Volontari & Iscrizioni */}
+          <div>
+            <h3 className="font-bold text-slate-900 border-b border-slate-200 pb-1 mb-2 text-xs uppercase tracking-wide flex items-center justify-between">
+              <span>2. Squadra & Iscrizioni</span>
+              <span className="text-[10px] text-slate-500 font-normal">
+                {volontariCoinvolti.length} volontari mobilitati • {(evento.iscrizioni || []).length} soci iscritti
+              </span>
+            </h3>
             
-            {/* Sezione Adempimenti */}
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Adempimenti & Conformità Istituzionale</span>
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-700">
-                <div className="flex justify-between border-b sm:border-b-0 sm:border-r border-slate-200 pr-2">
-                  <span>Comune/Suolo:</span>
-                  <span className={`font-bold ${evento.permessoComunale ? 'text-emerald-700' : 'text-slate-400'}`}>
-                    {evento.permessoComunale ? 'Acquisito' : 'Non rich.'}
+            {responsabile && (
+              <p className="text-[11px] text-slate-700 mb-2">
+                <strong>Responsabile Operativo:</strong> {responsabile.cognome} {responsabile.nome} (Tel: {responsabile.telefono})
+              </p>
+            )}
+
+            {volontariCoinvolti.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                {volontariCoinvolti.map(v => (
+                  <div key={v.id} className="p-2 bg-slate-50 rounded border border-slate-200 flex justify-between">
+                    <span className="font-medium text-slate-900">{v.cognome} {v.nome}</span>
+                    <span className="text-slate-500">{v.telefono}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-400 italic text-[11px]">Nessun volontario registrato in questa scheda.</p>
+            )}
+          </div>
+
+          {/* 3. Stand & Turni per ogni Stand */}
+          {(() => {
+            const stands = evento.standNumerati && evento.standNumerati.length > 0
+              ? evento.standNumerati
+              : STAND_SIMULATI_DEFAULT;
+
+            return (
+              <div>
+                <h3 className="font-bold text-slate-900 border-b border-slate-200 pb-1 mb-2 text-xs uppercase tracking-wide flex items-center justify-between">
+                  <span>3. Stand & Turni (Assegnazioni Volontari)</span>
+                  <span className="text-[10px] text-slate-500 font-normal">
+                    {stands.length} stand operativi
                   </span>
-                </div>
-                <div className="flex justify-between border-b sm:border-b-0 sm:border-r border-slate-200 pr-2">
-                  <span>SIAE Musica:</span>
-                  <span className={`font-bold ${evento.licenzaSIAE ? 'text-emerald-700' : 'text-slate-400'}`}>
-                    {evento.licenzaSIAE ? 'Autorizzato' : 'Non prev.'}
-                  </span>
-                </div>
-                <div className="flex justify-between border-b sm:border-b-0 sm:border-r border-slate-200 pr-2">
-                  <span>Safety Sicurezza:</span>
-                  <span className={`font-bold ${evento.pianoSicurezzaSafety ? 'text-emerald-700' : 'text-slate-400'}`}>
-                    {evento.pianoSicurezzaSafety ? 'Predisposto' : 'Non prev.'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>ASL HACCP:</span>
-                  <span className={`font-bold ${evento.aslHaccp ? 'text-emerald-700' : 'text-slate-400'}`}>
-                    {evento.aslHaccp ? 'Regolare' : 'Non prev.'}
-                  </span>
+                </h3>
+                <div className="overflow-x-auto rounded border border-slate-200">
+                  <table className="w-full text-[10.5px] text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 uppercase text-[9.5px] font-bold">
+                        <th className="py-1.5 px-2">Stand</th>
+                        <th className="py-1.5 px-2">Capo Stand / Orario</th>
+                        <th className="py-1.5 px-2">Turni & Volontari Assegnati (Mansione e Fascia Oraria)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {stands.map((st, idx) => {
+                        const def = STAND_SIMULATI_DEFAULT[idx];
+                        const turni = Array.isArray(st.turniAssegnazioni) && st.turniAssegnazioni.length > 0
+                          ? st.turniAssegnazioni
+                          : (def?.turniAssegnazioni || []);
+                        return (
+                          <tr key={st.id || st.numero} className="align-top">
+                            <td className="py-1.5 px-2 font-bold text-slate-900 whitespace-nowrap">
+                              <div>#{st.numero} - {st.nome}</div>
+                              <div className="text-[9px] text-slate-500 font-normal">{st.tipologia}</div>
+                            </td>
+                            <td className="py-1.5 px-2 whitespace-nowrap">
+                              <div className="font-semibold text-slate-800">{st.responsabile || '—'}</div>
+                              <div className="text-[9.5px] font-mono text-slate-500">{st.orarioAperturaStand || def?.orarioAperturaStand || '18:30 - 23:30'}</div>
+                            </td>
+                            <td className="py-1.5 px-2">
+                              {turni.length === 0 ? (
+                                <span className="text-slate-400 italic">Nessun turno assegnato</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {turni.map(t => (
+                                    <span key={t.id} className="inline-block bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[9.5px]">
+                                      <strong>{t.nomeVolontario || t.nominativo || 'Volontario'}</strong> ({(t.mansione || 'Operatore').split(' / ')[0]} • {t.orarioSpecifico || (t.orarioInizio && t.orarioFine ? `${t.orarioInizio}-${t.orarioFine}` : '') || (t.fasciaOraria || '').split(' ')[0]})
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            </div>
+            );
+          })()}
 
+          {/* 4. Quadro Economico */}
+          <div className="space-y-4">
             {/* Rendiconto Economico Preventivo & Consuntivo Dettagliato */}
             <div className="bg-white rounded-lg border border-slate-300 p-3.5 space-y-3">
               <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
                 <h4 className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
                   <Euro className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Rendiconto Economico Analitico (Preventivo & Consuntivo)</span>
+                  <span>4. Quadro Economico (Preventivo & Consuntivo)</span>
                 </h4>
                 <span className="text-[10px] text-slate-500 font-medium">
                   Affluenza stimata: <strong>{evento.partecipantiStimati || '-'}</strong> partecipanti
@@ -357,95 +413,38 @@ export const EventPrintModal: React.FC<EventPrintModalProps> = ({
             </div>
           </div>
 
-          {/* Quadro Turni e Assegnazioni per ogni Stand */}
-          {(() => {
-            const stands = evento.standNumerati && evento.standNumerati.length > 0
-              ? evento.standNumerati
-              : STAND_SIMULATI_DEFAULT;
-
-            return (
-              <div>
-                <h3 className="font-bold text-slate-900 border-b border-slate-200 pb-1 mb-2 text-xs uppercase tracking-wide flex items-center justify-between">
-                  <span>Quadro Stand, Turni & Assegnazioni Volontari</span>
-                  <span className="text-[10px] text-slate-500 font-normal">
-                    {stands.length} stand operativi
-                  </span>
-                </h3>
-                <div className="overflow-x-auto rounded border border-slate-200">
-                  <table className="w-full text-[10.5px] text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 uppercase text-[9.5px] font-bold">
-                        <th className="py-1.5 px-2">Stand</th>
-                        <th className="py-1.5 px-2">Capo Stand / Orario</th>
-                        <th className="py-1.5 px-2">Turni & Volontari Assegnati (Mansione e Fascia Oraria)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {stands.map((st, idx) => {
-                        const def = STAND_SIMULATI_DEFAULT[idx];
-                        const turni = Array.isArray(st.turniAssegnazioni) && st.turniAssegnazioni.length > 0
-                          ? st.turniAssegnazioni
-                          : (def?.turniAssegnazioni || []);
-                        return (
-                          <tr key={st.id || st.numero} className="align-top">
-                            <td className="py-1.5 px-2 font-bold text-slate-900 whitespace-nowrap">
-                              <div>#{st.numero} - {st.nome}</div>
-                              <div className="text-[9px] text-slate-500 font-normal">{st.tipologia}</div>
-                            </td>
-                            <td className="py-1.5 px-2 whitespace-nowrap">
-                              <div className="font-semibold text-slate-800">{st.responsabile || '—'}</div>
-                              <div className="text-[9.5px] font-mono text-slate-500">{st.orarioAperturaStand || def?.orarioAperturaStand || '18:30 - 23:30'}</div>
-                            </td>
-                            <td className="py-1.5 px-2">
-                              {turni.length === 0 ? (
-                                <span className="text-slate-400 italic">Nessun turno assegnato</span>
-                              ) : (
-                                <div className="flex flex-wrap gap-1">
-                                  {turni.map(t => (
-                                    <span key={t.id} className="inline-block bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[9.5px]">
-                                      <strong>{t.nomeVolontario || t.nominativo || 'Volontario'}</strong> ({(t.mansione || 'Operatore').split(' / ')[0]} • {t.orarioSpecifico || (t.orarioInizio && t.orarioFine ? `${t.orarioInizio}-${t.orarioFine}` : '') || (t.fasciaOraria || '').split(' ')[0]})
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+          {/* 5. Permessi & Conferma */}
+          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+              <span>5. Permessi & Conferma (Adempimenti Istituzionali)</span>
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-700">
+              <div className="flex justify-between border-b sm:border-b-0 sm:border-r border-slate-200 pr-2">
+                <span>Comune/Suolo:</span>
+                <span className={`font-bold ${evento.permessoComunale ? 'text-emerald-700' : 'text-slate-400'}`}>
+                  {evento.permessoComunale ? 'Acquisito' : 'Non rich.'}
+                </span>
               </div>
-            );
-          })()}
-
-          {/* Squadra Operativa Volontari */}
-          <div>
-            <h3 className="font-bold text-slate-900 border-b border-slate-200 pb-1 mb-2 text-xs uppercase tracking-wide flex items-center justify-between">
-              <span>Squadra Volontari & Coordinamento</span>
-              <span className="text-[10px] text-slate-500 font-normal">
-                {volontariCoinvolti.length} volontari mobilitati
-              </span>
-            </h3>
-            
-            {responsabile && (
-              <p className="text-[11px] text-slate-700 mb-2">
-                <strong>Responsabile Operativo:</strong> {responsabile.cognome} {responsabile.nome} (Tel: {responsabile.telefono})
-              </p>
-            )}
-
-            {volontariCoinvolti.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                {volontariCoinvolti.map(v => (
-                  <div key={v.id} className="p-2 bg-slate-50 rounded border border-slate-200 flex justify-between">
-                    <span className="font-medium text-slate-900">{v.cognome} {v.nome}</span>
-                    <span className="text-slate-500">{v.telefono}</span>
-                  </div>
-                ))}
+              <div className="flex justify-between border-b sm:border-b-0 sm:border-r border-slate-200 pr-2">
+                <span>SIAE Musica:</span>
+                <span className={`font-bold ${evento.licenzaSIAE ? 'text-emerald-700' : 'text-slate-400'}`}>
+                  {evento.licenzaSIAE ? 'Autorizzato' : 'Non prev.'}
+                </span>
               </div>
-            ) : (
-              <p className="text-slate-400 italic text-[11px]">Nessun volontario registrato in questa scheda.</p>
-            )}
+              <div className="flex justify-between border-b sm:border-b-0 sm:border-r border-slate-200 pr-2">
+                <span>Safety Sicurezza:</span>
+                <span className={`font-bold ${evento.pianoSicurezzaSafety ? 'text-emerald-700' : 'text-slate-400'}`}>
+                  {evento.pianoSicurezzaSafety ? 'Predisposto' : 'Non prev.'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>ASL HACCP:</span>
+                <span className={`font-bold ${evento.aslHaccp ? 'text-emerald-700' : 'text-slate-400'}`}>
+                  {evento.aslHaccp ? 'Regolare' : 'Non prev.'}
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Note Organizzative */}

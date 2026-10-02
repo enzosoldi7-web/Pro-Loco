@@ -54,8 +54,8 @@ interface EventListProps {
   soci: Socio[];
   config: ProLocoInfo;
   annoSelezionato: number;
-  onNuovoEvento: () => void;
-  onModificaEvento: (evento: ProLocoEvento) => void;
+  onNuovoEvento: (step?: 1 | 2 | 3 | 4 | 5) => void;
+  onModificaEvento: (evento: ProLocoEvento, step?: 1 | 2 | 3 | 4 | 5) => void;
   onEliminaEvento: (eventoId: string) => void;
   onStampaEvento: (evento: ProLocoEvento) => void;
   onAggiornaEvento?: (evento: ProLocoEvento) => void;
@@ -365,7 +365,7 @@ export const EventList: React.FC<EventListProps> = ({
           ) : (
             <button
               type="button"
-              onClick={onNuovoEvento}
+              onClick={() => onNuovoEvento(1)}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl transition shadow-2xs cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -386,31 +386,31 @@ export const EventList: React.FC<EventListProps> = ({
                 </span>
                 <div>
                   <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">
-                    Inserimento e Gestione Manifestazioni in 5 Step Sequenziali
+                    Pianificazione e Gestione Manifestazioni in 5 Step Sequenziali
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Ogni evento segue una sequenza guidata: 1. Identità & Modello → 2. Bilancio 4 Voci → 3. Squadra Soci (da 1.1) → 4. Stand & Turni → 5. Permessi & Stampa.
+                    Ogni evento segue una sequenza guidata: 1. Dati, Date & Modello → 2. Squadra & Iscrizioni → 3. Stand & Turni → 4. Quadro Economico → 5. Permessi & Conferma.
                   </p>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={onNuovoEvento}
+                onClick={() => onNuovoEvento(1)}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-2xs transition cursor-pointer shrink-0"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Avvia Inserimento Evento in Sequenza (Step 1 → 5)</span>
+                <span>Avvia Pianificazione Evento (Step 1 → 5)</span>
               </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
               <div
-                onClick={onNuovoEvento}
+                onClick={() => onNuovoEvento(1)}
                 className="p-2.5 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200 transition cursor-pointer"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-emerald-700 text-white">Step 1</span>
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-emerald-700 text-white">Punto 1</span>
                   <span className="text-[10px] font-bold text-emerald-800">{stats.totale} eventi</span>
                 </div>
                 <div className="text-xs font-extrabold text-slate-900">1. Dati, Date & Modello</div>
@@ -418,56 +418,73 @@ export const EventList: React.FC<EventListProps> = ({
               </div>
 
               <div
-                onClick={() => setMostraComparazioneModelli(true)}
-                className="p-2.5 rounded-xl bg-teal-50/70 hover:bg-teal-100/70 border border-teal-200 transition cursor-pointer"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-teal-700 text-white">Step 2</span>
-                  <span className="text-[10px] font-mono font-bold text-teal-800">4 Voci Spesa</span>
-                </div>
-                <div className="text-xs font-extrabold text-slate-900">2. Quadro Economico</div>
-                <p className="text-[10px] text-slate-600 mt-0.5">Preventivo, Consuntivo e Differenza su Food, Musica, Logistica e Varie.</p>
-              </div>
-
-              <div
-                onClick={() => setVistaSezione('presenze')}
+                onClick={() => {
+                  if (eventiFiltrati[0]) {
+                    onModificaEvento(eventiFiltrati[0], 2);
+                  } else {
+                    setVistaSezione('presenze');
+                  }
+                }}
                 className="p-2.5 rounded-xl bg-sky-50/70 hover:bg-sky-100/70 border border-sky-200 transition cursor-pointer"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-sky-700 text-white">Step 3</span>
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-sky-700 text-white">Punto 2</span>
                   <span className="text-[10px] font-bold text-sky-800">{stats.volontariMobilitati} soci</span>
                 </div>
-                <div className="text-xs font-extrabold text-slate-900">3. Squadra & Iscrizioni</div>
-                <p className="text-[10px] text-slate-600 mt-0.5">Convocazione soci volontari dall'Albo 1.1, iscrizioni e registro presenze.</p>
+                <div className="text-xs font-extrabold text-slate-900">2. Squadra & Iscrizioni</div>
+                <p className="text-[10px] text-slate-600 mt-0.5">Coordinatore, convocazione volontari dall'Albo 1.1, iscrizioni e presenze.</p>
               </div>
 
               <div
                 onClick={() => {
                   if (eventiFiltrati[0]) {
-                    setTabInizialeModificaStand('turni');
-                    setEventoPerModificaStand(eventiFiltrati[0]);
+                    onModificaEvento(eventiFiltrati[0], 3);
                   }
                 }}
                 className="p-2.5 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/70 border border-indigo-200 transition cursor-pointer"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-indigo-700 text-white">Step 4</span>
-                  <span className="text-[10px] font-bold text-indigo-800">Turni Stand</span>
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-indigo-700 text-white">Punto 3</span>
+                  <span className="text-[10px] font-bold text-indigo-800">Stand & Turni</span>
                 </div>
-                <div className="text-xs font-extrabold text-slate-900">4. Stand & Turni in Sequenza</div>
+                <div className="text-xs font-extrabold text-slate-900">3. Stand & Turni</div>
                 <p className="text-[10px] text-slate-600 mt-0.5">Numerazione stand #1..N, incassi/spese stand e assegnazione turni volontari.</p>
               </div>
 
               <div
-                onClick={() => onStampaProgrammaEventi && onStampaProgrammaEventi()}
+                onClick={() => {
+                  if (eventiFiltrati[0]) {
+                    onModificaEvento(eventiFiltrati[0], 4);
+                  } else {
+                    setMostraComparazioneModelli(true);
+                  }
+                }}
+                className="p-2.5 rounded-xl bg-teal-50/70 hover:bg-teal-100/70 border border-teal-200 transition cursor-pointer"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-teal-700 text-white">Punto 4</span>
+                  <span className="text-[10px] font-mono font-bold text-teal-800">4 Voci Spesa</span>
+                </div>
+                <div className="text-xs font-extrabold text-slate-900">4. Quadro Economico</div>
+                <p className="text-[10px] text-slate-600 mt-0.5">Preventivo, Consuntivo e Differenza su Food, Musica, Logistica e Varie.</p>
+              </div>
+
+              <div
+                onClick={() => {
+                  if (eventiFiltrati[0]) {
+                    onModificaEvento(eventiFiltrati[0], 5);
+                  } else if (onStampaProgrammaEventi) {
+                    onStampaProgrammaEventi();
+                  }
+                }}
                 className="p-2.5 rounded-xl bg-amber-50/70 hover:bg-amber-100/70 border border-amber-200 transition cursor-pointer"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-amber-600 text-white">Step 5</span>
-                  <span className="text-[10px] font-bold text-amber-900">PDF A4</span>
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-amber-600 text-white">Punto 5</span>
+                  <span className="text-[10px] font-bold text-amber-900">Permessi & PDF</span>
                 </div>
-                <div className="text-xs font-extrabold text-slate-900">5. Permessi & Stampa</div>
-                <p className="text-[10px] text-slate-600 mt-0.5">Checklist Comune, SIAE, Safety, HACCP e stampa scheda ufficiale evento.</p>
+                <div className="text-xs font-extrabold text-slate-900">5. Permessi & Conferma</div>
+                <p className="text-[10px] text-slate-600 mt-0.5">Checklist Comune, SIAE, Safety, HACCP, conferma e stampa scheda evento.</p>
               </div>
             </div>
           </div>
@@ -761,7 +778,7 @@ export const EventList: React.FC<EventListProps> = ({
 
             <button
               id="btn-nuovo-evento-proloco"
-              onClick={onNuovoEvento}
+              onClick={() => onNuovoEvento(1)}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg shadow-sm transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -885,7 +902,7 @@ export const EventList: React.FC<EventListProps> = ({
               Azzera Filtri
             </button>
             <button
-              onClick={onNuovoEvento}
+              onClick={() => onNuovoEvento(1)}
               className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg shadow-sm transition-colors cursor-pointer"
             >
               Inserisci Primo Evento
@@ -976,63 +993,57 @@ export const EventList: React.FC<EventListProps> = ({
                   <div className="bg-emerald-50/60 p-2 rounded-xl border border-emerald-200/80">
                     <div className="flex items-center justify-between mb-1.5 px-0.5">
                       <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900">
-                        Sequenza Organizzativa Evento (5 Step)
+                        Pianificazione Evento (5 Punti)
                       </span>
                       <span className="text-[10px] font-bold text-emerald-700">
-                        Clicca uno step per operare in sequenza
+                        Clicca un punto per aprirlo
                       </span>
                     </div>
                     <div className="grid grid-cols-5 gap-1">
                       <button
                         type="button"
-                        onClick={() => onModificaEvento(evento)}
+                        onClick={() => onModificaEvento(evento, 1)}
                         className="p-1.5 rounded-lg bg-white hover:bg-emerald-50 border border-emerald-200 text-left transition cursor-pointer"
-                        title="Step 1: Modifica Dati, Date, Luogo e Modello"
+                        title="Punto 1: Dati, Date & Modello"
                       >
-                        <span className="block text-[9px] font-black text-emerald-700 uppercase">Step 1</span>
-                        <span className="block text-[10px] font-bold text-slate-800 truncate">Dati & Date</span>
+                        <span className="block text-[9px] font-black text-emerald-700 uppercase">1. Dati</span>
+                        <span className="block text-[10px] font-bold text-slate-800 truncate">Date & Modello</span>
                       </button>
                       <button
                         type="button"
-                        onClick={() => setEventoEspansoId(eventoEspansoId === evento.id ? null : evento.id)}
-                        className="p-1.5 rounded-lg bg-white hover:bg-teal-50 border border-teal-200 text-left transition cursor-pointer"
-                        title="Step 2: Quadro Economico e 4 Voci di Spesa"
-                      >
-                        <span className="block text-[9px] font-black text-teal-700 uppercase">Step 2</span>
-                        <span className="block text-[10px] font-bold text-slate-800 truncate">Bilancio 4V</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTabInizialeModificaStand('bilancio');
-                          setEventoPerModificaStand(evento);
-                        }}
-                        className="p-1.5 rounded-lg bg-white hover:bg-amber-50 border border-amber-200 text-left transition cursor-pointer"
-                        title="Step 3: Configura Stand Numerati #1..N e Bilancio Stand"
-                      >
-                        <span className="block text-[9px] font-black text-amber-700 uppercase">Step 3</span>
-                        <span className="block text-[10px] font-bold text-slate-800 truncate">Stand #{(evento.standNumerati || STAND_SIMULATI_DEFAULT).length}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTabInizialeModificaStand('turni');
-                          setEventoPerModificaStand(evento);
-                        }}
-                        className="p-1.5 rounded-lg bg-white hover:bg-indigo-50 border border-indigo-200 text-left transition cursor-pointer"
-                        title="Step 4: Assegna Turni e Mansioni per Ogni Stand"
-                      >
-                        <span className="block text-[9px] font-black text-indigo-700 uppercase">Step 4</span>
-                        <span className="block text-[10px] font-bold text-slate-800 truncate">Turni Stand</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEventoPresenze(evento)}
+                        onClick={() => onModificaEvento(evento, 2)}
                         className="p-1.5 rounded-lg bg-white hover:bg-sky-50 border border-sky-200 text-left transition cursor-pointer"
-                        title="Step 5: Iscrizioni Soci, Appello Presenze e Stampa"
+                        title="Punto 2: Squadra & Iscrizioni"
                       >
-                        <span className="block text-[9px] font-black text-sky-700 uppercase">Step 5</span>
-                        <span className="block text-[10px] font-bold text-slate-800 truncate">Presenze</span>
+                        <span className="block text-[9px] font-black text-sky-700 uppercase">2. Squadra</span>
+                        <span className="block text-[10px] font-bold text-slate-800 truncate">& Iscrizioni</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onModificaEvento(evento, 3)}
+                        className="p-1.5 rounded-lg bg-white hover:bg-indigo-50 border border-indigo-200 text-left transition cursor-pointer"
+                        title="Punto 3: Stand & Turni"
+                      >
+                        <span className="block text-[9px] font-black text-indigo-700 uppercase">3. Stand</span>
+                        <span className="block text-[10px] font-bold text-slate-800 truncate">& Turni (#{(evento.standNumerati || STAND_SIMULATI_DEFAULT).length})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onModificaEvento(evento, 4)}
+                        className="p-1.5 rounded-lg bg-white hover:bg-teal-50 border border-teal-200 text-left transition cursor-pointer"
+                        title="Punto 4: Quadro Economico"
+                      >
+                        <span className="block text-[9px] font-black text-teal-700 uppercase">4. Quadro</span>
+                        <span className="block text-[10px] font-bold text-slate-800 truncate">Economico</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onModificaEvento(evento, 5)}
+                        className="p-1.5 rounded-lg bg-white hover:bg-amber-50 border border-amber-200 text-left transition cursor-pointer"
+                        title="Punto 5: Permessi & Conferma"
+                      >
+                        <span className="block text-[9px] font-black text-amber-700 uppercase">5. Permessi</span>
+                        <span className="block text-[10px] font-bold text-slate-800 truncate">& Conferma</span>
                       </button>
                     </div>
                   </div>
@@ -1043,28 +1054,6 @@ export const EventList: React.FC<EventListProps> = ({
                       {evento.descrizione}
                     </p>
                   )}
-
-                  {/* Checklist Adempimenti Burocratici Pro Loco */}
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3 text-slate-500" />
-                      <span>Conformità & Autorizzazioni</span>
-                    </span>
-                    <div className="flex flex-wrap gap-1.5 text-[10px]">
-                      <span className={`px-2 py-0.5 rounded font-semibold ${evento.permessoComunale ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
-                        {evento.permessoComunale ? '✓ Comune / Suolo' : '✗ Comune'}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded font-semibold ${evento.licenzaSIAE ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
-                        {evento.licenzaSIAE ? '✓ SIAE Musica' : '✗ SIAE'}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded font-semibold ${evento.pianoSicurezzaSafety ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
-                        {evento.pianoSicurezzaSafety ? '✓ Safety Sicurezza' : '✗ Safety'}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded font-semibold ${evento.aslHaccp ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
-                        {evento.aslHaccp ? '✓ ASL Somministrazione' : '✗ ASL'}
-                      </span>
-                    </div>
-                  </div>
 
                   {/* Sezione Volontari Coinvolti */}
                   <div className="flex items-center justify-between text-xs text-slate-700 pt-1 border-t border-slate-100">
@@ -1629,6 +1618,28 @@ export const EventList: React.FC<EventListProps> = ({
                       </div>
                     );
                   })()}
+
+                  {/* Punto 5: Permessi & Conferma (Conformità & Autorizzazioni) */}
+                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-slate-500" />
+                      <span>5. Permessi & Conferma (Conformità & Autorizzazioni)</span>
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 text-[10px]">
+                      <span className={`px-2 py-0.5 rounded font-semibold ${evento.permessoComunale ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
+                        {evento.permessoComunale ? '✓ Comune / Suolo' : '✗ Comune'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded font-semibold ${evento.licenzaSIAE ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
+                        {evento.licenzaSIAE ? '✓ SIAE Musica' : '✗ SIAE'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded font-semibold ${evento.pianoSicurezzaSafety ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
+                        {evento.pianoSicurezzaSafety ? '✓ Safety Sicurezza' : '✗ Safety'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded font-semibold ${evento.aslHaccp ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
+                        {evento.aslHaccp ? '✓ ASL Somministrazione' : '✗ ASL'}
+                      </span>
+                    </div>
+                  </div>
 
                   {/* Pulsanti Azioni */}
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-1.5">

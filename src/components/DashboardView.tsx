@@ -61,6 +61,7 @@ import {
 import { esportaLibroSociCSV, esportaBackupJSON, esportaBilancioCompletoCSV, esportaCodiceSitoHTML, loadDonazioni } from '../storage';
 import { calcolaRiepilogoQuoteSoci } from '../utils/quoteHelpers';
 import { aggregaEventiPerBilancio } from '../utils/eventoHelpers';
+import { DashboardAnalyticsSection } from './DashboardAnalyticsSection';
 
 interface DashboardViewProps {
   config: ProLocoInfo;
@@ -451,6 +452,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           </div>
         </div>
+
+        {/* SEZIONE VISUALE RECHARTS: ANDAMENTO MENSILE ISCRIZIONI SOCI & ENTRATE/USCITE PIANIFICATE EVENTI */}
+        <DashboardAnalyticsSection
+          soci={soci}
+          eventi={eventi}
+          annoSelezionato={annoSelezionato}
+          onNavigaPagina={(pagina, sottoTab) => onNavigaPagina(pagina, sottoTab)}
+        />
 
         {/* GUIDA & TITOLO SEZIONE DI NAVIGAZIONE DEI 3 MODULI */}
         <div>

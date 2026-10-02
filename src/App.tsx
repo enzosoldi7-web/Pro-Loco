@@ -136,6 +136,7 @@ export default function App() {
 
   // Stati per Modali Eventi e Bilancio e Stampe A4
   const [eventoModale, setEventoModale] = useState<ProLocoEvento | null | 'nuovo'>(null);
+  const [eventoModaleStep, setEventoModaleStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [eventoStampa, setEventoStampa] = useState<ProLocoEvento | null>(null);
   const [mostraStampaBilancio, setMostraStampaBilancio] = useState<boolean>(false);
   const [mostraStampaLibroSoci, setMostraStampaLibroSoci] = useState<boolean>(false);
@@ -981,8 +982,14 @@ export default function App() {
                   soci={soci}
                   config={config}
                   annoSelezionato={annoSelezionato}
-                  onNuovoEvento={() => setEventoModale('nuovo')}
-                  onModificaEvento={(evento) => setEventoModale(evento)}
+                  onNuovoEvento={(step = 1) => {
+                    setEventoModaleStep(step);
+                    setEventoModale('nuovo');
+                  }}
+                  onModificaEvento={(evento, step = 1) => {
+                    setEventoModaleStep(step);
+                    setEventoModale(evento);
+                  }}
                   onEliminaEvento={handleEliminaEvento}
                   onStampaEvento={(evento) => setEventoStampa(evento)}
                   onAggiornaEvento={handleSalvaEvento}
@@ -1165,8 +1172,12 @@ export default function App() {
           evento={eventoModale === 'nuovo' ? null : eventoModale}
           soci={soci}
           annoPredefinito={annoSelezionato}
+          stepIniziale={eventoModaleStep}
           onSalva={handleSalvaEvento}
-          onClose={() => setEventoModale(null)}
+          onClose={() => {
+            setEventoModale(null);
+            setEventoModaleStep(1);
+          }}
         />
       )}
 
